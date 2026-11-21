@@ -22,6 +22,7 @@ import {
   submitListingApplication,
 } from "@/features/listings/queries";
 import { ApplySteps } from "@/features/listings/apply-steps";
+import { employerName, listingEmployer } from "@/features/listings/view/employer-identity";
 import {
   JdSections,
   ReportDialog,
@@ -241,7 +242,7 @@ export default function ListingDetailPage() {
                 {listing.title}
               </p>
               <p className="text-[11px] text-text-muted truncate">
-                {listing.poster_name || "Verified Employer"}
+                {employerName(listingEmployer(listing))}
               </p>
             </div>
             <a

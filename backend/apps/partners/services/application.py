@@ -9,7 +9,6 @@ the draft. Reviewer-side decisions on the same row live in `review`; document ha
 import uuid
 from collections.abc import Iterable, Sequence
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -37,7 +36,7 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
-from apps.partners.selectors import employer_business_complete
+from apps.partners.selectors import employer_missing_fields, required_document_kinds
 
 from .base import (
     PARTNER_APPLICATION_PROGRESS_PURPOSE,
@@ -451,6 +450,27 @@ def update_partner_application(
     return application
 
 
+EMPLOYER_MISSING_MESSAGES = {
+    "hiring_as": "Choose who is hiring before sending.",
+    "display_name": "Add your name before sending.",
+    "legal_name": "Add your business's legal name before sending.",
+    "legal_structure": "Choose your business's legal structure before sending.",
+    "business_category": "Choose your business's industry before sending.",
+    "company_size": "Choose your business's size before sending.",
+    "business_proof_type": "Choose which business proof you will upload before sending.",
+    "gstin": "Add a valid GSTIN before sending.",
+    "address": "Add your business address before sending.",
+    "area": "Add your area before sending.",
+    "city": "Add your city before sending.",
+    "state": "Add your state before sending.",
+    "pin_code": "Add your pin code before sending.",
+    "latitude": "Pin your business on the map before sending.",
+    "longitude": "Pin your business on the map before sending.",
+    "poster_role": "Choose your role before sending.",
+    "id_document_type": "Choose which ID you will upload before sending.",
+}
+
+
 @transaction.atomic
 def submit_partner_application(
     *,
@@ -511,27 +531,30 @@ def submit_partner_application(
                 raise PartnerApplicationIncompleteError(
                     "Set your weekly working hours for each service area before submitting.",
                 )
-    if application.track == PartnerApplication.Track.EMPLOYER and not employer_business_complete(
-        partner
-    ):
-        raise PartnerApplicationIncompleteError(
-            "Add your business name, type and city before submitting.",
-        )
+    if application.track == PartnerApplication.Track.EMPLOYER:
+        missing = employer_missing_fields(partner)
+        if missing:
+            raise PartnerApplicationIncompleteError(EMPLOYER_MISSING_MESSAGES[missing[0]])
     if not _base_application_is_complete(application, allow_area_requests=True):
         raise PartnerApplicationIncompleteError(
             "Complete your profile, services, areas, skills, and required consents "
             "before submitting.",
         )
-    required_kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
     if any(
         not PartnerDocument.objects.filter(application=application, kind=kind).exists()
-        for kind in required_kinds
+        for kind in required_document_kinds(application)
     ):
         raise PartnerApplicationIncompleteError(
             "Upload every required identity document before submitting.",
         )
 
     previous_status = application.status
+    if (
+        application.track == PartnerApplication.Track.EMPLOYER
+        and previous_status == PartnerApplication.Status.CHANGES_REQUIRED
+    ):
+        # Old ticks may be about details that have since changed.
+        application.employer_checks.all().delete()
     application.status = PartnerApplication.Status.SUBMITTED
     application.submitted_at = timezone.now()
     application.change_request_message = ""

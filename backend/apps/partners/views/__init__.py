@@ -47,6 +47,7 @@ from .m2_registration import (
     _unmet_gates,
 )
 from .operations import (
+    OperationsEmployerCheckView,
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
@@ -83,6 +84,8 @@ from .partner_application import (
     PartnerDocumentAccessView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
+    PartnerEmployerDetailsView,
+    PartnerEmployerLogoView,
     PartnerMeView,
     PartnerPresenceHeartbeatView,
     PartnerPresenceOfflineView,
@@ -101,6 +104,7 @@ __all__ = [
     "OperationsAreaRequestListView",
     "OperationsAreaRequestNotifyView",
     "OperationsCoverageLiteView",
+    "OperationsEmployerCheckView",
     "OperationsPartnerAddAreaView",
     "OperationsPartnerApplicationClaimView",
     "OperationsPartnerApplicationDetailView",
@@ -140,6 +144,8 @@ __all__ = [
     "PartnerDocumentAccessView",
     "PartnerDocumentCreateView",
     "PartnerDocumentUploadView",
+    "PartnerEmployerDetailsView",
+    "PartnerEmployerLogoView",
     "PartnerGateListView",
     "PartnerInsuranceView",
     "PartnerLanguageView",

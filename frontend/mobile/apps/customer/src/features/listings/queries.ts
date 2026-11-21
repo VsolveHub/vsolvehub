@@ -1,4 +1,4 @@
-import { createIdempotencyKey, request } from "@vsolve/api-client";
+import { createIdempotencyKey, request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
 
 export type ListingPay = {
@@ -34,6 +34,8 @@ export interface Listing extends ListingPay {
   id: string;
   slug?: string;
   poster_name?: string;
+  /** Who is hiring, as the server describes them publicly. */
+  employer?: Schemas["EmployerIdentity"] | null;
   company_name?: string; // backwards compatibility fallback
   partner?: {
     id?: string;

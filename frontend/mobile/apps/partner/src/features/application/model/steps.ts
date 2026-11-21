@@ -30,23 +30,46 @@ export const SERVICE_APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
+/** Who an employer hires for. Empty until they choose. */
+export type HiringAs = "INDIVIDUAL" | "BUSINESS";
+
+const HIRING_AS: ApplicationStep = { href: "/apply/hiring-as", label: "Who is hiring" };
+const DOCUMENTS: ApplicationStep = { href: "/apply/documents", label: "Documents" };
+const REVIEW: ApplicationStep = { href: "/apply/review", label: "Agree & send" };
+
 /**
- * An employer's short form adds "Business details" after "About you": the business its jobs are
- * shown under. The same list as the website's.
+ * An employer first says who is hiring, and what they are asked next follows from it. Each is its
+ * own list, so `APPLICATION_STEPS` stays exactly the short path. Before a choice, only the choice
+ * shows: what comes after depends on it. The same lists as the website's, without its overview.
  */
-export const EMPLOYER_APPLICATION_STEPS: readonly ApplicationStep[] = [
-  { href: "/apply/about", label: "About you" },
-  { href: "/apply/employer", label: "Business details" },
-  { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/review", label: "Agree & send" },
-] as const;
+const EMPLOYER_UNCHOSEN_STEPS: readonly ApplicationStep[] = [HIRING_AS];
+const EMPLOYER_INDIVIDUAL_STEPS: readonly ApplicationStep[] = [
+  HIRING_AS,
+  { href: "/apply/employer/about", label: "About you" },
+  DOCUMENTS,
+  REVIEW,
+];
+const EMPLOYER_BUSINESS_STEPS: readonly ApplicationStep[] = [
+  HIRING_AS,
+  { href: "/apply/employer/business", label: "Business details" },
+  { href: "/apply/employer/contact", label: "You and your role" },
+  DOCUMENTS,
+  REVIEW,
+];
 
 /** Stays, rentals and hiring share the short application. Services walk the full list. */
 export { isListingTrack };
 
 /** The step sequence for this partner. Services is the server's default track, as on the web. */
-export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
-  if (track === "EMPLOYER") return EMPLOYER_APPLICATION_STEPS;
+export function applicationSteps(
+  track?: string | null,
+  hiringAs?: string | null,
+): readonly ApplicationStep[] {
+  if (track === "EMPLOYER") {
+    if (hiringAs === "INDIVIDUAL") return EMPLOYER_INDIVIDUAL_STEPS;
+    if (hiringAs === "BUSINESS") return EMPLOYER_BUSINESS_STEPS;
+    return EMPLOYER_UNCHOSEN_STEPS;
+  }
   return isListingTrack(track) ? APPLICATION_STEPS : SERVICE_APPLICATION_STEPS;
 }
 
@@ -59,6 +82,14 @@ export function isUnchosenDraft(
   application: { status: string; version: number } | null | undefined,
 ): boolean {
   return application?.status === "DRAFT" && application.version === 1;
+}
+
+/**
+ * Where a partner goes first once they have chosen how to join. An employer starts by saying who
+ * is hiring; everyone else starts with who they are.
+ */
+export function firstStepHref(track: string): string {
+  return track === "EMPLOYER" ? "/apply/hiring-as" : "/apply/about";
 }
 
 /** The ways to join offered on the first screen. */
@@ -78,7 +109,12 @@ export function trackPreview(track: StartTrack): {
   after: string;
 } {
   return {
-    steps: applicationSteps(track),
+    steps:
+      track === "EMPLOYER"
+        ? // Who is hiring comes first and decides the rest, so the preview names the one
+          // "your details" stage that follows rather than either path.
+          [HIRING_AS, { href: "/apply/employer", label: "Your details" }, DOCUMENTS, REVIEW]
+        : applicationSteps(track),
     time: isListingTrack(track) ? "About 3 minutes" : "About 5 minutes",
     after: AFTER_APPROVAL[track],
   };
@@ -97,8 +133,12 @@ export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
 /**
  * Which step a path is on, or -1.
  */
-export function stepIndexOf(pathname: string, track?: string | null): number {
-  return applicationSteps(track).findIndex((step) => step.href === normalise(pathname));
+export function stepIndexOf(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): number {
+  return applicationSteps(track, hiringAs).findIndex((step) => step.href === normalise(pathname));
 }
 
 function normalise(pathname: string): string {
@@ -111,13 +151,21 @@ export function capabilityStepIndexOf(pathname: string): number {
 }
 
 /** The step after `pathname`, or null at the end of the sequence or off it. */
-export function nextStep(pathname: string, track?: string | null): ApplicationStep | null {
-  const index = stepIndexOf(pathname, track);
+export function nextStep(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): ApplicationStep | null {
+  const index = stepIndexOf(pathname, track, hiringAs);
   if (index === -1) return null;
-  return applicationSteps(track)[index + 1] ?? null;
+  return applicationSteps(track, hiringAs)[index + 1] ?? null;
 }
 
-export function isLastStep(pathname: string, track?: string | null): boolean {
-  const steps = applicationSteps(track);
-  return stepIndexOf(pathname, track) === steps.length - 1;
+export function isLastStep(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): boolean {
+  const steps = applicationSteps(track, hiringAs);
+  return stepIndexOf(pathname, track, hiringAs) === steps.length - 1;
 }

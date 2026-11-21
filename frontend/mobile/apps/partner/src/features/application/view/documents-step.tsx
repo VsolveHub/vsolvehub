@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/documents-step.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import {
@@ -15,8 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
-import { requiredDocumentKinds } from "../model/readiness";
-import { isDocumentRejected } from "../model/status";
+import { offeredDocumentKinds, requiredDocumentKinds } from "../model/readiness";
+import { documentLabel, isDocumentRejected } from "../model/status";
 import { previousStep } from "../model/progress";
 import { usePartnerApplication } from "../queries";
 import { usePartnerDocumentAccess } from "../upload-queries";
@@ -26,10 +26,62 @@ import { DocumentUpload } from "./document-upload";
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
-const OFFERED: readonly { kind: DocumentKind; label: string }[] = [
-  { kind: "GOVERNMENT_ID", label: "Government photo ID" },
-  { kind: "ADDRESS_PROOF", label: "Proof of address" },
-];
+/**
+ * What each slot says about itself: its name, why it is asked, and what it must match.
+ *
+ * An employer's documents are named for what they prove ("Your ID", "Business proof: Udyam
+ * registration"), and each says what the applicant gave that it must match, so the reviewer's
+ * checklist is no surprise to them. Every other track keeps its two documents as they were.
+ */
+function slotText(
+  application: Application | null,
+  kind: DocumentKind,
+  t: ReturnType<typeof useT>,
+): { label: string; hint: string | null; notes: string[] } {
+  const fallback = documentLabel(kind);
+  if (application?.track !== "EMPLOYER") {
+    return {
+      label: fallback,
+      hint:
+        kind === "GOVERNMENT_ID"
+          ? "Confirms who you are. If you upload Aadhaar, cover the first 8 digits."
+          : "Any recent bill or statement showing your name and address.",
+      notes: [],
+    };
+  }
+  const employer = application.employer;
+  switch (kind) {
+    case "GOVERNMENT_ID": {
+      const idType = employer?.id_document_type;
+      const notes: string[] = [];
+      if (idType) {
+        notes.push(
+          t("apply.employer.documents.idType", { type: t(`apply.employer.field.idType.${idType}`) }),
+        );
+        if (idType === "AADHAAR_MASKED") notes.push(t("apply.employer.documents.aadhaarHelp"));
+      }
+      return { label: t("apply.employer.documents.id.label"), hint: t("apply.employer.documents.id.why"), notes };
+    }
+    case "SELFIE":
+      return { label: fallback, hint: t("apply.employer.documents.selfie.why"), notes: [] };
+    case "BUSINESS_PROOF": {
+      const proof = employer?.business?.business_proof_type;
+      return {
+        label: proof
+          ? t("apply.employer.documents.businessProof.label", {
+              type: t(`apply.employer.business.proof.${proof}`),
+            })
+          : fallback,
+        hint: t("apply.employer.documents.businessProof.why"),
+        notes: [],
+      };
+    }
+    case "AUTHORIZATION_LETTER":
+      return { label: fallback, hint: t("apply.employer.documents.letter.why"), notes: [] };
+    default:
+      return { label: fallback, hint: null, notes: [] };
+  }
+}
 
 function currentDocument(application: Application, kind: DocumentKind): Schemas["PartnerDocument"] | null {
   const candidates = application.documents
@@ -39,6 +91,7 @@ function currentDocument(application: Application, kind: DocumentKind): Schemas[
 }
 
 export function DocumentsStep() {
+  const t = useT();
   const query = usePartnerApplication();
   const router = useRouter();
   const { registerDock } = useApplyDock();
@@ -73,7 +126,7 @@ export function DocumentsStep() {
     // A file that failed the security scan is rejected too, as on the website.
     return document !== null && !isDocumentRejected(document);
   });
-  const anyUploaded = OFFERED.some((item) => application !== null && currentDocument(application, item.kind) !== null);
+  const offered = offeredDocumentKinds(application);
 
   const onCommit = useCallback(() => {
     router.push("/apply/review");
@@ -81,7 +134,9 @@ export function DocumentsStep() {
 
   // The step before Documents in this partner's own list: hours for services, Business details
   // for employers, About you for stays and rentals.
-  const backHref = previousStep("/apply/documents", application?.track)?.href ?? "/apply/about";
+  const backHref =
+    previousStep("/apply/documents", application?.track, application?.employer?.hiring_as)?.href ??
+    "/apply/about";
 
   useEffect(() => {
     registerDock({
@@ -132,9 +187,11 @@ export function DocumentsStep() {
       description="A reviewer checks these before you can take work."
     >
       <View style={styles.cardsContainer}>
-        {[...OFFERED]
-          .sort((a, b) => Number(required.includes(b.kind)) - Number(required.includes(a.kind)))
-          .map((item) => {
+        {[...offered]
+          .sort((a, b) => Number(required.includes(b)) - Number(required.includes(a)))
+          .map((kind) => {
+          const { label, hint, notes } = slotText(application, kind, t);
+          const item = { kind, label };
           const document = application ? currentDocument(application, item.kind) : null;
           const isUploaded = document !== null;
           const isReplacing = replacingKind === item.kind;
@@ -150,11 +207,6 @@ export function DocumentsStep() {
             !canReplace &&
             (application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW");
           const isRequired = required.includes(item.kind);
-
-          const hint =
-            item.kind === "GOVERNMENT_ID"
-              ? "Confirms who you are. If you upload Aadhaar, cover the first 8 digits."
-              : "Any recent bill or statement showing your name and address.";
 
           return (
             <View key={item.kind} style={styles.card}>
@@ -189,7 +241,12 @@ export function DocumentsStep() {
               </View>
 
               {/* Hint text: only while there is nothing, or a rejection, to act on */}
-              {!isUploaded || isRejected ? <Text style={styles.hintText}>{hint}</Text> : null}
+              {notes.map((note) => (
+                <Text key={note} style={styles.hintText}>
+                  {note}
+                </Text>
+              ))}
+              {hint && (!isUploaded || isRejected) ? <Text style={styles.hintText}>{hint}</Text> : null}
 
               {/* Expired / Rejected Banner if Replace State */}
               {isUploaded && !isReplacing && isReplaceState ? (

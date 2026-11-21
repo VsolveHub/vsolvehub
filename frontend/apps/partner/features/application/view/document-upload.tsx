@@ -3,7 +3,7 @@
 import type { Schemas } from "@vsolve/api-client";
 import { Badge, Button, ErrorState, useT, type Translator } from "@vsolve/ui";
 import { Eye, RefreshCw, UploadCloud } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import {
   currentDocument,
@@ -13,6 +13,7 @@ import {
 } from "../model/status";
 import {
   ACCEPTED_CONTENT_TYPES,
+  IMAGE_ONLY_CONTENT_TYPES,
   MAX_UPLOAD_BYTES,
   formatBytes,
   isRetryableUploadFailure,
@@ -44,16 +45,22 @@ export function DocumentSlot({
   kind,
   required,
   hintKey,
+  label: labelOverride,
+  note,
 }: {
   application: Application;
   kind: DocumentKind;
   required: boolean;
   hintKey?: string;
+  /** A name for this slot other than the kind's usual one (an employer's ID is "Your ID"). */
+  label?: string;
+  /** What the applicant gave that this document must match, shown above the slot. */
+  note?: ReactNode;
 }) {
   const t = useT();
   const document = currentDocument(application, kind);
   const [replacing, setReplacing] = useState(false);
-  const label = t(documentLabelKey(kind));
+  const label = labelOverride ?? t(documentLabelKey(kind));
   const rejected = document !== null && isDocumentRejected(document);
   const canReplace = document?.can_replace ?? false;
   const showUploader =
@@ -77,6 +84,8 @@ export function DocumentSlot({
           {badge ? t(badge.labelKey) : t("apply.documents.notUploaded")}
         </Badge>
       </div>
+
+      {note ? <div className="flex flex-col gap-1 text-xs text-text-secondary">{note}</div> : null}
 
       {hintKey && (document === null || rejected) ? (
         <p className="text-xs text-text-secondary">{t(hintKey)}</p>
@@ -239,6 +248,9 @@ function DocumentUpload({
 
   const isBusy = upload.isPending;
   const inputId = `upload-${kind.toLowerCase()}`;
+  // A selfie is a photo: the picker offers only photos, and a phone opens its front camera.
+  const isSelfie = kind === "SELFIE";
+  const acceptedTypes = isSelfie ? IMAGE_ONLY_CONTENT_TYPES : ACCEPTED_CONTENT_TYPES;
 
   async function send(file: File) {
     setFailure(null);
@@ -260,7 +272,7 @@ function DocumentUpload({
 
   function accept(file: File | undefined) {
     if (!file) return;
-    const problem = rejectFile(file, t);
+    const problem = rejectFile(file, t, { imageOnly: isSelfie });
     if (problem) {
       setRejection(problem.message);
       setPendingFile(null);
@@ -317,7 +329,8 @@ function DocumentUpload({
           ref={inputRef}
           id={inputId}
           type="file"
-          accept={ACCEPTED_CONTENT_TYPES.join(",")}
+          accept={acceptedTypes.join(",")}
+          capture={isSelfie ? "user" : undefined}
           disabled={isBusy}
           onChange={(event) => accept(event.target.files?.[0])}
           className="sr-only"
@@ -327,7 +340,9 @@ function DocumentUpload({
           {replacing ? t("apply.upload.reupload") : t("apply.upload.chooseFile")}
         </p>
         <p className="text-xs text-text-muted">
-          {t("apply.upload.supportHint", { size: formatBytes(MAX_UPLOAD_BYTES) })}
+          {t(isSelfie ? "apply.upload.supportHintImage" : "apply.upload.supportHint", {
+            size: formatBytes(MAX_UPLOAD_BYTES),
+          })}
         </p>
       </div>
 

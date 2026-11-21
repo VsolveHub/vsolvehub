@@ -145,6 +145,12 @@ const DOCUMENT_LABEL_KEYS: Record<DocumentKind, { key: string; label: string }> 
   TAX: { key: "apply.overview.documentLabels.tax", label: "Tax document" },
   BANK: { key: "apply.overview.documentLabels.bank", label: "Bank document" },
   BACKGROUND_CHECK: { key: "apply.overview.documentLabels.backgroundCheck", label: "Background check" },
+  SELFIE: { key: "apply.overview.documentLabels.selfie", label: "Selfie" },
+  BUSINESS_PROOF: { key: "apply.overview.documentLabels.businessProof", label: "Business proof" },
+  AUTHORIZATION_LETTER: {
+    key: "apply.overview.documentLabels.authorizationLetter",
+    label: "Authorization letter",
+  },
   OTHER: { key: "apply.overview.documentLabels.other", label: "Document" },
 };
 

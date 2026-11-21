@@ -1,6 +1,8 @@
 from django.contrib import admin
 
 from apps.partners.models import (
+    EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerApplicationTransition,
     PartnerAreaRequest,
@@ -35,3 +37,5 @@ admin.site.register(PartnerAvailabilityRule)
 admin.site.register(PartnerAvailabilityException)
 admin.site.register(PartnerLocation)
 admin.site.register(PartnerOnlineSession)
+admin.site.register(EmployerProfile)
+admin.site.register(EmployerReviewCheck)

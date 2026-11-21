@@ -85,7 +85,7 @@ export function stepProgress(
   */
   const met = requirements(application, availability);
 
-  return applicationSteps(application?.track).map((step) => {
+  return applicationSteps(application?.track, application?.employer?.hiring_as).map((step) => {
     const mine = met.filter((requirement) => requirement.href === step.href);
     const outstanding = mine.filter((requirement) => !requirement.isMet).length;
 
@@ -144,10 +144,14 @@ export function progressSummary(
  * they mistyped something on the previous screen was the one gesture the flow
  * did not offer.
  */
-export function previousStep(pathname: string, track?: string | null): ApplicationStep | null {
+export function previousStep(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): ApplicationStep | null {
   const normalised =
     pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  const steps = applicationSteps(track);
+  const steps = applicationSteps(track, hiringAs);
   const index = steps.findIndex((step) => step.href === normalised);
   if (index <= 0) return null;
   return steps[index - 1] ?? null;

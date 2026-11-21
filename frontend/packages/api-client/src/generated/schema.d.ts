@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.108.0)
- * Checksum: 4a450d9a6c7c3989
+ * Source:   contracts/openapi/v1.yaml (version 1.109.0)
+ * Checksum: 79feb766f4d34b87
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3859,6 +3859,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/partner-applications/{application_id}/employer-checks/{code}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Pass or fail one manual check on an employer application. 400 codes: `employer_check_not_applicable`, `employer_check_note_required`. 409 `partner_review_ownership_conflict` unless you hold the application. */
+        put: operations["operations_partner_application_employer_check_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/partner-applications/{application_id}/release/": {
         parameters: {
             query?: never;
@@ -6075,6 +6092,41 @@ export interface paths {
         put?: never;
         post: operations["partner_application_documents_uploads_create"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/application/employer/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description The only write path for the employer screens. 400 codes: `pin_code_invalid`, `pin_incomplete`, `gstin_format`, `gstin_state`, `gstin_pan`, `gstin_checksum`, `gstin_needs_gst_registered`, `business_proof_mismatch`, `employer_field_not_for_type`. */
+        patch: operations["partner_application_employer_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/application/employer/logo/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 400 codes: `employer_logo_type`, `employer_logo_empty`, `employer_logo_too_large`, `employer_field_not_for_type` (not hiring for a business). */
+        post: operations["partner_application_employer_logo_create"];
+        /** @description A business employer's public logo: JPEG, PNG or WebP, up to 2 MB. */
+        delete: operations["partner_application_employer_logo_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10347,14 +10399,33 @@ export interface components {
             group_key?: string;
         };
         /**
-         * @description * `SHOP` - Shop
-         *     * `CLINIC` - Clinic
-         *     * `OFFICE` - Office
-         *     * `RESTAURANT` - Restaurant
+         * @description * `SHOP` - Shop / retail
+         *     * `RESTAURANT` - Restaurant / food
+         *     * `CLINIC` - Clinic / hospital
+         *     * `OFFICE` - Office / IT
+         *     * `SCHOOL` - School / coaching
+         *     * `FACTORY` - Factory / workshop
+         *     * `CONSTRUCTION` - Construction
+         *     * `FACILITY` - Security / facility services
+         *     * `LOGISTICS` - Delivery / logistics
+         *     * `HOTEL` - Hotel
+         *     * `SALON` - Salon / beauty
          *     * `OTHER` - Other
          * @enum {string}
          */
-        BusinessCategoryEnum: "SHOP" | "CLINIC" | "OFFICE" | "RESTAURANT" | "OTHER";
+        BusinessCategoryEnum: "SHOP" | "RESTAURANT" | "CLINIC" | "OFFICE" | "SCHOOL" | "FACTORY" | "CONSTRUCTION" | "FACILITY" | "LOGISTICS" | "HOTEL" | "SALON" | "OTHER";
+        /**
+         * @description * `GST_CERTIFICATE` - GST certificate
+         *     * `INCORPORATION_CERTIFICATE` - Incorporation certificate
+         *     * `COMPANY_PAN` - Company PAN
+         *     * `SHOP_ESTABLISHMENT` - Shop & Establishment licence
+         *     * `TRADE_LICENCE` - Trade licence
+         *     * `FSSAI` - FSSAI licence
+         *     * `CLINIC_REGISTRATION` - Clinic registration
+         *     * `UDYAM` - Udyam registration
+         * @enum {string}
+         */
+        BusinessProofTypeEnum: "GST_CERTIFICATE" | "INCORPORATION_CERTIFICATE" | "COMPANY_PAN" | "SHOP_ESTABLISHMENT" | "TRADE_LICENCE" | "FSSAI" | "CLINIC_REGISTRATION" | "UDYAM";
         BusinessTypeOption: {
             readonly value: string;
             readonly label: string;
@@ -10977,6 +11048,14 @@ export interface components {
             purpose: string;
             is_enabled?: boolean;
         };
+        /**
+         * @description * `SIZE_1_10` - 1-10
+         *     * `SIZE_11_50` - 11-50
+         *     * `SIZE_51_200` - 51-200
+         *     * `SIZE_200_PLUS` - 200+
+         * @enum {string}
+         */
+        CompanySizeEnum: "SIZE_1_10" | "SIZE_11_50" | "SIZE_51_200" | "SIZE_200_PLUS";
         CompatibilityRule: {
             /** Format: uuid */
             readonly id: string;
@@ -12154,6 +12233,108 @@ export interface components {
          * @enum {string}
          */
         EarnModeEnum: "FLAT" | "TIERED_ORDER_VALUE" | "TIERED_BOOKING_SEQUENCE";
+        /** @description An employer's business as the applicant sees it. The logo is a public, absolute URL. */
+        EmployerBusiness: {
+            readonly trade_name: string;
+            readonly legal_name: string;
+            readonly legal_structure: components["schemas"]["LegalStructureEnum"];
+            readonly business_category: components["schemas"]["BusinessCategoryEnum"];
+            readonly company_size: components["schemas"]["CompanySizeEnum"];
+            readonly gst_registered: boolean;
+            readonly gstin: string;
+            readonly business_proof_type: components["schemas"]["BusinessProofTypeEnum"];
+            readonly address: string;
+            readonly area: string;
+            readonly city: string;
+            readonly state: string;
+            readonly pin_code: string;
+            /** Format: decimal */
+            readonly latitude: string | null;
+            /** Format: decimal */
+            readonly longitude: string | null;
+            readonly logo_url: string;
+            /** Format: uri */
+            readonly website_url: string;
+        };
+        EmployerBusinessInputRequest: {
+            trade_name?: string;
+            legal_name?: string;
+            legal_structure?: components["schemas"]["LegalStructureEnum"] | components["schemas"]["BlankEnum"];
+            business_category?: components["schemas"]["BusinessCategoryEnum"] | components["schemas"]["BlankEnum"];
+            company_size?: components["schemas"]["CompanySizeEnum"] | components["schemas"]["BlankEnum"];
+            gst_registered?: boolean;
+            gstin?: string;
+            business_proof_type?: components["schemas"]["BusinessProofTypeEnum"] | components["schemas"]["BlankEnum"];
+            address?: string;
+            area?: string;
+            city?: string;
+            state?: string;
+            pin_code?: string;
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
+            /** Format: uri */
+            website_url?: string;
+        };
+        EmployerCheck: {
+            code: components["schemas"]["EmployerCheckCodeEnum"];
+            label: string;
+            result: (components["schemas"]["ResultEnum"] | components["schemas"]["NullEnum"]) | null;
+            note: string;
+            checked_by_name: string;
+            /** Format: date-time */
+            checked_at: string | null;
+        };
+        /**
+         * @description * `NAME_MATCHES_ID` - The name on the ID matches the name they gave
+         *     * `SELFIE_MATCHES_ID` - The selfie is the same person as the ID photo
+         *     * `GST_ACTIVE_ON_PORTAL` - GSTIN is Active on the GST portal and the legal name matches
+         *     * `PROOF_MATCHES_BUSINESS` - The business proof shows the same legal name and isn't edited
+         *     * `POSTER_ID_MATCHES` - The poster's ID matches the name they gave
+         *     * `AUTHORITY_CONFIRMED` - Owner: ID name matches the business owner. Others: the owner's letter is valid
+         * @enum {string}
+         */
+        EmployerCheckCodeEnum: "NAME_MATCHES_ID" | "SELFIE_MATCHES_ID" | "GST_ACTIVE_ON_PORTAL" | "PROOF_MATCHES_BUSINESS" | "POSTER_ID_MATCHES" | "AUTHORITY_CONFIRMED";
+        EmployerCheckInputRequest: {
+            result: components["schemas"]["ResultEnum"];
+            /** @default  */
+            note: string;
+        };
+        /** @description Who is hiring. `business` is only present for someone hiring for a business. */
+        EmployerDetails: {
+            readonly hiring_as: components["schemas"]["HiringAsEnum"];
+            readonly poster_role: components["schemas"]["PosterRoleEnum"];
+            readonly id_document_type: components["schemas"]["IdDocumentTypeEnum"];
+            /** Format: email */
+            readonly email: string;
+            readonly area: string;
+            readonly city: string;
+            readonly pin_code: string;
+            readonly business: components["schemas"]["EmployerBusiness"] | null;
+            readonly missing_fields: string[];
+        };
+        EmployerHint: {
+            code: string;
+            level: components["schemas"]["LevelEnum"];
+            message: string;
+        };
+        /** @description Who a job is shown as hiring. An individual is a short name with no street address. */
+        EmployerIdentity: {
+            name: string;
+            kind: components["schemas"]["EmployerIdentityKindEnum"];
+            locality: string;
+            is_verified: boolean;
+            logo_url: string;
+            industry_label: string;
+            size_label: string;
+        };
+        /**
+         * @description * `BUSINESS` - Business
+         *     * `INDIVIDUAL` - Individual
+         * @enum {string}
+         */
+        EmployerIdentityKindEnum: "BUSINESS" | "INDIVIDUAL";
         EngageKillSwitchRequestRequest: {
             scope: components["schemas"]["KillSwitchScopeEnum"];
             /** @default  */
@@ -12841,6 +13022,12 @@ export interface components {
             note: string;
             items: components["schemas"]["DeliverableInputRequest"][];
         };
+        /**
+         * @description * `INDIVIDUAL` - For myself or my home
+         *     * `BUSINESS` - For my business
+         * @enum {string}
+         */
+        HiringAsEnum: "INDIVIDUAL" | "BUSINESS";
         HostStaySummary: {
             total_properties: number;
             live_properties: number;
@@ -12909,6 +13096,15 @@ export interface components {
          * @enum {string}
          */
         IconKeyEnum: "service" | "electrical" | "plumbing" | "carpentry" | "air-conditioning" | "water-purifier" | "internet-wifi" | "gas-stove" | "computer" | "mobile" | "security-camera" | "locksmith" | "home-automation" | "fire-safety" | "face-care" | "beauty-treatment" | "waxing" | "threading" | "hair-care" | "nail-care" | "makeup" | "mehendi" | "body-care" | "skin-care" | "home-cleaning" | "sofa-carpet" | "pest-control" | "water-tank" | "septic-tank" | "laundry" | "gardening" | "swimming-pool" | "chimney-exhaust" | "home-organization" | "home-inspection" | "home-maintenance" | "pet-grooming" | "veterinary" | "pet-walking" | "pet-sitting" | "pet-training" | "pet-photography" | "workforce" | "custom-project";
+        /**
+         * @description * `AADHAAR_MASKED` - Masked Aadhaar
+         *     * `PAN` - PAN
+         *     * `DRIVING_LICENCE` - Driving licence
+         *     * `VOTER_ID` - Voter ID
+         *     * `PASSPORT` - Passport
+         * @enum {string}
+         */
+        IdDocumentTypeEnum: "AADHAAR_MASKED" | "PAN" | "DRIVING_LICENCE" | "VOTER_ID" | "PASSPORT";
         InstantAvailability: {
             readonly is_available: boolean;
             /** Format: date-time */
@@ -13173,6 +13369,21 @@ export interface components {
          */
         LedgerEntryStatusEnum: "PENDING" | "AVAILABLE" | "RESERVED" | "PAID" | "RELEASED";
         /**
+         * @description * `PROPRIETORSHIP` - Proprietorship
+         *     * `PARTNERSHIP_LLP` - Partnership / LLP
+         *     * `COMPANY` - Company
+         *     * `TRUST_SOCIETY_NGO` - Trust / society / NGO
+         *     * `GOVERNMENT` - Government
+         * @enum {string}
+         */
+        LegalStructureEnum: "PROPRIETORSHIP" | "PARTNERSHIP_LLP" | "COMPANY" | "TRUST_SOCIETY_NGO" | "GOVERNMENT";
+        /**
+         * @description * `OK` - OK
+         *     * `WARN` - WARN
+         * @enum {string}
+         */
+        LevelEnum: "OK" | "WARN";
+        /**
          * @description * `DRAFT` - Draft
          *     * `ACTIVE` - Active
          *     * `RETIRED` - Retired
@@ -13195,6 +13406,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly poster_name: string;
+            readonly employer: components["schemas"]["EmployerIdentity"];
             readonly service_name: string;
             readonly variant_name: string;
             title: string;
@@ -13305,6 +13517,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly poster_name: string;
+            readonly employer: components["schemas"]["EmployerIdentity"];
             readonly service_name: string;
             readonly variant_name: string;
             title: string;
@@ -13646,6 +13859,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly status: components["schemas"]["PartnerApplicationStatusEnum"];
+            readonly track: components["schemas"]["TrackEnum"];
             readonly version: number;
             readonly display_name: string;
             /** Format: date-time */
@@ -14260,6 +14474,55 @@ export interface components {
             service_area_id: string;
             /** @default Area opened */
             reason: string;
+        };
+        /**
+         * @description The application as Operations reads it: the applicant's view plus what only a reviewer sees.
+         *
+         *     A separate class, not extra fields on `PartnerApplicationSerializer`, so the hints and checks
+         *     cannot reach an applicant whichever serializer context a view forgets to pass.
+         */
+        OperationsPartnerApplicationDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly status: components["schemas"]["PartnerApplicationStatusEnum"];
+            readonly track: components["schemas"]["TrackEnum"];
+            readonly version: number;
+            readonly display_name: string;
+            readonly biography: string;
+            readonly experience_years: number;
+            readonly skill_codes: string[];
+            readonly service_variant_ids: string[];
+            readonly service_area_ids: string[];
+            readonly requested_postal_codes: string[];
+            readonly area_requests: components["schemas"]["PartnerAreaRequest"][];
+            readonly area_details: components["schemas"]["PartnerApplicationAreaDetail"][];
+            readonly services_not_offered: string[];
+            readonly change_request_message: string;
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: uuid */
+            readonly review_assigned_to_id: string | null;
+            /** Format: date-time */
+            readonly review_assigned_at: string | null;
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+            readonly consents: components["schemas"]["PartnerConsent"][];
+            readonly documents: components["schemas"]["PartnerDocument"][];
+            readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            readonly can_edit: boolean;
+            readonly required_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly offered_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly employer: components["schemas"]["EmployerDetails"] | null;
+            readonly consents_complete: boolean;
+            readonly business_details_complete: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly employer_hints: components["schemas"]["EmployerHint"][];
+            readonly employer_checks: components["schemas"]["EmployerCheck"][];
         };
         OperationsPartnerBalance: {
             /** @description Payable now. Negative when refunds exceed it. */
@@ -15123,6 +15386,8 @@ export interface components {
             readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
             readonly can_edit: boolean;
             readonly required_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly offered_document_kinds: components["schemas"]["PartnerDocumentKindEnum"][];
+            readonly employer: components["schemas"]["EmployerDetails"] | null;
             readonly consents_complete: boolean;
             readonly business_details_complete: boolean;
             /** Format: date-time */
@@ -15553,10 +15818,13 @@ export interface components {
          *     * `TAX` - Tax document
          *     * `BANK` - Bank document
          *     * `BACKGROUND_CHECK` - Background check
+         *     * `SELFIE` - Selfie
+         *     * `BUSINESS_PROOF` - Business proof
+         *     * `AUTHORIZATION_LETTER` - Authorization letter
          *     * `OTHER` - Other
          * @enum {string}
          */
-        PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "OTHER";
+        PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "SELFIE" | "BUSINESS_PROOF" | "AUTHORIZATION_LETTER" | "OTHER";
         PartnerDocumentReviewAccess: {
             /** Format: uri */
             readonly review_url: string;
@@ -15736,6 +16004,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly poster_name: string;
+            readonly employer: components["schemas"]["EmployerIdentity"];
             readonly service_name: string;
             readonly variant_name: string;
             title: string;
@@ -16473,6 +16742,23 @@ export interface components {
             user_agent?: string;
         };
         /**
+         * @description Save who is hiring. Business facts live in `business`, so a home pin code and a business
+         *     pin code can never be confused.
+         */
+        PatchedEmployerDetailsUpdateRequest: {
+            expected_version?: number;
+            display_name?: string;
+            hiring_as?: components["schemas"]["HiringAsEnum"];
+            poster_role?: components["schemas"]["PosterRoleEnum"] | components["schemas"]["BlankEnum"];
+            id_document_type?: components["schemas"]["IdDocumentTypeEnum"] | components["schemas"]["BlankEnum"];
+            /** Format: email */
+            email?: string;
+            area?: string;
+            city?: string;
+            pin_code?: string;
+            business?: components["schemas"]["EmployerBusinessInputRequest"];
+        };
+        /**
          * @description A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
          *     the service; free text is limited to skills, duties, benefits, title, city and area.
          */
@@ -17081,6 +17367,14 @@ export interface components {
             state: string;
             is_active: boolean;
         };
+        /**
+         * @description * `OWNER` - Owner / Partner / Director
+         *     * `HR` - HR / Recruiter
+         *     * `MANAGER` - Manager
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        PosterRoleEnum: "OWNER" | "HR" | "MANAGER" | "OTHER";
         /** @description One visit's chosen start, keyed by the scheduling group it belongs to. */
         PreferredStartRequest: {
             group_key: string;
@@ -19388,6 +19682,12 @@ export interface components {
             /** @default false */
             decline: boolean;
         };
+        /**
+         * @description * `PASS` - Pass
+         *     * `FAIL` - Fail
+         * @enum {string}
+         */
+        ResultEnum: "PASS" | "FAIL";
         ReverseGeocodeRequestRequest: {
             /** Format: decimal */
             latitude: string;
@@ -30133,6 +30433,13 @@ export interface operations {
                  *     * `CHANGES_REQUIRED` - CHANGES_REQUIRED
                  */
                 status?: "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUIRED";
+                /**
+                 * @description * `SERVICES` - Offer services
+                 *     * `STAY_HOST` - List my property
+                 *     * `RENTAL_OWNER` - Rent out items
+                 *     * `EMPLOYER` - Hire staff
+                 */
+                track?: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
                 unassigned?: boolean;
             };
             header?: never;
@@ -30183,7 +30490,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PartnerApplication"];
+                    "application/json": components["schemas"]["OperationsPartnerApplicationDetail"];
                 };
             };
             403: {
@@ -30227,6 +30534,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_application_employer_check_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployerCheckInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EmployerCheckInputRequest"];
+                "multipart/form-data": components["schemas"]["EmployerCheckInputRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployerCheck"][];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             403: {
@@ -35363,6 +35730,125 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_employer_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedEmployerDetailsUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedEmployerDetailsUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedEmployerDetailsUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `partner_application_version_conflict`, `employer_track_required` (not a hire-staff application) or `partner_transition_not_allowed` (the application can no longer be edited). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_employer_logo_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_employer_logo_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

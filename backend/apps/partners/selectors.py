@@ -15,10 +15,14 @@ from django.utils import timezone
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
+from apps.partners.gstin import PAN_HOLDER_STRUCTURE, GstinInvalidError, validate_gstin
 from apps.partners.models import (
+    EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
+    PartnerBusinessProfile,
     PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
@@ -221,19 +225,197 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
     )
 
 
-def employer_business_complete(partner: PartnerProfile) -> bool:
-    """Whether an employer has given the business details its jobs are shown under.
+MIN_EMPLOYER_NAME_LENGTH = 2
 
-    Business name, kind of business and city. Address and GSTIN are optional. The one rule for
-    both submitting an employer application and the apps' "Business details" checklist step.
+
+def required_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
+    """The document kinds this application must hold to be submitted and approved."""
+    if application.track != PartnerApplication.Track.EMPLOYER:
+        return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    kind = PartnerDocument.Kind
+    employer = getattr(application.partner, "employer_profile", None)
+    if employer is None:
+        return (kind.GOVERNMENT_ID,)
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return (kind.GOVERNMENT_ID, kind.SELFIE)
+    if employer.hiring_as == EmployerProfile.HiringAs.BUSINESS:
+        kinds: tuple[str, ...] = (kind.GOVERNMENT_ID, kind.BUSINESS_PROOF)
+        if employer.poster_role != EmployerProfile.PosterRole.OWNER:
+            kinds += (kind.AUTHORIZATION_LETTER,)
+        return kinds
+    return (kind.GOVERNMENT_ID,)
+
+
+def offered_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
+    """The document slots the apps show. An employer is offered exactly what it must upload."""
+    if application.track == PartnerApplication.Track.EMPLOYER:
+        return required_document_kinds(application)
+    return (PartnerDocument.Kind.GOVERNMENT_ID, PartnerDocument.Kind.ADDRESS_PROOF)
+
+
+def employer_missing_fields(partner: PartnerProfile) -> list[str]:
+    """What an employer still has to give before submitting, in screen order.
+
+    The one rule for submitting an employer application and for the apps' "details complete"
+    step. `trade_name`, `email`, `logo` and `website_url` are optional.
     """
+    employer = getattr(partner, "employer_profile", None)
+    if employer is None or not employer.hiring_as:
+        return ["hiring_as"]
+    missing: list[str] = []
+    if len(partner.display_name.strip()) < MIN_EMPLOYER_NAME_LENGTH:
+        missing.append("display_name")
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return missing + _blank_fields(employer, ("area", "city", "pin_code", "id_document_type"))
+
     business = getattr(partner, "business_profile", None)
-    return bool(
-        business
-        and business.legal_name.strip()
-        and business.business_category
-        and business.city.strip()
+    missing += _blank_fields(
+        business,
+        ("legal_name", "legal_structure", "business_category", "company_size"),
     )
+    missing += _blank_fields(business, ("business_proof_type",))
+    if business is not None and business.gst_registered and not _gstin_is_valid(business.gstin):
+        missing.append("gstin")
+    missing += _blank_fields(business, ("address", "area", "city", "state", "pin_code"))
+    if business is None or business.latitude is None or business.longitude is None:
+        missing += ["latitude", "longitude"]
+    return missing + _blank_fields(employer, ("poster_role", "id_document_type"))
+
+
+def required_check_codes(partner: PartnerProfile) -> list[str]:
+    """The manual checks Operations must pass before approving this employer, in review order."""
+    employer = getattr(partner, "employer_profile", None)
+    if employer is None:
+        return []
+    code = EmployerReviewCheck.Code
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return [code.NAME_MATCHES_ID, code.SELFIE_MATCHES_ID]
+    if employer.hiring_as != EmployerProfile.HiringAs.BUSINESS:
+        return []
+    business = getattr(partner, "business_profile", None)
+    has_gst = business is not None and business.gst_registered
+    return [
+        *([code.GST_ACTIVE_ON_PORTAL] if has_gst else []),
+        code.PROOF_MATCHES_BUSINESS,
+        code.POSTER_ID_MATCHES,
+        code.AUTHORITY_CONFIRMED,
+    ]
+
+
+def _hint(code: str, *, warn: bool, ok: str, warning: str) -> dict[str, str]:
+    return {"code": code, "level": "WARN" if warn else "OK", "message": warning if warn else ok}
+
+
+def _gstin_hints(partner: PartnerProfile, business: PartnerBusinessProfile) -> list[dict[str, str]]:
+    try:
+        facts = validate_gstin(business.gstin)
+    except GstinInvalidError:
+        return []
+    others = (
+        PartnerBusinessProfile.objects.filter(gstin=facts.gstin)
+        .exclude(partner=partner)
+        .select_related("partner")
+    )
+    names = sorted({other.legal_name or other.partner.display_name for other in others})
+    structure = business.get_legal_structure_display() or "not given"
+    return [
+        _hint(
+            "GSTIN_STATE_MISMATCH",
+            warn=facts.state_name.casefold() != business.state.strip().casefold(),
+            ok="The GSTIN's state matches the business state.",
+            warning=(
+                f"The GSTIN is for {facts.state_name}, but the state given is {business.state}."
+            ),
+        ),
+        _hint(
+            "PAN_TYPE_MISMATCH",
+            warn=PAN_HOLDER_STRUCTURE.get(facts.pan_holder_letter) != business.legal_structure,
+            ok="The PAN's holder type fits the legal structure.",
+            warning=(
+                f"The PAN's 4th letter ({facts.pan_holder_letter}) does not fit the legal "
+                f"structure ({structure})."
+            ),
+        ),
+        _hint(
+            "DUPLICATE_GSTIN",
+            warn=bool(names),
+            ok="No other business uses this GSTIN.",
+            warning=f"Another business already uses this GSTIN: {', '.join(names)}.",
+        ),
+    ]
+
+
+def employer_hints(partner: PartnerProfile) -> list[dict[str, str]]:
+    """Read-only pointers for the reviewer; they never block anything.
+
+    Each applicable check gives one hint, OK or WARN. Business only: an individual has no GSTIN
+    or proof to compare.
+    """
+    employer = getattr(partner, "employer_profile", None)
+    business = getattr(partner, "business_profile", None)
+    if employer is None or employer.hiring_as != EmployerProfile.HiringAs.BUSINESS:
+        return []
+    if business is None:
+        return []
+    hints: list[dict[str, str]] = []
+    if business.gst_registered:
+        hints += _gstin_hints(partner, business)
+    else:
+        hints.append(
+            _hint(
+                "NO_GST",
+                warn=True,
+                ok="",
+                warning="Check the business proof carefully.",
+            )
+        )
+    if business.business_proof_type == PartnerBusinessProfile.BusinessProofType.UDYAM:
+        hints.append(
+            _hint(
+                "UDYAM_PROOF",
+                warn=True,
+                ok="",
+                warning="Udyam is self-declared. Look for other signs the business is real.",
+            )
+        )
+    return hints
+
+
+def employer_checks_for(application: PartnerApplication) -> list[dict[str, Any]]:
+    """Every check this employer needs, each with its result so far (`result` is null if unset)."""
+    recorded = {
+        check.code: check
+        for check in EmployerReviewCheck.objects.filter(application=application).select_related(
+            "checked_by"
+        )
+    }
+    rows: list[dict[str, Any]] = []
+    for code in required_check_codes(application.partner):
+        check = recorded.get(code)
+        rows.append(
+            {
+                "code": code,
+                "label": EmployerReviewCheck.Code(code).label,
+                "result": check.result if check else None,
+                "note": check.note if check else "",
+                "checked_by_name": check.checked_by.full_name if check else "",
+                "checked_at": check.checked_at if check else None,
+            }
+        )
+    return rows
+
+
+def _blank_fields(source: object | None, names: Sequence[str]) -> list[str]:
+    """The names whose value is missing or blank on `source` (all of them when it is missing)."""
+    return [name for name in names if source is None or not str(getattr(source, name)).strip()]
+
+
+def _gstin_is_valid(raw: str) -> bool:
+    try:
+        validate_gstin(raw)
+    except GstinInvalidError:
+        return False
+    return True
 
 
 def partner_has_required_consents(partner: PartnerProfile) -> bool:
@@ -285,12 +467,15 @@ def operations_partner_application_queue(
     status: str | None,
     assigned_to_me: bool,
     unassigned: bool,
+    track: str | None = None,
     area_pending: bool = False,
 ) -> QuerySet[PartnerApplication]:
     queryset = PartnerApplication.objects.select_related(
         "partner",
         "review_assigned_to",
     )
+    if track is not None:
+        queryset = queryset.filter(track=track)
     if area_pending:
         queryset = (
             queryset.filter(

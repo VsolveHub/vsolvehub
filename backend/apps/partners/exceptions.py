@@ -114,12 +114,49 @@ class PartnerApplicationIncompleteError(PartnerDomainError):
         )
 
 
-class PartnerDocumentUploadError(PartnerDomainError):
-    def __init__(self, message: str, *, retryable: bool = False) -> None:
+class EmployerTrackRequiredError(PartnerDomainError):
+    def __init__(self) -> None:
         super().__init__(
-            code="partner_document_upload_unavailable"
-            if retryable
-            else "partner_document_upload_invalid",
+            code="employer_track_required",
+            message="Employer details can only be saved on a hire-staff application.",
+            status_code=409,
+        )
+
+
+class EmployerDetailError(PartnerDomainError):
+    """An employer detail that cannot be saved, naming the field it belongs to."""
+
+    def __init__(self, message: str, *, field: str, code: str) -> None:
+        super().__init__(code=code, message=message, status_code=400)
+        self.field = field
+
+
+class EmployerCheckError(PartnerDomainError):
+    def __init__(self, message: str, *, code: str) -> None:
+        super().__init__(code=code, message=message, status_code=400)
+
+
+class EmployerChecksIncompleteError(PartnerDomainError):
+    """Approval refused: an employer's review checklist is not fully passed."""
+
+    def __init__(self, missing_codes: Sequence[str]) -> None:
+        super().__init__(
+            code="employer_checks_incomplete",
+            message="Finish the checklist first.",
+            status_code=409,
+        )
+        self.api_details = {"missing_codes": list(missing_codes)}
+
+
+class PartnerDocumentUploadError(PartnerDomainError):
+    def __init__(self, message: str, *, retryable: bool = False, code: str = "") -> None:
+        super().__init__(
+            code=code
+            or (
+                "partner_document_upload_unavailable"
+                if retryable
+                else "partner_document_upload_invalid"
+            ),
             message=message,
             status_code=503 if retryable else 409,
             retryable=retryable,

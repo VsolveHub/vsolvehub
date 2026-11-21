@@ -10,6 +10,8 @@ import type { ReactNode } from "react";
 import type { OfferableService } from "@/features/catalog/queries";
 import { getApiClient } from "@/lib/api/browser";
 
+import { hiringAsOf } from "../model/employer";
+import { SIZES } from "../model/employer-form";
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { isEditable, requiredDocumentKinds } from "../model/readiness";
 import { WEEKDAY_KEYS } from "../model/schedule";
@@ -21,7 +23,6 @@ import {
   trackLabelKey,
 } from "../model/status";
 import { isListingTrack } from "../model/steps";
-import { usePartnerBusinessProfile } from "@/features/capability/queries";
 
 import { usePartnerApplication, usePartnerAvailability } from "../queries";
 import { useApplicationReference, type ApplicationReference } from "../reference-queries";
@@ -48,7 +49,10 @@ interface SectionProps {
  */
 const SECTIONS: Record<string, (props: SectionProps) => ReactNode> = {
   "/apply/about": AboutSection,
-  "/apply/employer": BusinessSection,
+  "/apply/hiring-as": HiringAsSection,
+  "/apply/employer/about": IndividualSection,
+  "/apply/employer/business": BusinessSection,
+  "/apply/employer/contact": ContactSection,
   "/apply/work": WorkSection,
   "/apply/areas": AreasSection,
   "/apply/schedule": HoursSection,
@@ -254,35 +258,124 @@ function Row({ name, children }: { name: string; children: ReactNode }) {
   );
 }
 
-/** An employer's "Business details" step. */
-function BusinessSection({ t }: SectionProps) {
-  const business = usePartnerBusinessProfile();
-  if (business.isPending) return <Skeleton className="h-16 w-full" />;
-  const data = business.data;
-  const notSet = t("apply.review.notSet");
+/** A row of the employer's answers; a blank one says it is not set. */
+function EmployerRow({ name, children, t }: { name: string; children: ReactNode; t: T }) {
+  return (
+    <Row name={name}>
+      <p className={value}>{children || t("apply.review.notSet")}</p>
+    </Row>
+  );
+}
+
+/** An employer's "Who is hiring" step. */
+function HiringAsSection({ application, t }: SectionProps) {
+  const hiringAs = hiringAsOf(application.employer);
+  return (
+    <EmployerRow name={t("apply.steps.hiringAs")} t={t}>
+      {hiringAs
+        ? t(
+            hiringAs === "INDIVIDUAL"
+              ? "apply.employer.hiringAs.individual.title"
+              : "apply.employer.hiringAs.business.title",
+          )
+        : ""}
+    </EmployerRow>
+  );
+}
+
+/** Someone hiring for themselves. The pin code and ID are Operations' to see, not candidates'. */
+function IndividualSection({ application, t }: SectionProps) {
+  const employer = application.employer;
   return (
     <>
-      <Row name={t("apply.employer.name.label")}>
-        <p className={value}>{data?.legal_name || notSet}</p>
-      </Row>
-      <Row name={t("apply.employer.category.label")}>
-        <p className={value}>
-          {data?.business_category ? t(`apply.employer.category.${data.business_category}`) : notSet}
-        </p>
-      </Row>
-      <Row name={t("apply.employer.city.label")}>
-        <p className={value}>{data?.city || notSet}</p>
-      </Row>
-      {data?.address ? (
-        <Row name={t("apply.employer.address.label")}>
-          <p className={value}>{data.address}</p>
-        </Row>
+      <EmployerRow name={t("apply.employer.field.name.label")} t={t}>
+        {application.display_name}
+      </EmployerRow>
+      {employer?.email ? (
+        <EmployerRow name={t("apply.employer.field.email.label")} t={t}>
+          {employer.email}
+        </EmployerRow>
       ) : null}
-      {data?.gstin ? (
-        <Row name={t("apply.employer.gstin.label")}>
-          <p className={value}>{data.gstin}</p>
-        </Row>
+      <EmployerRow name={t("apply.employer.field.area.label")} t={t}>
+        {employer?.area}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.field.city.label")} t={t}>
+        {employer?.city}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.field.pinCode.label")} t={t}>
+        {employer?.pin_code}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.field.idType.label")} t={t}>
+        {employer?.id_document_type ? t(`apply.employer.field.idType.${employer.id_document_type}`) : ""}
+      </EmployerRow>
+    </>
+  );
+}
+
+/** Someone hiring for a business: its names, kind, GST answer, proof and place. */
+function BusinessSection({ application, t }: SectionProps) {
+  const business = application.employer?.business;
+  const size = SIZES.find((option) => option.value === business?.company_size)?.label;
+  return (
+    <>
+      <EmployerRow name={t("apply.employer.business.tradeName.label")} t={t}>
+        {business?.trade_name || business?.legal_name}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.legalName.label")} t={t}>
+        {business?.legal_name}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.structure.label")} t={t}>
+        {business?.legal_structure ? t(`apply.employer.business.structure.${business.legal_structure}`) : ""}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.industry.label")} t={t}>
+        {business?.business_category ? t(`apply.employer.category.${business.business_category}`) : ""}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.size.label")} t={t}>
+        {size}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.gst.label")} t={t}>
+        {business?.gst_registered
+          ? t("apply.employer.review.gstin", { gstin: business.gstin })
+          : business?.business_proof_type
+            ? t("apply.employer.review.noGst")
+            : ""}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.proof.label")} t={t}>
+        {business?.business_proof_type ? t(`apply.employer.business.proof.${business.business_proof_type}`) : ""}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.business.address.label")} t={t}>
+        {[business?.address, business?.area, business?.city, business?.state, business?.pin_code]
+          .filter(Boolean)
+          .join(", ")}
+      </EmployerRow>
+      {business?.website_url ? (
+        <EmployerRow name={t("apply.employer.business.website.label")} t={t}>
+          {business.website_url}
+        </EmployerRow>
       ) : null}
+    </>
+  );
+}
+
+/** The person posting the jobs for a business. */
+function ContactSection({ application, t }: SectionProps) {
+  const employer = application.employer;
+  return (
+    <>
+      <EmployerRow name={t("apply.employer.field.name.label")} t={t}>
+        {application.display_name}
+      </EmployerRow>
+      <EmployerRow name={t("apply.employer.contact.role.label")} t={t}>
+        {employer?.poster_role ? t(`apply.employer.contact.role.${employer.poster_role}`) : ""}
+      </EmployerRow>
+      {employer?.email ? (
+        <EmployerRow name={t("apply.employer.field.email.label")} t={t}>
+          {employer.email}
+        </EmployerRow>
+      ) : null}
+      <EmployerRow name={t("apply.employer.field.idType.label")} t={t}>
+        {employer?.id_document_type ? t(`apply.employer.field.idType.${employer.id_document_type}`) : ""}
+      </EmployerRow>
     </>
   );
 }

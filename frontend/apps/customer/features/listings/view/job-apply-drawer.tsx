@@ -21,7 +21,14 @@ import {
 } from "../seeker-queries";
 import { QuickApplyCard } from "./quick-apply-card";
 import { AlreadyAppliedCard } from "./already-applied-card";
-import { getCompanyInitials, resolveCategoryTone } from "./career-tones";
+import { resolveCategoryTone } from "./career-tones";
+import {
+  EmployerMark,
+  VerifiedBadge,
+  employerDetailLine,
+  employerName,
+  listingEmployer,
+} from "./employer-identity";
 
 export interface JobApplyDrawerProps {
   listing: Listing | null;
@@ -90,8 +97,9 @@ export function JobApplyDrawer({
   if (!listing) return null;
 
   const fields = listingFields(listing.structured_fields);
-  const employerName = listing.poster_name || "Apex Staffing Solutions";
-  const initials = getCompanyInitials(employerName);
+  const employer = listingEmployer(listing);
+  const name = employerName(employer);
+  const employerDetail = employerDetailLine(employer);
   const toneConfig = resolveCategoryTone(listing.job_category || fields.category as string, listing.title);
 
   // Pay calculation
@@ -205,10 +213,9 @@ export function JobApplyDrawer({
           {/* Identity Block */}
           <div className="flex items-start gap-3.5">
             <div
-              className={`size-14 rounded-2xl grid place-items-center font-extrabold text-base border shrink-0 ${toneConfig.badgeClass}`}
-              aria-hidden="true"
+              className={`size-14 rounded-2xl grid place-items-center overflow-hidden font-extrabold text-base border shrink-0 ${toneConfig.badgeClass}`}
             >
-              {initials}
+              <EmployerMark employer={employer} />
             </div>
             <div className="min-w-0 flex-1">
               <h2
@@ -218,15 +225,17 @@ export function JobApplyDrawer({
                 {listing.title}
               </h2>
               <div className="mt-1 flex items-center gap-2 flex-wrap text-sm">
-                <span className="font-semibold text-[#15264D]/90">{employerName}</span>
-                <span className="text-[#A89F90] font-bold" aria-hidden="true">
-                  ·
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-[#047857]">
-                  <ShieldCheck className="size-3.5" />
-                  <span>Verified employer</span>
-                </span>
+                <span className="font-semibold text-[#15264D]/90">{name}</span>
+                {employer.is_verified ? (
+                  <>
+                    <span className="text-[#A89F90] font-bold" aria-hidden="true">
+                      ·
+                    </span>
+                    <VerifiedBadge employer={employer} className="text-xs font-bold text-[#047857]" />
+                  </>
+                ) : null}
               </div>
+              {employerDetail ? <p className="mt-0.5 text-xs text-[#5F6B7E]">{employerDetail}</p> : null}
             </div>
           </div>
 
@@ -312,18 +321,18 @@ export function JobApplyDrawer({
           <div className="rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] p-3 text-xs text-[#065F46] flex items-start gap-2.5">
             <ShieldCheck className="size-4 text-[#047857] shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong className="font-bold">Free to apply.</strong> This employer is phone &amp; GST verified. VSolveHub never charges candidates any registration or placement fees.
+              <strong className="font-bold">Free to apply.</strong> This employer is phone &amp; ID verified. VSolveHub never charges candidates any registration or placement fees.
             </p>
           </div>
 
           {/* Application Engine */}
           <div className="pt-2 border-t border-[#E8E3DE]">
             {isApplied ? (
-              <AlreadyAppliedCard posterName={employerName} status="SUBMITTED" />
+              <AlreadyAppliedCard posterName={name} status="SUBMITTED" />
             ) : profileQuery.data ? (
               <QuickApplyCard
                 listingId={listing.id}
-                posterName={employerName}
+                posterName={name}
                 profile={profileQuery.data}
                 jobSkills={skillsList}
               />
@@ -333,7 +342,7 @@ export function JobApplyDrawer({
                   Sign in to apply in 1 tap
                 </h4>
                 <p className="text-xs text-[#5F6B7E]">
-                  Your profile and contact info are shared directly with {employerName}.
+                  Your profile and contact info are shared directly with {name}.
                 </p>
                 <SignInCard
                   title="Sign in with mobile"

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.108.0
+  version: 1.109.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -9204,6 +9204,21 @@ paths:
           * `UNDER_REVIEW` - UNDER_REVIEW
           * `CHANGES_REQUIRED` - CHANGES_REQUIRED
       - in: query
+        name: track
+        schema:
+          enum:
+          - SERVICES
+          - STAY_HOST
+          - RENTAL_OWNER
+          - EMPLOYER
+          type: string
+          minLength: 1
+        description: |-
+          * `SERVICES` - Offer services
+          * `STAY_HOST` - List my property
+          * `RENTAL_OWNER` - Rent out items
+          * `EMPLOYER` - Hire staff
+      - in: query
         name: unassigned
         schema:
           type: boolean
@@ -9250,7 +9265,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartnerApplication'
+                $ref: '#/components/schemas/OperationsPartnerApplicationDetail'
           description: ''
         '403':
           content:
@@ -9328,6 +9343,73 @@ paths:
                       retryable: true
                       request_id: req_example
                   summary: Partner application version conflict
+          description: ''
+  /api/v1/operations/partner-applications/{application_id}/employer-checks/{code}/:
+    put:
+      operationId: operations_partner_application_employer_check_update
+      description: 'Pass or fail one manual check on an employer application. 400
+        codes: `employer_check_not_applicable`, `employer_check_note_required`. 409
+        `partner_review_ownership_conflict` unless you hold the application.'
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: code
+        schema:
+          type: string
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployerCheckInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmployerCheckInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmployerCheckInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmployerCheck'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/operations/partner-applications/{application_id}/release/:
     post:
@@ -14741,6 +14823,128 @@ paths:
                   summary: Partner application version conflict
           description: ''
         '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/application/employer/:
+    patch:
+      operationId: partner_application_employer_partial_update
+      description: 'The only write path for the employer screens. 400 codes: `pin_code_invalid`,
+        `pin_incomplete`, `gstin_format`, `gstin_state`, `gstin_pan`, `gstin_checksum`,
+        `gstin_needs_gst_registered`, `business_proof_mismatch`, `employer_field_not_for_type`.'
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployerDetailsUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployerDetailsUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployerDetailsUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
+          description: '`partner_application_version_conflict`, `employer_track_required`
+            (not a hire-staff application) or `partner_transition_not_allowed` (the
+            application can no longer be edited).'
+  /api/v1/partner/application/employer/logo/:
+    post:
+      operationId: partner_application_employer_logo_create
+      description: '400 codes: `employer_logo_type`, `employer_logo_empty`, `employer_logo_too_large`,
+        `employer_field_not_for_type` (not hiring for a business).'
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: partner_application_employer_logo_destroy
+      description: 'A business employer''s public logo: JPEG, PNG or WebP, up to 2
+        MB.'
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -25310,17 +25514,51 @@ components:
     BusinessCategoryEnum:
       enum:
       - SHOP
+      - RESTAURANT
       - CLINIC
       - OFFICE
-      - RESTAURANT
+      - SCHOOL
+      - FACTORY
+      - CONSTRUCTION
+      - FACILITY
+      - LOGISTICS
+      - HOTEL
+      - SALON
       - OTHER
       type: string
       description: |-
-        * `SHOP` - Shop
-        * `CLINIC` - Clinic
-        * `OFFICE` - Office
-        * `RESTAURANT` - Restaurant
+        * `SHOP` - Shop / retail
+        * `RESTAURANT` - Restaurant / food
+        * `CLINIC` - Clinic / hospital
+        * `OFFICE` - Office / IT
+        * `SCHOOL` - School / coaching
+        * `FACTORY` - Factory / workshop
+        * `CONSTRUCTION` - Construction
+        * `FACILITY` - Security / facility services
+        * `LOGISTICS` - Delivery / logistics
+        * `HOTEL` - Hotel
+        * `SALON` - Salon / beauty
         * `OTHER` - Other
+    BusinessProofTypeEnum:
+      enum:
+      - GST_CERTIFICATE
+      - INCORPORATION_CERTIFICATE
+      - COMPANY_PAN
+      - SHOP_ESTABLISHMENT
+      - TRADE_LICENCE
+      - FSSAI
+      - CLINIC_REGISTRATION
+      - UDYAM
+      type: string
+      description: |-
+        * `GST_CERTIFICATE` - GST certificate
+        * `INCORPORATION_CERTIFICATE` - Incorporation certificate
+        * `COMPANY_PAN` - Company PAN
+        * `SHOP_ESTABLISHMENT` - Shop & Establishment licence
+        * `TRADE_LICENCE` - Trade licence
+        * `FSSAI` - FSSAI licence
+        * `CLINIC_REGISTRATION` - Clinic registration
+        * `UDYAM` - Udyam registration
     BusinessTypeOption:
       type: object
       properties:
@@ -26868,6 +27106,18 @@ components:
       required:
       - channel
       - purpose
+    CompanySizeEnum:
+      enum:
+      - SIZE_1_10
+      - SIZE_11_50
+      - SIZE_51_200
+      - SIZE_200_PLUS
+      type: string
+      description: |-
+        * `SIZE_1_10` - 1-10
+        * `SIZE_11_50` - 11-50
+        * `SIZE_51_200` - 51-200
+        * `SIZE_200_PLUS` - 200+
     CompatibilityRule:
       type: object
       properties:
@@ -29706,6 +29956,302 @@ components:
         * `FLAT` - Flat
         * `TIERED_ORDER_VALUE` - Tiered order value
         * `TIERED_BOOKING_SEQUENCE` - Tiered booking sequence
+    EmployerBusiness:
+      type: object
+      description: An employer's business as the applicant sees it. The logo is a
+        public, absolute URL.
+      properties:
+        trade_name:
+          type: string
+          readOnly: true
+        legal_name:
+          type: string
+          readOnly: true
+        legal_structure:
+          allOf:
+          - $ref: '#/components/schemas/LegalStructureEnum'
+          readOnly: true
+        business_category:
+          allOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          readOnly: true
+        company_size:
+          allOf:
+          - $ref: '#/components/schemas/CompanySizeEnum'
+          readOnly: true
+        gst_registered:
+          type: boolean
+          readOnly: true
+        gstin:
+          type: string
+          readOnly: true
+        business_proof_type:
+          allOf:
+          - $ref: '#/components/schemas/BusinessProofTypeEnum'
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        pin_code:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        logo_url:
+          type: string
+          readOnly: true
+        website_url:
+          type: string
+          format: uri
+          readOnly: true
+      required:
+      - address
+      - area
+      - business_category
+      - business_proof_type
+      - city
+      - company_size
+      - gst_registered
+      - gstin
+      - latitude
+      - legal_name
+      - legal_structure
+      - logo_url
+      - longitude
+      - pin_code
+      - state
+      - trade_name
+      - website_url
+    EmployerBusinessInputRequest:
+      type: object
+      properties:
+        trade_name:
+          type: string
+          maxLength: 120
+        legal_name:
+          type: string
+          maxLength: 200
+        legal_structure:
+          oneOf:
+          - $ref: '#/components/schemas/LegalStructureEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        business_category:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        company_size:
+          oneOf:
+          - $ref: '#/components/schemas/CompanySizeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        gst_registered:
+          type: boolean
+        gstin:
+          type: string
+          maxLength: 20
+        business_proof_type:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessProofTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        address:
+          type: string
+          maxLength: 240
+        area:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 80
+        state:
+          type: string
+          maxLength: 40
+        pin_code:
+          type: string
+          maxLength: 6
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        website_url:
+          type: string
+          format: uri
+          maxLength: 300
+    EmployerCheck:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/EmployerCheckCodeEnum'
+        label:
+          type: string
+        result:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ResultEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        note:
+          type: string
+        checked_by_name:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - checked_at
+      - checked_by_name
+      - code
+      - label
+      - note
+      - result
+    EmployerCheckCodeEnum:
+      enum:
+      - NAME_MATCHES_ID
+      - SELFIE_MATCHES_ID
+      - GST_ACTIVE_ON_PORTAL
+      - PROOF_MATCHES_BUSINESS
+      - POSTER_ID_MATCHES
+      - AUTHORITY_CONFIRMED
+      type: string
+      description: |-
+        * `NAME_MATCHES_ID` - The name on the ID matches the name they gave
+        * `SELFIE_MATCHES_ID` - The selfie is the same person as the ID photo
+        * `GST_ACTIVE_ON_PORTAL` - GSTIN is Active on the GST portal and the legal name matches
+        * `PROOF_MATCHES_BUSINESS` - The business proof shows the same legal name and isn't edited
+        * `POSTER_ID_MATCHES` - The poster's ID matches the name they gave
+        * `AUTHORITY_CONFIRMED` - Owner: ID name matches the business owner. Others: the owner's letter is valid
+    EmployerCheckInputRequest:
+      type: object
+      properties:
+        result:
+          $ref: '#/components/schemas/ResultEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 480
+      required:
+      - result
+    EmployerDetails:
+      type: object
+      description: Who is hiring. `business` is only present for someone hiring for
+        a business.
+      properties:
+        hiring_as:
+          allOf:
+          - $ref: '#/components/schemas/HiringAsEnum'
+          readOnly: true
+        poster_role:
+          allOf:
+          - $ref: '#/components/schemas/PosterRoleEnum'
+          readOnly: true
+        id_document_type:
+          allOf:
+          - $ref: '#/components/schemas/IdDocumentTypeEnum'
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        pin_code:
+          type: string
+          readOnly: true
+        business:
+          allOf:
+          - $ref: '#/components/schemas/EmployerBusiness'
+          nullable: true
+          readOnly: true
+        missing_fields:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - area
+      - business
+      - city
+      - email
+      - hiring_as
+      - id_document_type
+      - missing_fields
+      - pin_code
+      - poster_role
+    EmployerHint:
+      type: object
+      properties:
+        code:
+          type: string
+        level:
+          $ref: '#/components/schemas/LevelEnum'
+        message:
+          type: string
+      required:
+      - code
+      - level
+      - message
+    EmployerIdentity:
+      type: object
+      description: Who a job is shown as hiring. An individual is a short name with
+        no street address.
+      properties:
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/EmployerIdentityKindEnum'
+        locality:
+          type: string
+        is_verified:
+          type: boolean
+        logo_url:
+          type: string
+        industry_label:
+          type: string
+        size_label:
+          type: string
+      required:
+      - industry_label
+      - is_verified
+      - kind
+      - locality
+      - logo_url
+      - name
+      - size_label
+    EmployerIdentityKindEnum:
+      enum:
+      - BUSINESS
+      - INDIVIDUAL
+      type: string
+      description: |-
+        * `BUSINESS` - Business
+        * `INDIVIDUAL` - Individual
     EngageKillSwitchRequestRequest:
       type: object
       properties:
@@ -31527,6 +32073,14 @@ components:
             $ref: '#/components/schemas/DeliverableInputRequest'
       required:
       - items
+    HiringAsEnum:
+      enum:
+      - INDIVIDUAL
+      - BUSINESS
+      type: string
+      description: |-
+        * `INDIVIDUAL` - For myself or my home
+        * `BUSINESS` - For my business
     HostStaySummary:
       type: object
       properties:
@@ -31678,6 +32232,20 @@ components:
         * `pet-photography` - Pet photography
         * `workforce` - Workforce
         * `custom-project` - Custom project
+    IdDocumentTypeEnum:
+      enum:
+      - AADHAAR_MASKED
+      - PAN
+      - DRIVING_LICENCE
+      - VOTER_ID
+      - PASSPORT
+      type: string
+      description: |-
+        * `AADHAAR_MASKED` - Masked Aadhaar
+        * `PAN` - PAN
+        * `DRIVING_LICENCE` - Driving licence
+        * `VOTER_ID` - Voter ID
+        * `PASSPORT` - Passport
     InstantAvailability:
       type: object
       properties:
@@ -32351,6 +32919,28 @@ components:
         * `RESERVED` - Reserved in a batch
         * `PAID` - Paid
         * `RELEASED` - Released
+    LegalStructureEnum:
+      enum:
+      - PROPRIETORSHIP
+      - PARTNERSHIP_LLP
+      - COMPANY
+      - TRUST_SOCIETY_NGO
+      - GOVERNMENT
+      type: string
+      description: |-
+        * `PROPRIETORSHIP` - Proprietorship
+        * `PARTNERSHIP_LLP` - Partnership / LLP
+        * `COMPANY` - Company
+        * `TRUST_SOCIETY_NGO` - Trust / society / NGO
+        * `GOVERNMENT` - Government
+    LevelEnum:
+      enum:
+      - OK
+      - WARN
+      type: string
+      description: |-
+        * `OK` - OK
+        * `WARN` - WARN
     LifecycleStatusEnum:
       enum:
       - DRAFT
@@ -32401,6 +32991,10 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
         poster_name:
           type: string
+          readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerIdentity'
           readOnly: true
         service_name:
           type: string
@@ -32533,6 +33127,7 @@ components:
       - city
       - contact_masked
       - description
+      - employer
       - experience_band
       - id
       - job_category
@@ -32686,6 +33281,10 @@ components:
         poster_name:
           type: string
           readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerIdentity'
+          readOnly: true
         service_name:
           type: string
           readOnly: true
@@ -32801,6 +33400,7 @@ components:
       - area
       - benefits
       - city
+      - employer
       - experience_band
       - id
       - job_category
@@ -33522,6 +34122,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
           readOnly: true
+        track:
+          allOf:
+          - $ref: '#/components/schemas/TrackEnum'
+          readOnly: true
         version:
           type: integer
           readOnly: true
@@ -33563,6 +34167,7 @@ components:
       - review_assigned_to_id
       - status
       - submitted_at
+      - track
       - updated_at
       - version
     OperationsApplicationQueuePage:
@@ -35092,6 +35697,191 @@ components:
           default: Area opened
       required:
       - service_area_id
+    OperationsPartnerApplicationDetail:
+      type: object
+      description: |-
+        The application as Operations reads it: the applicant's view plus what only a reviewer sees.
+
+        A separate class, not extra fields on `PartnerApplicationSerializer`, so the hints and checks
+        cannot reach an applicant whichever serializer context a view forgets to pass.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
+          readOnly: true
+        track:
+          allOf:
+          - $ref: '#/components/schemas/TrackEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        biography:
+          type: string
+          readOnly: true
+        experience_years:
+          type: integer
+          readOnly: true
+        skill_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_variant_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_area_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAreaRequest'
+          readOnly: true
+        area_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationAreaDetail'
+          readOnly: true
+        services_not_offered:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        change_request_message:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        review_assigned_to_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerConsent'
+          readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocument'
+          readOnly: true
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationTransition'
+          readOnly: true
+        can_edit:
+          type: boolean
+          readOnly: true
+        required_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        offered_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerDetails'
+          nullable: true
+          readOnly: true
+        consents_complete:
+          type: boolean
+          readOnly: true
+        business_details_complete:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        employer_hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmployerHint'
+          readOnly: true
+        employer_checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmployerCheck'
+          readOnly: true
+      required:
+      - area_details
+      - area_requests
+      - biography
+      - business_details_complete
+      - can_edit
+      - change_request_message
+      - consents
+      - consents_complete
+      - created_at
+      - display_name
+      - documents
+      - employer
+      - employer_checks
+      - employer_hints
+      - experience_years
+      - id
+      - offered_document_kinds
+      - partner_id
+      - requested_postal_codes
+      - required_document_kinds
+      - review_assigned_at
+      - review_assigned_to_id
+      - reviewed_at
+      - service_area_ids
+      - service_variant_ids
+      - services_not_offered
+      - skill_codes
+      - status
+      - submitted_at
+      - track
+      - transitions
+      - updated_at
+      - version
     OperationsPartnerBalance:
       type: object
       properties:
@@ -37531,6 +38321,16 @@ components:
           items:
             $ref: '#/components/schemas/PartnerDocumentKindEnum'
           readOnly: true
+        offered_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerDetails'
+          nullable: true
+          readOnly: true
         consents_complete:
           type: boolean
           readOnly: true
@@ -37557,8 +38357,10 @@ components:
       - created_at
       - display_name
       - documents
+      - employer
       - experience_years
       - id
+      - offered_document_kinds
       - partner_id
       - requested_postal_codes
       - required_document_kinds
@@ -38683,6 +39485,9 @@ components:
       - TAX
       - BANK
       - BACKGROUND_CHECK
+      - SELFIE
+      - BUSINESS_PROOF
+      - AUTHORIZATION_LETTER
       - OTHER
       type: string
       description: |-
@@ -38691,6 +39496,9 @@ components:
         * `TAX` - Tax document
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
+        * `SELFIE` - Selfie
+        * `BUSINESS_PROOF` - Business proof
+        * `AUTHORIZATION_LETTER` - Authorization letter
         * `OTHER` - Other
     PartnerDocumentReviewAccess:
       type: object
@@ -39138,6 +39946,10 @@ components:
         poster_name:
           type: string
           readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerIdentity'
+          readOnly: true
         service_name:
           type: string
           readOnly: true
@@ -39312,6 +40124,7 @@ components:
       - counts
       - created_at
       - description
+      - employer
       - experience_band
       - id
       - job_category
@@ -41017,6 +41830,44 @@ components:
         user_agent:
           type: string
           maxLength: 500
+    PatchedEmployerDetailsUpdateRequest:
+      type: object
+      description: |-
+        Save who is hiring. Business facts live in `business`, so a home pin code and a business
+        pin code can never be confused.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        hiring_as:
+          $ref: '#/components/schemas/HiringAsEnum'
+        poster_role:
+          oneOf:
+          - $ref: '#/components/schemas/PosterRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        id_document_type:
+          oneOf:
+          - $ref: '#/components/schemas/IdDocumentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        area:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 80
+        pin_code:
+          type: string
+          maxLength: 6
+        business:
+          $ref: '#/components/schemas/EmployerBusinessInputRequest'
     PatchedJobUpdateRequest:
       type: object
       description: |-
@@ -42498,6 +43349,18 @@ components:
       - id
       - is_active
       - state
+    PosterRoleEnum:
+      enum:
+      - OWNER
+      - HR
+      - MANAGER
+      - OTHER
+      type: string
+      description: |-
+        * `OWNER` - Owner / Partner / Director
+        * `HR` - HR / Recruiter
+        * `MANAGER` - Manager
+        * `OTHER` - Other
     PreferredStartRequest:
       type: object
       description: One visit's chosen start, keyed by the scheduling group it belongs
@@ -48291,6 +49154,14 @@ components:
         decline:
           type: boolean
           default: false
+    ResultEnum:
+      enum:
+      - PASS
+      - FAIL
+      type: string
+      description: |-
+        * `PASS` - Pass
+        * `FAIL` - Fail
     ReverseGeocodeRequestRequest:
       type: object
       properties:

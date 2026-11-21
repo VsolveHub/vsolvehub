@@ -38,6 +38,11 @@ import { useDismissAreaRequest } from "@/features/area-requests/queries";
 import { getApiClient } from "@/lib/api/browser";
 
 import { DocumentReveal } from "./document-reveal";
+import {
+  EmployerChecklist,
+  EmployerDetailsPanel,
+  employerChecklistComplete,
+} from "./employer-review-panel";
 
 /**
  * One application, and the decisions a reviewer may take on it.
@@ -81,9 +86,9 @@ const TRACK_CONFIG: Record<
     description: "Rents tools, machinery, and equipment.",
   },
   EMPLOYER: {
-    label: "Workforce & projects",
+    label: "Employer",
     icon: Briefcase,
-    description: "Commercial workforce and crew assignments.",
+    description: "Hires staff, for their own home or for a business, and posts jobs once approved.",
   },
 };
 
@@ -195,6 +200,9 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
       (d) => d.kind === "GOVERNMENT_ID" && d.status === "APPROVED",
     );
   const hasDocuments = nonSupersededDocs.length > 0;
+  // An employer is approved only once Operations has passed every check for its type. The server
+  // refuses it otherwise; this keeps the button honest about why.
+  const checklistDone = application.track !== "EMPLOYER" || employerChecklistComplete(application);
   const allRequiredApproved =
     hasDocuments &&
     hasGovIdApproved &&
@@ -240,7 +248,8 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
               </span>
             </div>
             <p className="text-xs text-text-secondary">
-              Version v{application.version} · {application.experience_years} years experience
+              Version v{application.version}
+              {application.track === "EMPLOYER" ? "" : ` · ${application.experience_years} years experience`}
             </p>
           </div>
 
@@ -424,6 +433,9 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           </div>
         </Card>
       ) : null}
+
+      {/* 2b. An employer: who they are, their GST details and what was noticed */}
+      <EmployerDetailsPanel application={application} />
 
       {/* 3. Partner Skills, Services, Coverage & Consents */}
       <Card className="p-5 space-y-4">
@@ -712,6 +724,9 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
         </div>
       </section>
 
+      {/* 4b. The employer's checks, below the documents they are about */}
+      <EmployerChecklist application={application} canRecord={isMine && application.status === "UNDER_REVIEW"} />
+
       {/* 5. Audit History / Transitions Trail */}
       {(application.transitions ?? []).length > 0 ? (
         <Card className="p-4">
@@ -797,6 +812,13 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
             </p>
           ) : null}
 
+          {!checklistDone ? (
+            <p className="mt-2 flex items-center gap-1.5 rounded-control border border-warning-line bg-warning-surface p-2.5 text-xs font-medium text-warning-text">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>Finish the checklist first.</span>
+            </p>
+          ) : null}
+
           {isVersionConflict(transition.error) ? (
             <ErrorState
               inline
@@ -825,8 +847,10 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
           <div className="mt-3 flex flex-wrap gap-2">
             {actions.map((entry) => {
               const isApprove = entry.target === "APPROVED";
-              const isApproveDisabled = isApprove && (!allRequiredApproved || isZeroAreaServices);
-              // During review: reviewer must hold it AND approve requires all docs and at least one service area.
+              const isApproveDisabled =
+                isApprove && (!allRequiredApproved || !checklistDone || isZeroAreaServices);
+              // During review: reviewer must hold it AND approve requires all docs, the employer
+              // checklist and, for services, at least one service area.
               // Post-approval (APPROVED / SUSPENDED): open to any operator!
               const isDisabled = inReview ? !isMine || isApproveDisabled : false;
 
@@ -839,7 +863,9 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
                     isApprove && isZeroAreaServices
                       ? "An application with zero active service areas cannot be approved"
                       : isApproveDisabled
-                        ? "All required KYC documents must be verified and approved first"
+                        ? !allRequiredApproved
+                          ? "All required KYC documents must be verified and approved first"
+                          : "Finish the checklist first."
                         : !isMine && inReview
                           ? "Claim this application before deciding"
                           : undefined

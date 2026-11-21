@@ -42,6 +42,11 @@ class ListingStateError(ValueError):
     pass
 
 
+class JobTextAsksForMoneyError(ListingStateError):
+    def __init__(self, phrase: str) -> None:
+        super().__init__(f"Jobs on V Solve Hub can't ask candidates to pay. Remove “{phrase}”.")
+
+
 _S = Application.Status
 #: Where an applicant may go from each stage, and nowhere else. Every move is audited
 #: (`ApplicationStatusEvent`). Rejected can be reopened only by booking an interview
@@ -932,6 +937,22 @@ def _job_description(listing: Listing) -> str:
     )
 
 
+def _assert_job_text_asks_for_no_money(listing: Listing) -> None:
+    """Refuse a job that asks candidates to pay. Each field is checked on its own, so a phrase
+    cannot be assembled across the end of one field and the start of the next."""
+    for text in (
+        listing.title,
+        listing.description,
+        " ".join(listing.responsibilities or []),
+        " ".join(listing.benefits or []),
+        " ".join(listing.required_skills or []),
+        " ".join(listing.preferred_skills or []),
+    ):
+        phrase = jobs.money_ask_phrase(text)
+        if phrase:
+            raise JobTextAsksForMoneyError(phrase)
+
+
 def _require_job_basics(listing: Listing) -> None:
     missing = [
         label
@@ -974,6 +995,7 @@ def post_job(
     if len(listing.title) < 3:  # noqa: PLR2004
         raise ListingStateError("Give the job a title.")
     listing.description = cleaned.get("description") or _job_description(listing)
+    _assert_job_text_asks_for_no_money(listing)
     listing.save()
     _event(listing, ListingModerationEvent.Action.EDITED)
     if publish:
@@ -1003,6 +1025,7 @@ def publish_job_now(*, listing: Listing, actor: Any) -> Listing:
     fields matching needs and tells strong matches about the job."""
     _require_poster(listing, actor)
     _require_job_basics(listing)
+    _assert_job_text_asks_for_no_money(listing)
     listing = publish_listing_instantly(listing=listing, actor=actor)
     # Strong matches hear about it once the job is safely live.
     transaction.on_commit(lambda: _notify_matches(listing.id))
@@ -1032,6 +1055,7 @@ def update_job(*, listing: Listing, actor: Any, data: dict[str, Any]) -> Listing
         listing.description = _job_description(listing)
     if listing.status == Listing.Status.PUBLISHED:
         _require_job_basics(listing)
+    _assert_job_text_asks_for_no_money(listing)
     listing.version += 1
     listing.save()
     _event(listing, ListingModerationEvent.Action.EDITED, actor=actor)

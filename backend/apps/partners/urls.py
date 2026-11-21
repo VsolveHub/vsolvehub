@@ -6,6 +6,7 @@ from apps.partners.views import (
     OperationsAreaRequestListView,
     OperationsAreaRequestNotifyView,
     OperationsCoverageLiteView,
+    OperationsEmployerCheckView,
     OperationsPartnerAddAreaView,
     OperationsPartnerApplicationClaimView,
     OperationsPartnerApplicationDetailView,
@@ -43,6 +44,8 @@ from apps.partners.views import (
     PartnerDocumentAccessView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
+    PartnerEmployerDetailsView,
+    PartnerEmployerLogoView,
     PartnerGateListView,
     PartnerInsuranceView,
     PartnerLanguageView,
@@ -83,6 +86,16 @@ urlpatterns = [
         "partner/application/documents/<uuid:document_id>/access/",
         PartnerDocumentAccessView.as_view(),
         name="partner-application-document-access",
+    ),
+    path(
+        "partner/application/employer/",
+        PartnerEmployerDetailsView.as_view(),
+        name="partner-application-employer",
+    ),
+    path(
+        "partner/application/employer/logo/",
+        PartnerEmployerLogoView.as_view(),
+        name="partner-application-employer-logo",
     ),
     path(
         "partner/application/submit/",
@@ -179,6 +192,11 @@ urlpatterns = [
         "operations/partner-applications/<uuid:application_id>/release/",
         OperationsPartnerApplicationReleaseView.as_view(),
         name="operations-partner-application-release",
+    ),
+    path(
+        "operations/partner-applications/<uuid:application_id>/employer-checks/<str:code>/",
+        OperationsEmployerCheckView.as_view(),
+        name="operations-partner-application-employer-check",
     ),
     path(
         "operations/partner-applications/<uuid:application_id>/transition/",

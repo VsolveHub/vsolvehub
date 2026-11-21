@@ -4,17 +4,81 @@ from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
 
 from apps.listings.models import Listing
-from apps.partners.models import PartnerApplication
+from apps.partners.models import EmployerProfile, PartnerApplication, PartnerBusinessProfile
+
+#: What `employer_public_identity` reads. Add these to a listing query's `select_related` (with a
+#: `listing__` prefix from an application) to keep a page of jobs at one query.
+EMPLOYER_IDENTITY_RELATED = (
+    "poster__business_profile",
+    "poster__employer_profile",
+    "poster__application",
+)
+
+
+def _locality(area: str, city: str) -> str:
+    return ", ".join(part.strip() for part in (area, city) if part.strip())
+
+
+def _short_person_name(display_name: str) -> str:
+    """ "Priya Sharma" becomes "Priya S.": a candidate never sees an individual's full name."""
+    parts = display_name.split()
+    if len(parts) < 2:  # noqa: PLR2004
+        return display_name.strip()
+    return f"{parts[0]} {parts[-1][0].upper()}."
+
+
+def employer_public_identity(poster: Any) -> dict[str, Any]:
+    """Who a job is shown as hiring: the name, kind, place and whether Operations verified them.
+
+    Never returns an individual's full name or any street address. `logo_url` is what storage
+    gives (absolute in production); the serializer makes it absolute from the request in
+    development. Read with `EMPLOYER_IDENTITY_RELATED` to stay at one query per page.
+    """
+    employer: EmployerProfile | None = getattr(poster, "employer_profile", None)
+    business: PartnerBusinessProfile | None = getattr(poster, "business_profile", None)
+    application = getattr(poster, "application", None)
+    identity: dict[str, Any] = {
+        "name": poster.display_name,
+        "kind": "",
+        "locality": "",
+        "is_verified": (
+            application is not None and application.status == PartnerApplication.Status.APPROVED
+        ),
+        "logo_url": "",
+        "industry_label": "",
+        "size_label": "",
+    }
+    hiring_as = employer.hiring_as if employer else ""
+    business_name = (business.trade_name.strip() or business.legal_name.strip()) if business else ""
+
+    if business is not None and business_name and hiring_as == EmployerProfile.HiringAs.BUSINESS:
+        identity.update(
+            name=business_name,
+            kind="BUSINESS",
+            locality=_locality(business.area, business.city),
+            logo_url=business.logo.url if business.logo else "",
+            industry_label=business.get_business_category_display(),
+            size_label=business.get_company_size_display(),
+        )
+    elif employer is not None and hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        identity.update(
+            name=_short_person_name(poster.display_name),
+            kind="INDIVIDUAL",
+            locality=_locality(employer.area, employer.city),
+        )
+    elif business is not None and business_name and not hiring_as:
+        identity.update(
+            name=business_name,
+            kind="BUSINESS",
+            locality=_locality("", business.city),
+            industry_label=business.get_business_category_display(),
+        )
+    return identity
 
 
 def employer_name(poster: Any) -> str:
-    """The name a job is shown under: the employer's business name, else the person's name.
-
-    Read with `select_related("poster__business_profile")` to stay at one query per page.
-    """
-    business = getattr(poster, "business_profile", None)
-    name = business.legal_name.strip() if business else ""
-    return name or poster.display_name
+    """The name a job is shown under (see `employer_public_identity`)."""
+    return str(employer_public_identity(poster)["name"])
 
 
 def public_listings(  # noqa: PLR0912
@@ -24,7 +88,7 @@ def public_listings(  # noqa: PLR0912
     filters = filters or {}
     qs = (
         Listing.objects.select_related(
-            "poster", "poster__business_profile", "variant", "variant__service"
+            "poster", *EMPLOYER_IDENTITY_RELATED, "variant", "variant__service"
         )
         .prefetch_related("variant__a10_configurations")
         .annotate(

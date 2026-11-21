@@ -100,6 +100,96 @@ describe("ProfilePreview", () => {
     expect(screen.getAllByRole("link", { name: /^Edit/ })).toHaveLength(6);
   });
 
+  it("shows a business employer's own steps, read from the application", () => {
+    given({
+      isPending: false,
+      isError: false,
+      data: {
+        ...APPLICATION,
+        track: "EMPLOYER",
+        display_name: "Asha Rao",
+        required_document_kinds: ["GOVERNMENT_ID", "BUSINESS_PROOF"],
+        employer: {
+          hiring_as: "BUSINESS",
+          poster_role: "OWNER",
+          id_document_type: "PAN",
+          email: "asha@example.com",
+          area: "",
+          city: "",
+          pin_code: "",
+          missing_fields: [],
+          business: {
+            trade_name: "Sai Mobiles",
+            legal_name: "Sri Sai Mobiles Pvt Ltd",
+            legal_structure: "COMPANY",
+            business_category: "SHOP",
+            company_size: "SIZE_11_50",
+            gst_registered: false,
+            gstin: "",
+            business_proof_type: "UDYAM",
+            address: "12 Main Road",
+            area: "Kondapur",
+            city: "Hyderabad",
+            state: "Telangana",
+            pin_code: "500084",
+            latitude: "17.469000",
+            longitude: "78.358000",
+            logo_url: "",
+            website_url: "https://sai.example",
+          },
+        },
+      },
+      error: null,
+    });
+    render(withI18n(<ProfilePreview services={SERVICES} />));
+
+    for (const heading of ["Who is hiring", "Your business", "You and your role"]) {
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("heading", { name: "Your details" })).toBeNull();
+    expect(screen.getByText("For my business")).toBeInTheDocument();
+    expect(screen.getByText("Sri Sai Mobiles Pvt Ltd")).toBeInTheDocument();
+    expect(screen.getByText("Udyam registration")).toBeInTheDocument();
+    expect(screen.getByText("No GST")).toBeInTheDocument();
+    expect(screen.getByText("12 Main Road, Kondapur, Hyderabad, Telangana, 500084")).toBeInTheDocument();
+    expect(screen.getByText("Owner / Partner / Director")).toBeInTheDocument();
+    expect(screen.getByText("PAN card")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /^Edit/ })).toHaveLength(5);
+  });
+
+  it("shows an individual employer their own details only", () => {
+    given({
+      isPending: false,
+      isError: false,
+      data: {
+        ...APPLICATION,
+        track: "EMPLOYER",
+        display_name: "Priya Sharma",
+        required_document_kinds: ["GOVERNMENT_ID", "SELFIE"],
+        employer: {
+          hiring_as: "INDIVIDUAL",
+          poster_role: "",
+          id_document_type: "PAN",
+          email: "",
+          area: "Kondapur",
+          city: "Hyderabad",
+          pin_code: "500084",
+          business: null,
+          missing_fields: [],
+        },
+      },
+      error: null,
+    });
+    render(withI18n(<ProfilePreview services={SERVICES} />));
+
+    expect(screen.getByRole("heading", { name: "Your details" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Your business" })).toBeNull();
+    expect(screen.getByText("For myself or my home")).toBeInTheDocument();
+    expect(screen.getByText("Kondapur")).toBeInTheDocument();
+    expect(screen.getByText("500084")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /^Edit/ })).toHaveLength(4);
+  });
+
   it("hides edit links once the application is sent", () => {
     given({
       isPending: false,

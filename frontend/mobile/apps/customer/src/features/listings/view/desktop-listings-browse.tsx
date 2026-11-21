@@ -20,11 +20,11 @@ import {
 } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
 
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useSavedItems } from "../../stays/use-saved-items";
 import { getCareerImage } from "../career-images";
+import { VerifiedBadge, employerDetailLine, employerName, listingEmployer } from "./employer-identity";
 import { fetchListingFilters, fetchListings, type Listing } from "../queries";
 
 export const DEFAULT_CATEGORY_PILLS = [
@@ -57,24 +57,6 @@ function formatMoney(raw: unknown): string {
   const s = String(raw).trim();
   if (s.includes("₹")) return s;
   return `₹ ${s}`;
-}
-
-function VerifiedEmployerBadge() {
-  return (
-    <View className="flex-row items-center gap-1.5">
-      <Svg width={16} height={16} viewBox="0 0 24 24">
-        <Path
-          fill="#FF7900"
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z"
-        />
-      </Svg>
-      <Text className="text-[13px] md:text-[14px] text-[#555555] font-normal">
-        Verified employer
-      </Text>
-    </View>
-  );
 }
 
 function DesktopListingCard({ listing }: { listing: Listing }) {
@@ -152,12 +134,8 @@ function DesktopListingCard({ listing }: { listing: Listing }) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const heroImage = getCareerImage(listing);
-  const employerName =
-    listing.company_name ||
-    listing.poster_name ||
-    listing.partner?.company_name ||
-    listing.partner?.full_name ||
-    "Apex Staffing Solutions";
+  const employer = listingEmployer(listing);
+  const employerDetail = employerDetailLine(employer);
 
   const handleCardPress = () => {
     router.push(`/listings/${listing.slug || listing.id}` as never);
@@ -206,11 +184,24 @@ function DesktopListingCard({ listing }: { listing: Listing }) {
                   className="text-[15px] md:text-[16px] font-semibold text-[#15264D]/90"
                   numberOfLines={1}
                 >
-                  {employerName}
+                  {employerName(employer)}
                 </Text>
-                <Text className="text-slate-400 font-bold">·</Text>
-                <VerifiedEmployerBadge />
+                {employer.is_verified ? (
+                  <>
+                    <Text className="text-slate-400 font-bold">·</Text>
+                    <VerifiedBadge
+                      employer={employer}
+                      color="#FF7900"
+                      textClassName="text-[13px] md:text-[14px] text-[#555555] font-normal"
+                    />
+                  </>
+                ) : null}
               </View>
+              {employerDetail ? (
+                <Text className="mt-1 text-[13px] text-[#5F6B7E] font-normal" numberOfLines={1}>
+                  {employerDetail}
+                </Text>
+              ) : null}
             </Pressable>
 
             {/* Favorite / Heart Icon */}

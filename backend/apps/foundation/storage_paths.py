@@ -194,6 +194,12 @@ def stay_ad_upload_to(instance: Any, filename: str) -> str:
     )
 
 
+def employer_logo_upload_to(instance: Any, filename: str) -> str:
+    ext = _sanitize_extension(filename, allowed=SAFE_IMAGE_EXTENSIONS, default=".jpg")
+    partner_key = _as_key(getattr(instance, "partner_id", None), "anon")
+    return f"images/employer-logos/{partner_key}/{uuid.uuid4().hex}{ext}"
+
+
 def stay_review_upload_to(instance: Any, filename: str) -> str:
     customer_id = getattr(instance, "customer_id", None)
     property_id = getattr(instance, "property_id", None)

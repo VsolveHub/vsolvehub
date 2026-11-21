@@ -10,7 +10,13 @@ import { useState } from "react";
 import { progressSummary, stepProgress } from "../model/progress";
 import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
 import { documentLabelKey } from "../model/status";
-import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import {
+  firstStepHref,
+  isListingTrack,
+  isUnchosenDraft,
+  trackPreview,
+  type StartTrack,
+} from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { HelpSheet } from "./account-menu";
 import { StepMark } from "./apply-shell";
@@ -118,7 +124,7 @@ function NotStarted() {
           pending={start.isPending}
           failed={start.isError}
           onStart={() =>
-            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about") })
+            start.mutate({ track: chosen }, { onSuccess: () => router.push(firstStepHref(chosen)) })
           }
           onBack={() => setChosen(null)}
         />
@@ -394,7 +400,7 @@ function SwitchTrack({ current }: { current: string }) {
             variant="outline"
             size="sm"
             disabled={update.isPending}
-            onClick={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about") })}
+            onClick={() => update.mutate({ track }, { onSuccess: () => router.push(firstStepHref(track)) })}
           >
             <Icon size={16} aria-hidden />
             {t(titleKey)}

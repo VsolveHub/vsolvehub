@@ -1,0 +1,194 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { ToastProvider } from "@vsolve/ui";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { withI18n } from "@/i18n/test-utils";
+
+/**
+ * The job form for an employer: what the first step shows to someone hiring for themselves versus
+ * a business, and what is said when the server refuses a job that asks candidates to pay.
+ */
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
+vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
+
+const { PostJobWizard } = await import("./post-job-wizard");
+
+const MONEY_MESSAGE = "Jobs on V Solve Hub can't ask candidates to pay. Remove “registration fee”.";
+
+function ok<T>(data: T) {
+  return { data, error: undefined, response: new Response(null, { status: 200 }) };
+}
+
+function refusal(status: number, code: string, message: string) {
+  return {
+    data: undefined,
+    error: { error: { code, message, details: null, retryable: false, request_id: "r" } },
+    response: new Response(null, { status }),
+  };
+}
+
+function role(id: string, name: string) {
+  return {
+    id,
+    name,
+    skills: ["Cleaning"],
+    responsibilities: ["Clean the house"],
+    job_type: "FULL_TIME",
+    shift: "DAY",
+    work_mode: "ON_SITE",
+    salary_min_rupees: 8000,
+    salary_max_rupees: 15000,
+  };
+}
+
+const OPTIONS = {
+  categories: [
+    { name: "Retail & Sales", roles: [role("r1", "Sales Executive")] },
+    { name: "Healthcare", roles: [role("r2", "Staff Nurse")] },
+    { name: "Driver & Delivery", roles: [role("r4", "Heavy Vehicle Driver")] },
+    {
+      name: "Home & Personal",
+      roles: [role("r3", "House Help / Maid"), role("r5", "Personal / Family Driver")],
+    },
+  ],
+  job_types: [{ value: "FULL_TIME", label: "Full time" }],
+  experience_bands: [],
+  qualifications: [],
+  languages: [],
+  benefits: [],
+  shifts: [],
+  work_modes: [],
+  weekly_offs: [],
+  urgencies: [],
+  salary_periods: [],
+  salary_bands: [],
+  cities: ["Hyderabad"],
+};
+
+function serve(hiringAs: string | undefined) {
+  client.GET.mockImplementation((path: string) => {
+    if (path === "/api/v1/jobs/options") return Promise.resolve(ok(OPTIONS));
+    if (path === "/api/v1/partner/application/") {
+      return Promise.resolve(
+        ok({ id: "app-1", status: "APPROVED", track: "EMPLOYER", version: 5, employer: { hiring_as: hiringAs } }),
+      );
+    }
+    return Promise.resolve(ok({}));
+  });
+}
+
+let queryClient: QueryClient;
+
+function wrapper({ children }: { children: ReactNode }) {
+  return withI18n(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  push.mockReset();
+  window.scrollTo = vi.fn() as typeof window.scrollTo;
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  for (const method of Object.values(client)) method.mockReset();
+});
+
+afterEach(() => queryClient.clear());
+
+const categoryNames = () =>
+  screen
+    .getAllByRole("button", { pressed: false })
+    .map((button) => button.textContent)
+    .filter((name) => OPTIONS.categories.some((category) => category.name === name));
+
+const SHOW_ALL = "Hiring for something else? Show all categories";
+
+describe("someone hiring for themselves", () => {
+  it("sees the household roles straight away, and no category grid", async () => {
+    serve("INDIVIDUAL");
+    render(<PostJobWizard />, { wrapper });
+
+    expect(await screen.findByRole("button", { name: "House Help / Maid" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Personal / Family Driver" })).toBeInTheDocument();
+    expect(screen.getByText("Help for your home — tap one")).toBeInTheDocument();
+    expect(categoryNames()).toEqual([]);
+  });
+
+  it("goes straight on to the basics when they tap a household role", async () => {
+    serve("INDIVIDUAL");
+    render(<PostJobWizard />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "House Help / Maid" }));
+
+    expect(await screen.findByText("The basics")).toBeInTheDocument();
+  });
+
+  it("can still reach every other category, with the household one not repeated", async () => {
+    serve("INDIVIDUAL");
+    render(<PostJobWizard />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: SHOW_ALL }));
+
+    expect(categoryNames()).toEqual(["Retail & Sales", "Healthcare", "Driver & Delivery"]);
+    expect(screen.queryByRole("button", { name: SHOW_ALL })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retail & Sales" }));
+
+    expect(await screen.findByRole("button", { name: "Sales Executive" })).toBeInTheDocument();
+  });
+
+  it("finds household roles first when they search", async () => {
+    serve("INDIVIDUAL");
+    render(<PostJobWizard />, { wrapper });
+    await screen.findByRole("button", { name: "House Help / Maid" });
+
+    fireEvent.change(screen.getByPlaceholderText("Search a job, e.g. cashier, driver, nurse"), {
+      target: { value: "driver" },
+    });
+
+    const matches = screen.getAllByRole("button", { name: /Driver/ }).map((button) => button.textContent);
+    expect(matches).toEqual(["Personal / Family Driver· Home & Personal", "Heavy Vehicle Driver· Driver & Delivery"]);
+  });
+});
+
+describe("a business", () => {
+  it("sees every category in the server's order, with no household shortcut", async () => {
+    serve("BUSINESS");
+    render(<PostJobWizard />, { wrapper });
+
+    await screen.findByRole("button", { name: "Home & Personal" });
+    expect(categoryNames()).toEqual(["Retail & Sales", "Healthcare", "Driver & Delivery", "Home & Personal"]);
+    expect(screen.queryByRole("button", { name: SHOW_ALL })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "House Help / Maid" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a job that asks candidates to pay", () => {
+  it("is refused with the server's own message, at the foot of the form", async () => {
+    serve("BUSINESS");
+    client.POST.mockResolvedValue(refusal(400, "job_text_asks_for_money", MONEY_MESSAGE));
+    render(<PostJobWizard />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retail & Sales" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sales Executive" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Next" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Next" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Hyderabad" }));
+    // The form offers the same save inline and in its bottom bar.
+    fireEvent.click((await screen.findAllByRole("button", { name: "See preview" }))[0]!);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(MONEY_MESSAGE);
+    expect(client.POST).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+});

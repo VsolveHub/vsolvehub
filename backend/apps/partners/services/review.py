@@ -18,6 +18,7 @@ from django.utils import timezone
 from apps.assignments.suspension import release_future_work
 from apps.identity.models import User
 from apps.partners.exceptions import (
+    EmployerChecksIncompleteError,
     PartnerApplicationIncompleteError,
     PartnerApplicationNotFoundError,
     PartnerReviewOwnershipError,
@@ -25,12 +26,13 @@ from apps.partners.exceptions import (
     PartnerTransitionError,
 )
 from apps.partners.models import (
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerAvailabilityRule,
     PartnerOnlineSession,
     PartnerProfile,
 )
-from apps.partners.selectors import presence_cache_key
+from apps.partners.selectors import presence_cache_key, required_check_codes
 
 from .base import (
     PARTNER_APPLICATION_DECISION_PURPOSE,
@@ -278,6 +280,20 @@ def _assert_working_hours_set(application: PartnerApplication) -> None:
         )
 
 
+def _assert_employer_checks_passed(application: PartnerApplication) -> None:
+    """An employer is approved only after Operations has passed every check for its type."""
+    if application.track != PartnerApplication.Track.EMPLOYER:
+        return
+    passed = set(
+        EmployerReviewCheck.objects.filter(
+            application=application, result=EmployerReviewCheck.Result.PASS
+        ).values_list("code", flat=True)
+    )
+    missing = [code for code in required_check_codes(application.partner) if code not in passed]
+    if missing:
+        raise EmployerChecksIncompleteError(missing)
+
+
 #: Decisions the Partner is told about with a reason, and the refusal when it is missing.
 _REASON_REQUIRED: dict[str, str] = {
     PartnerApplication.Status.CHANGES_REQUIRED: "Explain which changes the Partner must make.",
@@ -360,6 +376,7 @@ def transition_partner_application(
                 "Approve the latest required documents before approving this application.",
             )
         _assert_working_hours_set(application)
+        _assert_employer_checks_passed(application)
 
     application.status = target_status
     application.reviewed_by = reviewer
