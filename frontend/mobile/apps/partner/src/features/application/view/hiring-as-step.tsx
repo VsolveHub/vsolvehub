@@ -3,7 +3,7 @@ import type { Schemas } from "@vsolve/api-client";
 import { Button, Dialog, ErrorState, Text, cn, useT } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useRouter } from "expo-router";
-import { Building2, Check, House } from "lucide-react-native";
+import { Building2, Check, House, Info } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 
@@ -51,11 +51,14 @@ function HiringAsChoice({ application }: { application: Application }) {
   const editable = application.can_edit;
   // A switch that would clear what they typed waits here until they confirm it.
   const [switchingTo, setSwitchingTo] = useState<HiringAs | null>(null);
+  // The card they tapped lights up at once, instead of waiting for the save to come back.
+  const [picked, setPicked] = useState<HiringAs | null>(null);
 
   const goOn = (type: HiringAs) =>
     router.push((nextStep("/apply/hiring-as", "EMPLOYER", type)?.href ?? "/apply") as never);
 
   function save(type: HiringAs) {
+    setPicked(type);
     update.mutate(
       { hiring_as: type },
       {
@@ -63,6 +66,7 @@ function HiringAsChoice({ application }: { application: Application }) {
           setSwitchingTo(null);
           goOn(type);
         },
+        onError: () => setPicked(null),
       },
     );
   }
@@ -88,12 +92,13 @@ function HiringAsChoice({ application }: { application: Application }) {
         <View
           accessibilityRole="radiogroup"
           accessibilityLabel={t("apply.employer.hiringAs.title")}
-          style={{ rowGap: 12 }}
+          style={{ rowGap: 14 }}
         >
           {CHOICES.map(({ type, icon }) => (
             <ChoiceCard
               key={type}
-              selected={current === type}
+              type={type}
+              selected={(picked ?? current) === type}
               disabled={!editable || update.isPending}
               icon={icon}
               title={t(titleKey(type))}
@@ -102,7 +107,12 @@ function HiringAsChoice({ application }: { application: Application }) {
             />
           ))}
         </View>
-        <Text className="mt-4 text-sm text-text-secondary">{t("apply.employer.hiringAs.agencyNote")}</Text>
+        <View className="mt-4 flex-row items-start gap-3 rounded-control bg-surface-sunken p-4">
+          <Info size={16} color="#6b6458" className="mt-0.5 shrink-0" />
+          <Text className="flex-1 text-sm text-text-secondary leading-5">
+            {t("apply.employer.hiringAs.agencyNote")}
+          </Text>
+        </View>
         {update.error && switchingTo === null ? (
           <View className="mt-4">
             {isVersionConflict(update.error) ? (
@@ -168,6 +178,7 @@ function ChoiceCard({
   disabled,
   onSelect,
 }: {
+  type: HiringAs;
   icon: ReactNode;
   title: string;
   description: string;
@@ -183,24 +194,29 @@ function ChoiceCard({
       onPress={onSelect}
       className={cn(
         "min-h-11 flex-row items-center gap-3.5 rounded-card border bg-surface p-4 active:bg-surface-sunken",
-        selected ? "border-action" : "border-line",
-        disabled && "opacity-60",
+        selected ? "border-action bg-selected-surface/50" : "border-line",
+        disabled && !selected && "opacity-60",
       )}
     >
-      <View className="size-11 shrink-0 items-center justify-center self-start rounded-control bg-action-surface">
+      <View
+        className={cn(
+          "size-11 shrink-0 items-center justify-center rounded-control",
+          selected ? "bg-action" : "bg-action-surface",
+        )}
+      >
         {icon}
       </View>
-      <View className="min-w-0 flex-1 gap-1">
-        <Text className="font-bold text-navy-900">{title}</Text>
-        <Text className="text-sm text-text-secondary">{description}</Text>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="text-base font-semibold text-text">{title}</Text>
+        <Text className="text-sm leading-5 text-text-secondary">{description}</Text>
       </View>
       <View
         className={cn(
-          "size-6 shrink-0 items-center justify-center rounded-full border-2",
+          "size-5 shrink-0 items-center justify-center rounded-full border-2",
           selected ? "border-action bg-action" : "border-line-strong",
         )}
       >
-        {selected ? <Check size={14} strokeWidth={3} color="#ffffff" /> : null}
+        {selected ? <Check size={12} strokeWidth={3} color="#ffffff" /> : null}
       </View>
     </Pressable>
   );

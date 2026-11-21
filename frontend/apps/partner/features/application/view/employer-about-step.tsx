@@ -2,6 +2,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { Field, Input, Select, useT } from "@vsolve/ui";
+import { ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -13,7 +14,7 @@ import {
   type IndividualDraft,
 } from "../model/employer-form";
 import { useUpdateEmployerDetails } from "../queries";
-import { EmployerFrame, useEmployerNav, useSignUpName } from "./employer-frame";
+import { EmployerFrame, FormSection, useEmployerNav, useSignUpName } from "./employer-frame";
 import { EmployerGuard } from "./employer-guard";
 
 type Application = Schemas["PartnerApplication"];
@@ -69,83 +70,107 @@ function AboutForm({ application }: { application: Application }) {
       error={save.error}
       onContinue={onContinue}
     >
-      <Field
-        required
-        label={t("apply.employer.field.name.label")}
-        error={problems.invalid.has("displayName") ? t("apply.employer.field.name.error") : undefined}
-      >
-        <Input
-          name="display_name"
-          autoComplete="name"
-          maxLength={120}
-          value={draft.displayName}
-          onChange={(event) => change({ displayName: event.target.value })}
-        />
-      </Field>
+      <FormSection title="Personal information">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            required
+            label={t("apply.employer.field.name.label")}
+            error={problems.invalid.has("displayName") ? t("apply.employer.field.name.error") : undefined}
+          >
+            <Input
+              name="display_name"
+              autoComplete="name"
+              maxLength={120}
+              placeholder="e.g. Ramesh Kumar"
+              value={draft.displayName}
+              onChange={(event) => change({ displayName: event.target.value })}
+            />
+          </Field>
 
-      <Field
-        label={t("apply.employer.field.email.label")}
-        error={problems.invalid.has("email") ? t("apply.employer.field.email.error") : undefined}
-      >
-        <Input
-          name="email"
-          type="email"
-          autoComplete="email"
-          maxLength={254}
-          value={draft.email}
-          onChange={(event) => change({ email: event.target.value })}
-        />
-      </Field>
+          <Field
+            label={t("apply.employer.field.email.label")}
+            error={problems.invalid.has("email") ? t("apply.employer.field.email.error") : undefined}
+          >
+            <Input
+              name="email"
+              type="email"
+              autoComplete="email"
+              maxLength={254}
+              placeholder="e.g. ramesh@example.com"
+              value={draft.email}
+              onChange={(event) => change({ email: event.target.value })}
+            />
+          </Field>
+        </div>
+      </FormSection>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field required label={t("apply.employer.field.area.label")}>
-          <Input
-            name="area"
-            maxLength={120}
-            value={draft.area}
-            onChange={(event) => change({ area: event.target.value })}
-          />
+      <FormSection title="Location">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field required label={t("apply.employer.field.area.label")}>
+            <Input
+              name="area"
+              maxLength={120}
+              placeholder="e.g. Kondapur"
+              value={draft.area}
+              onChange={(event) => change({ area: event.target.value })}
+            />
+          </Field>
+
+          <Field required label={t("apply.employer.field.city.label")}>
+            <Input
+              name="city"
+              autoComplete="address-level2"
+              maxLength={80}
+              placeholder="e.g. Hyderabad"
+              value={draft.city}
+              onChange={(event) => change({ city: event.target.value })}
+            />
+          </Field>
+
+          <Field
+            required
+            label={t("apply.employer.field.pinCode.label")}
+            error={problems.invalid.has("pinCode") ? t("apply.employer.field.pinCode.error") : undefined}
+          >
+            <Input
+              name="pin_code"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              maxLength={6}
+              placeholder="500084"
+              value={draft.pinCode}
+              onChange={(event) => change({ pinCode: event.target.value.replace(/\D/g, "") })}
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection title="Identity verification">
+        <Field required label={t("apply.employer.field.idType.label")}>
+          <Select
+            name="id_document_type"
+            placeholder={t("apply.employer.field.idType.placeholder")}
+            value={draft.idType}
+            onChange={(event) => change({ idType: event.target.value })}
+          >
+            {ID_TYPES.map((code) => (
+              <option key={code} value={code}>
+                {t(`apply.employer.field.idType.${code}`)}
+              </option>
+            ))}
+          </Select>
         </Field>
-        <Field required label={t("apply.employer.field.city.label")}>
-          <Input
-            name="city"
-            autoComplete="address-level2"
-            maxLength={80}
-            value={draft.city}
-            onChange={(event) => change({ city: event.target.value })}
-          />
-        </Field>
-      </div>
 
-      <Field
-        required
-        label={t("apply.employer.field.pinCode.label")}
-        error={problems.invalid.has("pinCode") ? t("apply.employer.field.pinCode.error") : undefined}
-      >
-        <Input
-          name="pin_code"
-          inputMode="numeric"
-          autoComplete="postal-code"
-          maxLength={6}
-          value={draft.pinCode}
-          onChange={(event) => change({ pinCode: event.target.value.replace(/\D/g, "") })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.field.idType.label")}>
-        <Select
-          name="id_document_type"
-          placeholder={t("apply.employer.field.idType.placeholder")}
-          value={draft.idType}
-          onChange={(event) => change({ idType: event.target.value })}
-        >
-          {ID_TYPES.map((code) => (
-            <option key={code} value={code}>
-              {t(`apply.employer.field.idType.${code}`)}
-            </option>
-          ))}
-        </Select>
-      </Field>
+        <div className="flex items-start gap-3 rounded-control bg-surface-sunken p-4 text-xs text-text-secondary">
+          <ShieldCheck size={16} className="mt-0.5 shrink-0 text-success-text" aria-hidden />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-semibold text-text">Your details stay private</span>
+            <p className="leading-relaxed">
+              Your street address, pin code, and identification documents are held securely and only viewed by Operations for manual verification. Candidates only see your first name, last initial, and locality on job cards.
+            </p>
+          </div>
+        </div>
+      </FormSection>
     </EmployerFrame>
   );
 }

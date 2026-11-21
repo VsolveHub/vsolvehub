@@ -304,7 +304,6 @@ export function StepFrame({
         <Text style={stepFrameStyles.title}>{title}</Text>
         {description ? <Text style={stepFrameStyles.description}>{description}</Text> : null}
       </View>
-      <View style={stepFrameStyles.divider} />
       {children}
     </View>
   );
@@ -313,7 +312,7 @@ export function StepFrame({
 const stepFrameStyles = StyleSheet.create({
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#e7e2da",
     padding: 20,
@@ -332,10 +331,11 @@ const stepFrameStyles = StyleSheet.create({
   },
   header: {
     flexDirection: "column",
+    marginBottom: 24,
   },
   title: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#00112e",
     letterSpacing: -0.3,
   },
@@ -344,11 +344,5 @@ const stepFrameStyles = StyleSheet.create({
     color: "#453f37",
     marginTop: 4,
     lineHeight: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#f1f5f9",
-    marginTop: 16,
-    marginBottom: 20,
   },
 });
