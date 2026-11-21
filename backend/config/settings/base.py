@@ -701,6 +701,9 @@ OTP_RATE_WINDOW_SECONDS = 10 * 60
 OTP_PHONE_RATE_LIMIT = 5
 OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
+#: Reverse proxies in front of Django whose `X-Forwarded-For` is trusted (`common.http.client_ip`).
+#: 0 here: a developer machine has none, and a forged header must not dodge the OTP limits.
+TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
 # Account deletion (apps.identity.account_deletion): how long a closed account waits before it is
@@ -813,6 +816,9 @@ NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = env.bool("NOTIFICATIONS_ALLOW_FAKE_TRANSPOR
 MSG91_AUTH_KEY = env("MSG91_AUTH_KEY", default="")
 MSG91_SENDER_ID = env("MSG91_SENDER_ID", default="")
 MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
+#: The visit start code's own DLT template. Unset, the start code is shown in the app only: it is
+#: never sent in the login template's wording.
+MSG91_START_OTP_TEMPLATE_ID = env("MSG91_START_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 #: Notification SMS (`notifications.channel_plan`). Off by default, like WhatsApp below. On, a
 #: routed notice is sent through `MESSAGE_TRANSPORT`, which must then be `msg91` in production.

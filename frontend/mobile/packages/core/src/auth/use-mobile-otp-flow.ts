@@ -56,8 +56,8 @@ function digitsIn(value: string): number {
 
 /**
  * Phone sign-in for both apps, switched like the web's `usePhoneAuthFlow`: Firebase when the
- * build sets `EXPO_PUBLIC_PHONE_AUTH_PROVIDER=firebase` (store and test builds), otherwise the
- * server-sent code. The setting is fixed for the life of a build, so the hook order never
+ * build sets `EXPO_PUBLIC_PHONE_AUTH_PROVIDER=firebase`, otherwise the server-sent code (MSG91),
+ * which store and test builds use since 2026-11-21. The setting is fixed for the life of a build, so the hook order never
  * changes between renders.
  */
 export function useMobileOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {

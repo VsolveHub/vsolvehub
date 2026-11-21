@@ -20,7 +20,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.vsolvehub.com",
         "EXPO_PUBLIC_WEB_BASE_URL": "https://vsolvehub.com",
-        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "firebase",
+        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "otp",
         "EXPO_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID": "6aa192fa-a225-4230-a65b-8119b598622d"
       }
     },
@@ -30,7 +30,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.vsolvehub.com",
         "EXPO_PUBLIC_WEB_BASE_URL": "https://vsolvehub.com",
-        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "firebase",
+        "EXPO_PUBLIC_PHONE_AUTH_PROVIDER": "otp",
         "EXPO_PUBLIC_ONESIGNAL_CUSTOMER_APP_ID": "6aa192fa-a225-4230-a65b-8119b598622d"
       }
     }

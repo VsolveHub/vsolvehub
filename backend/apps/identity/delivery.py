@@ -37,33 +37,67 @@ class UnconfiguredOtpSender:
         raise OtpDeliveryError("OTP delivery provider is not configured.")
 
 
+#: E.164 prefix of the only numbers the DLT-registered MSG91 templates reach.
+_INDIA_PREFIX = "+91"
+
+
+def _msg91_template_for(purpose: str) -> str:
+    """The DLT template registered for this purpose, or "" when there is none.
+
+    Each purpose has its own approved wording, so a code is never sent in another purpose's text:
+    the login template says "to log in", which would be wrong on a visit's start code.
+    """
+
+    templates = {
+        OtpChallenge.Purpose.LOGIN: settings.MSG91_OTP_TEMPLATE_ID,
+        "booking_start": settings.MSG91_START_OTP_TEMPLATE_ID,
+    }
+    return str(templates.get(purpose, "") or "")
+
+
 class Msg91OtpSender:
-    """Sends the login code through MSG91. Does not log the code."""
+    """Sends a one-time code through MSG91 Flow. Does not log the code."""
 
     def send(self, phone_number: str, code: str, purpose: str) -> None:
         auth_key = settings.MSG91_AUTH_KEY
-        template_id = settings.MSG91_OTP_TEMPLATE_ID
+        template_id = _msg91_template_for(purpose)
         if not auth_key or not template_id:
-            raise OtpDeliveryError("MSG91 OTP is not configured.")
+            raise OtpDeliveryError("MSG91 OTP is not configured for this purpose.")
+        if not phone_number.startswith(_INDIA_PREFIX):
+            # The DLT template covers Indian numbers only, and an international SMS is how OTP
+            # endpoints get abused for toll fraud. Refuse rather than send one.
+            raise OtpDeliveryError("MSG91 OTP is sent to Indian numbers only.")
         mobile = phone_number.removeprefix("+")
         payload = json.dumps(
             {
                 "template_id": template_id,
                 "short_url": "0",
-                "recipients": [{"mobiles": mobile, "otp": code, "purpose": purpose}],
+                "recipients": [{"mobiles": mobile, "otp": code}],
             }
         ).encode()
         request = Request(  # noqa: S310
             f"{settings.MSG91_API_BASE_URL}/flow/",
             data=payload,
-            headers={"authkey": auth_key, "Content-Type": "application/json"},
+            headers={
+                "authkey": auth_key,
+                "Content-Type": "application/json",
+                "accept": "application/json",
+            },
             method="POST",
         )
         try:
             with urlopen(request, timeout=10) as response:  # noqa: S310
-                response.read()
+                body = response.read().decode()
         except URLError as exc:
             raise OtpDeliveryError("MSG91 did not accept the OTP.") from exc
+        # MSG91 answers HTTP 200 for some refusals (a wrong template id, a DLT mismatch, no
+        # balance) with `{"type": "error"}` in the body. Only `"success"` means it was accepted.
+        try:
+            answer = json.loads(body)
+        except ValueError:
+            answer = {}
+        if not isinstance(answer, dict) or str(answer.get("type", "")).lower() != "success":
+            raise OtpDeliveryError("MSG91 refused the OTP.")
 
 
 def get_otp_sender() -> OtpSender:
