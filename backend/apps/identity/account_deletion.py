@@ -42,6 +42,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
+from functools import partial
 from typing import Any
 
 from django.conf import settings
@@ -493,10 +494,44 @@ def _offboard_application(*, partner: Any, actor: User) -> bool:
     return True
 
 
+def _erase_employer_data(partner: Any) -> None:
+    """Blank what an employer gave: their email and home location, and their business's details.
+
+    A proprietor's GSTIN contains their PAN, so it goes too. The public logo is deleted once the
+    erasure commits, so a rolled-back erasure never leaves a row pointing at a missing file.
+    """
+
+    from apps.partners.models import EmployerProfile, PartnerBusinessProfile  # noqa: PLC0415
+
+    EmployerProfile.objects.filter(partner=partner).update(email="", area="", city="", pin_code="")
+    businesses = PartnerBusinessProfile.objects.filter(
+        partner=partner, business_type=PartnerBusinessProfile.BusinessType.EMPLOYER
+    )
+    for business in businesses:
+        if business.logo:
+            transaction.on_commit(partial(business.logo.storage.delete, business.logo.name))
+    businesses.update(
+        trade_name="",
+        address="",
+        area="",
+        pin_code="",
+        website_url="",
+        latitude=None,
+        longitude=None,
+        logo="",
+        gstin="",
+        gst_registered=False,
+        gstin_verified_at=None,
+        registered_state_code="",
+        business_proof_type="",
+    )
+
+
 def _erase_partner(*, user: User, actor: User, now: datetime) -> tuple[list[str], bool]:
     """Scrub the Partner side. Returns the storage keys to delete and whether it offboarded."""
 
     from apps.partners.models import (  # noqa: PLC0415
+        PartnerAreaRequest,
         PartnerBusinessProfile,
         PartnerDocument,
         PartnerDocumentUpload,
@@ -521,7 +556,9 @@ def _erase_partner(*, user: User, actor: User, now: datetime) -> tuple[list[str]
     )
     PartnerDocument.objects.filter(application__partner=partner).update(object_key="")
     PartnerDocumentUpload.objects.filter(application__partner=partner).delete()
+    PartnerAreaRequest.objects.filter(application__partner=partner).delete()
     PartnerBusinessProfile.objects.filter(partner=partner).update(legal_name="", upi_vpa="")
+    _erase_employer_data(partner)
     PartnerLocation.objects.filter(partner=partner).delete()
     # The retired account keeps its last four digits and IFSC: past payouts reconcile against
     # them, and they are what the tax record of a payout names.

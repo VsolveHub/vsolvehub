@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Heart, MapPin, ShieldCheck } from "lucide-react";
+import { Check, Heart, MapPin } from "lucide-react";
 
 import { useSavedItems } from "@/features/part-a";
 import { listingHref } from "@/lib/routes";
 import { formatMoneyText } from "@vsolve/ui";
 import { listingFields, type Listing } from "./queries";
-import { getCompanyInitials, resolveCategoryTone } from "./view/career-tones";
+import { resolveCategoryTone } from "./view/career-tones";
+import {
+  EmployerMark,
+  VerifiedBadge,
+  employerDetailLine,
+  employerName,
+  listingEmployer,
+} from "./view/employer-identity";
 import { MATCH_LOOK, type JobMatch } from "./seeker-queries";
 
 export interface ListingOpportunityCardProps {
@@ -86,8 +93,8 @@ export function ListingOpportunityCard({
     .replace(/^general(\s*shift)?$/i, "General shift")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const employerName = listing.poster_name || "Apex Staffing Solutions";
-  const initials = getCompanyInitials(employerName);
+  const employer = listingEmployer(listing);
+  const employerDetail = employerDetailLine(employer);
   const toneConfig = resolveCategoryTone(listing.job_category || (fields.category as string), listing.title);
 
   const isUrgent = Boolean(listing.urgency === "URGENT" || fields.urgent || fields.is_featured);
@@ -123,14 +130,13 @@ export function ListingOpportunityCard({
         className="absolute inset-0 z-0 rounded-[16px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF7900]"
       />
 
-      {/* Left: Monogram Logo Tile */}
+      {/* Left: the employer's logo, or the first letter of its name */}
       <div
-        className={`rounded-[13px] grid place-items-center font-extrabold border shrink-0 relative z-1 pointer-events-none ${
+        className={`rounded-[13px] grid place-items-center overflow-hidden font-extrabold border shrink-0 relative z-1 pointer-events-none ${
           toneConfig.badgeClass
         } ${isCompact ? "size-10 text-xs" : "size-12 text-sm"}`}
-        aria-hidden="true"
       >
-        {initials}
+        <EmployerMark employer={employer} />
       </div>
 
       {/* Middle: Job Details */}
@@ -166,12 +172,15 @@ export function ListingOpportunityCard({
 
         {/* Company and Verified Badge */}
         <p className="mt-1 flex items-center gap-1.5 text-[13.5px] font-semibold text-[#15264D]">
-          <span className="truncate">{employerName}</span>
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#047857] shrink-0 ml-1">
-            <ShieldCheck className="size-3.5" />
-            Verified
-          </span>
+          <span className="truncate">{employerName(employer)}</span>
+          <VerifiedBadge
+            employer={employer}
+            className="text-[12px] font-bold text-[#047857] shrink-0 ml-1"
+          />
         </p>
+        {employerDetail ? (
+          <p className="mt-0.5 text-[12.5px] text-[#5F6B7E] font-medium truncate">{employerDetail}</p>
+        ) : null}
 
         {/* Location Row */}
         <p className="mt-1.5 flex items-center gap-1.5 text-[13.5px] font-semibold text-[#15264D]">

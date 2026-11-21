@@ -2,7 +2,7 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Button, ErrorState, Skeleton, buttonStyles, cn, useT, type Translator } from "@vsolve/ui";
-import { BedDouble, Briefcase, Check, ChevronRight, Package, Sparkles, Wrench } from "lucide-react";
+import { BedDouble, Briefcase, Check, ChevronRight, FileText, Package, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +10,13 @@ import { useState } from "react";
 import { progressSummary, stepProgress } from "../model/progress";
 import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
 import { documentLabelKey } from "../model/status";
-import { isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import {
+  firstStepHref,
+  isListingTrack,
+  isUnchosenDraft,
+  trackPreview,
+  type StartTrack,
+} from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { HelpSheet } from "./account-menu";
 import { StepMark } from "./apply-shell";
@@ -118,7 +124,7 @@ function NotStarted() {
           pending={start.isPending}
           failed={start.isError}
           onStart={() =>
-            start.mutate({ track: chosen }, { onSuccess: () => router.push("/apply/about") })
+            start.mutate({ track: chosen }, { onSuccess: () => router.push(firstStepHref(chosen)) })
           }
           onBack={() => setChosen(null)}
         />
@@ -259,6 +265,18 @@ function Standing({ application }: { application: Application }) {
     <section className="flex flex-col gap-4">
       <ApplicationStatusTracker application={application} />
 
+      {/* While it cannot be edited (sent, in review, decided), the one useful action is to read it. */}
+      {editable ? null : (
+        <Link
+          href="/apply/profile"
+          className="flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface px-4 shadow-xs hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <FileText size={18} aria-hidden className="shrink-0 text-text" />
+          <span className="flex-1 text-sm font-bold text-text">{t("apply.overview.viewApplication")}</span>
+          <ChevronRight size={18} aria-hidden className="shrink-0 text-text-muted" />
+        </Link>
+      )}
+
       {replaceable.length > 0 ? (
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-bold text-text">{t("apply.overview.needs.title")}</h2>
@@ -382,7 +400,7 @@ function SwitchTrack({ current }: { current: string }) {
             variant="outline"
             size="sm"
             disabled={update.isPending}
-            onClick={() => update.mutate({ track }, { onSuccess: () => router.push("/apply/about") })}
+            onClick={() => update.mutate({ track }, { onSuccess: () => router.push(firstStepHref(track)) })}
           >
             <Icon size={16} aria-hidden />
             {t(titleKey)}
@@ -393,6 +411,12 @@ function SwitchTrack({ current }: { current: string }) {
     </section>
   );
 }
+
+const HISTORY_DATE = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Kolkata",
+});
 
 interface HistoryEntry {
   id: string;
@@ -446,32 +470,35 @@ function History({ application }: { application: Application }) {
   if (entries.length === 0) return null;
 
   return (
-    <section>
-      <h2 className="pb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
-        {t("apply.overview.history.heading")}
-      </h2>
-      <ol className="flex list-none flex-col p-0">
-        {entries.map((entry, index) => (
-          <li key={entry.id} className="flex gap-3">
-            <span aria-hidden className="flex flex-col items-center">
-              <span
-                className={cn("mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", index === 0 ? "bg-action" : "bg-line-strong")}
-              />
-              {index === entries.length - 1 ? null : <span className="w-px flex-1 bg-line" />}
-            </span>
-            <div className="min-w-0 flex-1 pb-4">
-              <p className="text-sm font-semibold text-text">{entry.title}</p>
-              {entry.detail ? <p className="mt-0.5 text-sm text-text-secondary">{entry.detail}</p> : null}
-              <time dateTime={entry.at} className="mt-1 block text-xs text-text-muted">
-                {new Intl.DateTimeFormat("en-IN", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                  timeZone: "Asia/Kolkata",
-                }).format(new Date(entry.at))}
-              </time>
-            </div>
-          </li>
-        ))}
+    <section className="flex flex-col gap-2.5">
+      <h2 className="px-0.5 text-base font-bold text-text">{t("apply.overview.history.heading")}</h2>
+      <ol className="flex list-none flex-col rounded-card border border-line bg-surface p-4 shadow-xs sm:p-5">
+        {entries.map((entry, index) => {
+          const isLast = index === entries.length - 1;
+          return (
+            <li key={entry.id} className="flex gap-3">
+              <span aria-hidden className="flex flex-col items-center">
+                {/* The latest event gets a soft ring so it reads as "now". */}
+                <span
+                  className={cn(
+                    "mt-1 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full",
+                    index === 0 && "bg-signal-100",
+                  )}
+                >
+                  <span className={cn("h-2 w-2 rounded-full", index === 0 ? "bg-action" : "bg-line-strong")} />
+                </span>
+                {isLast ? null : <span className="my-1 w-px flex-1 bg-line" />}
+              </span>
+              <div className={cn("min-w-0 flex-1", !isLast && "pb-4")}>
+                <p className="text-sm font-semibold text-text">{entry.title}</p>
+                {entry.detail ? <p className="mt-0.5 text-sm text-text-secondary">{entry.detail}</p> : null}
+                <time dateTime={entry.at} className="mt-1 block text-xs text-text-muted">
+                  {HISTORY_DATE.format(new Date(entry.at))}
+                </time>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

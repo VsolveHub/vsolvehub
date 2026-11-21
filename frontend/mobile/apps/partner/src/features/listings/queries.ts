@@ -1,5 +1,6 @@
 import { createIdempotencyKey, request } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
+import { cursorFromNextUrl } from "@vsolve/query/native";
 
 import type {
   ListingHome,
@@ -73,7 +74,7 @@ export async function updatePartnerListing(
 
 export async function runListingAction(
   listingId: string,
-  action: "submit" | "publish" | "republish" | "close" | "purchase-premium",
+  action: "submit" | "publish" | "republish" | "close" | "purchase-premium" | "fill",
   reason: string = "",
 ): Promise<unknown> {
   const data = await request(() =>
@@ -85,14 +86,29 @@ export async function runListingAction(
   return data;
 }
 
+/** At most this many pages of applicants are read for one job (the website's `fetchAllPages` limit). */
+const MAX_APPLICANT_PAGES = 10;
+
+/**
+ * Every applicant of one job. The server answers one page at a time (`{ results, next }`), so
+ * this follows `next` to the end. It used to check for a plain list, find a page object, and
+ * return nothing: the applicants screen and the home's applicant sections were always empty.
+ */
 export async function fetchListingApplications(listingId: string): Promise<PartnerApplication[]> {
   try {
-    const data = await request(() =>
-      getApiClient().GET("/api/v1/partner/listings/{listing_id}/applications", {
-        params: { path: { listing_id: listingId } },
-      }),
-    );
-    return Array.isArray(data) ? (data as PartnerApplication[]) : [];
+    const rows: PartnerApplication[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_APPLICANT_PAGES; page += 1) {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/partner/listings/{listing_id}/applications", {
+          params: { path: { listing_id: listingId }, query: cursor ? { cursor } : {} },
+        }),
+      );
+      rows.push(...(data.results as unknown as PartnerApplication[]));
+      cursor = cursorFromNextUrl(data.next);
+      if (!cursor) break;
+    }
+    return rows;
   } catch (err: any) {
     if (err?.status === 404 || err?.statusCode === 404 || err?.message?.includes("404")) {
       return [];

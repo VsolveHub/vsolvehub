@@ -615,5 +615,40 @@ export type {
   WorkCatalog,
 } from "./partner-work";
 
-export { areasWithoutHours, presetPeriods } from "./partner-hours";
-export type { HoursPreset, PresetPeriod } from "./partner-hours";
+export {
+  areasWithoutHours,
+  collapseToWeeklySet,
+  expandExceptions,
+  expandWeeklySet,
+  presetPeriods,
+} from "./partner-hours";
+export type {
+  AreaException,
+  AreaRule,
+  HoursPreset,
+  PresetPeriod,
+  WeeklyShift,
+} from "./partner-hours";
+
+export {
+  canContinueStep3,
+  isValidPin,
+  matchPin,
+  MAX_REQUESTED_PINS,
+  normalisePin,
+} from "./partner-areas";
+export type {
+  AreaWithPostalCodes,
+  MatchPinResult,
+} from "./partner-areas";
+
+export {
+  isServiceAreaRequirementMet,
+  isWorkingHoursRequirementMet,
+  shouldSkipHoursStep,
+} from "./partner-readiness";
+export type {
+  ServiceAreaReadinessInput,
+  WorkingHoursReadinessInput,
+} from "./partner-readiness";
+

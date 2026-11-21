@@ -164,3 +164,86 @@ describe("whether the partner has chosen how to join", () => {
     expect(isUnchosenDraft(null)).toBe(false);
   });
 });
+
+describe("the employer path", () => {
+  const hrefs = (hiringAs?: string | null) =>
+    applicationSteps("EMPLOYER", hiringAs).map((step) => step.href);
+
+  it("shows only the overview and the choice until they say who is hiring", () => {
+    expect(hrefs()).toEqual(["/apply", "/apply/hiring-as"]);
+    expect(hrefs("")).toEqual(["/apply", "/apply/hiring-as"]);
+  });
+
+  it("walks an individual through their details, documents and review", () => {
+    expect(hrefs("INDIVIDUAL")).toEqual([
+      "/apply",
+      "/apply/hiring-as",
+      "/apply/employer/about",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("walks a business through its details, then who they are, documents and review", () => {
+    expect(hrefs("BUSINESS")).toEqual([
+      "/apply",
+      "/apply/hiring-as",
+      "/apply/employer/business",
+      "/apply/employer/contact",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("never asks for trades, areas or hours", () => {
+    for (const hiringAs of ["INDIVIDUAL", "BUSINESS"]) {
+      expect(hrefs(hiringAs)).not.toContain("/apply/work");
+      expect(hrefs(hiringAs)).not.toContain("/apply/areas");
+      expect(hrefs(hiringAs)).not.toContain("/apply/schedule");
+      expect(hrefs(hiringAs)).not.toContain("/apply/about");
+    }
+  });
+
+  it("continues from each step to the next, for both types", () => {
+    expect(nextStep("/apply/hiring-as", "EMPLOYER", "INDIVIDUAL")?.href).toBe("/apply/employer/about");
+    expect(nextStep("/apply/employer/about", "EMPLOYER", "INDIVIDUAL")?.href).toBe("/apply/documents");
+    expect(nextStep("/apply/hiring-as", "EMPLOYER", "BUSINESS")?.href).toBe("/apply/employer/business");
+    expect(nextStep("/apply/employer/business", "EMPLOYER", "BUSINESS")?.href).toBe(
+      "/apply/employer/contact",
+    );
+    expect(nextStep("/apply/employer/contact", "EMPLOYER", "BUSINESS")?.href).toBe("/apply/documents");
+    expect(nextStep("/apply/review", "EMPLOYER", "BUSINESS")).toBeNull();
+  });
+
+  it("has no next step from the choice until one is made", () => {
+    expect(nextStep("/apply/hiring-as", "EMPLOYER")).toBeNull();
+  });
+
+  it("does not know the other type's screens", () => {
+    expect(stepIndexOf("/apply/employer/business", "EMPLOYER", "INDIVIDUAL")).toBe(-1);
+    expect(stepIndexOf("/apply/employer/about", "EMPLOYER", "BUSINESS")).toBe(-1);
+  });
+
+  it("previews who is hiring, then their details, documents and review", () => {
+    expect(trackPreview("EMPLOYER").steps.map((step) => step.href)).toEqual([
+      "/apply/hiring-as",
+      "/apply/employer",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("is never asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"] as const) {
+      const all = applicationSteps(track, "BUSINESS").map((step) => step.href);
+      expect(all).not.toContain("/apply/hiring-as");
+      expect(all.some((href) => href.startsWith("/apply/employer"))).toBe(false);
+    }
+  });
+
+  it("gives every step a distinct address", () => {
+    for (const hiringAs of ["", "INDIVIDUAL", "BUSINESS"]) {
+      expect(new Set(hrefs(hiringAs)).size).toBe(hrefs(hiringAs).length);
+    }
+  });
+});

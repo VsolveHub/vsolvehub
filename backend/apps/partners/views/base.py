@@ -8,16 +8,20 @@ Operations lists page with.
 Imports nothing from its sibling view modules, so the dependency arrows run one way.
 """
 
-from typing import cast
+from typing import Any, cast
 
-from rest_framework.exceptions import APIException, NotFound, ValidationError
+from rest_framework.exceptions import APIException, ErrorDetail, NotFound, ValidationError
 from rest_framework.pagination import CursorPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.identity.models import AccessAuditEvent, User
 from apps.identity.services import record_access_event
-from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
+from apps.partners.exceptions import (
+    EmployerDetailError,
+    PartnerDomainError,
+    PartnerSelfReviewError,
+)
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_application_for_user, partner_profile_for_user
 from apps.partners.serializers import APPLICANT_AUDIENCE, PartnerApplicationSerializer
@@ -29,11 +33,20 @@ class PartnerApiException(APIException):
         self.status_code = error.status_code
         self.default_code = error.code
         self.retryable = error.retryable
+        self.api_details = getattr(error, "api_details", None)
         super().__init__(detail=error.message, code=error.code)
 
 
 def _raise_api_error(error: PartnerDomainError) -> None:
     raise PartnerApiException(error)
+
+
+def _raise_field_error(error: EmployerDetailError) -> None:
+    """A 400 that names the field. A dotted field ("business.gstin") nests like the request."""
+    detail: Any = [ErrorDetail(error.message, code=error.code)]
+    for part in reversed(error.field.split(".")):
+        detail = {part: detail}
+    raise ValidationError(detail)
 
 
 def _audit_self_review_denial(*, actor: User, error: PartnerSelfReviewError) -> None:
@@ -52,13 +65,14 @@ def _request_ip(request: Request) -> str:
     return str(request.META.get("REMOTE_ADDR") or "unknown")
 
 
-def _application_response(user: User) -> Response:
+def _application_response(user: User, request: Request | None = None) -> Response:
     application = partner_application_for_user(user)
     if application is None:
         raise NotFound("Partner application was not found.")
-    return Response(
-        PartnerApplicationSerializer(application, context={"audience": APPLICANT_AUDIENCE}).data
-    )
+    context: dict[str, Any] = {"audience": APPLICANT_AUDIENCE}
+    if request is not None:
+        context["request"] = request
+    return Response(PartnerApplicationSerializer(application, context=context).data)
 
 
 class OperationsApplicationCursorPagination(CursorPagination):

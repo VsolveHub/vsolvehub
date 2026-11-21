@@ -40,6 +40,7 @@ from apps.listings.models import (
     VendorSubscriptionPlan,
 )
 from apps.locations.models import ServiceArea, ServiceAreaService
+from apps.partners.demo import APEX_STAFFING, seed_business_employer
 from apps.partners.models import (
     PartnerApplication,
     PartnerCapability,
@@ -457,8 +458,13 @@ class Command(BaseCommand):
         # on /apply instead of /listings (same pattern as seed_trade_partners).
         PartnerApplication.objects.update_or_create(
             partner=profile,
-            defaults={"status": PartnerApplication.Status.APPROVED},
+            defaults={
+                "status": PartnerApplication.Status.APPROVED,
+                "track": PartnerApplication.Track.EMPLOYER,
+            },
         )
+        # A business owner with complete details, so its job cards show a real business identity.
+        seed_business_employer(profile, APEX_STAFFING)
 
         if first_variant:
             PartnerCapability.objects.get_or_create(

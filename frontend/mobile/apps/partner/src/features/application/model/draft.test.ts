@@ -195,3 +195,15 @@ describe("selection", () => {
     expect(toggle(["a", "b"], "a")).toEqual(["b"]);
   });
 });
+
+describe("requested PINs (FLOW.md Step 3)", () => {
+  it("reads them from the application and sends only a changed set", () => {
+    const withPins = { ...application, requested_postal_codes: ["509216"] } as unknown as Schemas["PartnerApplication"];
+    const draft = draftFromApplication(withPins);
+    expect(draft.requestedPostalCodes).toEqual(["509216"]);
+    expect(changedFields(draft, withPins)).toEqual({});
+    expect(changedFields({ ...draft, requestedPostalCodes: ["509216", "500032"] }, withPins)).toEqual({
+      requested_postal_codes: ["509216", "500032"],
+    });
+  });
+});

@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/application/view/review-step.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { AlertCircle, Bell, Check, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,8 @@ import {
 
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
 import { useApplyDock } from "../model/dock-context";
+import { hiringAsOf } from "../model/employer";
+import { SIZES } from "../model/employer-form";
 import {
   isEditable,
   outstandingRequirements,
@@ -50,6 +52,7 @@ function currentDocument(
 const consentKey = (purpose: string, version: string) => `${purpose}@${version}`;
 
 export function ReviewStep() {
+  const t = useT();
   const router = useRouter();
   const query = usePartnerApplication();
   const submit = useSubmitApplication();
@@ -167,7 +170,7 @@ export function ReviewStep() {
 
   const activeError = submit.error || updateApp.error;
   const conflict = isVersionConflict(activeError);
-  const refusal = describeRefusal(activeError);
+  const refusal = describeRefusal(activeError, t);
 
   useEffect(() => {
     if (!editable) {
@@ -291,23 +294,29 @@ export function ReviewStep() {
       >
         {/* Definition List of Application Steps */}
         <View style={styles.summaryList}>
-          {/* Row 1: About you */}
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryLeftCol}>
-              <Text style={styles.summaryLabel}>About you</Text>
-              <Text style={styles.summaryValue}>{displayName || "Not set"}</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Edit about you"
-              onPress={() => router.push("/apply/about")}
-              hitSlop={8}
-            >
-              <Text style={styles.editLink}>Edit</Text>
-            </Pressable>
-          </View>
+          {/* Row 1: About you, or for an employer who is hiring and what they gave for that type */}
+          {application.track === "EMPLOYER" ? (
+            <EmployerRows application={application} />
+          ) : (
+            <>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLeftCol}>
+                  <Text style={styles.summaryLabel}>About you</Text>
+                  <Text style={styles.summaryValue}>{displayName || "Not set"}</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit about you"
+                  onPress={() => router.push("/apply/about")}
+                  hitSlop={8}
+                >
+                  <Text style={styles.editLink}>Edit</Text>
+                </Pressable>
+              </View>
 
-          <View style={styles.summaryDivider} />
+              <View style={styles.summaryDivider} />
+            </>
+          )}
 
           {/* Services-only Steps */}
           {listing ? null : (
@@ -334,9 +343,18 @@ export function ReviewStep() {
               <View style={styles.summaryRow}>
                 <View style={styles.summaryLeftCol}>
                   <Text style={styles.summaryLabel}>Where you work</Text>
-                  <Text style={styles.summaryValue}>
-                    {areaNames.length > 0 ? areaNames.join(", ") : "Not set"}
-                  </Text>
+                  {areaNames.length > 0 ? (
+                    <Text style={styles.summaryValue}>{areaNames.join(", ")}</Text>
+                  ) : null}
+                  {(application.requested_postal_codes?.length ?? 0) > 0 ? (
+                    <Text style={[styles.summaryValue, { fontSize: 12, opacity: 0.7 }]}>
+                      {t("apply.review.summary.requestedPins", {
+                        pins: (application.requested_postal_codes ?? []).join(", "),
+                      })}
+                    </Text>
+                  ) : areaNames.length === 0 ? (
+                    <Text style={styles.summaryValue}>{t("apply.review.notSet")}</Text>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -354,7 +372,13 @@ export function ReviewStep() {
                 <View style={styles.summaryLeftCol}>
                   <Text style={styles.summaryLabel}>Your hours</Text>
                   <Text style={styles.summaryValue}>
-                    {`Hours set for ${hoursSet} of ${application.service_area_ids.length} areas`}
+                    {application.service_area_ids.length === 0 &&
+                    (application.requested_postal_codes?.length ?? 0) > 0
+                      ? t("apply.review.summary.hoursNotNeededYet")
+                      : t("apply.review.summary.hours", {
+                          set: hoursSet,
+                          total: application.service_area_ids.length,
+                        })}
                   </Text>
                 </View>
                 <Pressable
@@ -589,6 +613,95 @@ export function ReviewStep() {
         onGranted={() => setNotificationsEnabled(true)}
       />
     </View>
+  );
+}
+
+/**
+ * An employer's summary: who is hiring, then what they gave for that type, each with a way back
+ * to its screen. Read from what the server holds, so it never disagrees with the checklist.
+ */
+function EmployerRows({ application }: { application: Schemas["PartnerApplication"] }) {
+  const t = useT();
+  const router = useRouter();
+  const employer = application.employer;
+  const hiringAs = hiringAsOf(employer);
+  const notSet = "Not set";
+  const place = (area?: string, city?: string) => [area, city].filter(Boolean).join(", ") || notSet;
+  const business = employer?.business;
+  const size = SIZES.find((option) => option.value === business?.company_size)?.label;
+  const lines = [
+    business?.business_category ? t(`apply.employer.category.${business.business_category}`) : "",
+    size ?? "",
+  ].filter(Boolean);
+  const gst = business?.gst_registered
+    ? t("apply.employer.review.gstin", { gstin: business.gstin })
+    : business?.business_proof_type
+      ? t("apply.employer.review.noGst")
+      : "";
+
+  const row = (label: string, href: string, value: string[]) => (
+    <>
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryLeftCol}>
+          <Text style={styles.summaryLabel}>{label}</Text>
+          {value.map((line) => (
+            <Text key={line} style={styles.summaryValue}>
+              {line}
+            </Text>
+          ))}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${label.toLowerCase()}`}
+          onPress={() => router.push(href as never)}
+          hitSlop={8}
+        >
+          <Text style={styles.editLink}>Edit</Text>
+        </Pressable>
+      </View>
+      <View style={styles.summaryDivider} />
+    </>
+  );
+
+  return (
+    <>
+      {row(t("apply.steps.hiringAs"), "/apply/hiring-as", [
+        hiringAs
+          ? t(
+              hiringAs === "INDIVIDUAL"
+                ? "apply.employer.hiringAs.individual.title"
+                : "apply.employer.hiringAs.business.title",
+            )
+          : notSet,
+      ])}
+
+      {hiringAs === "INDIVIDUAL"
+        ? row(t("apply.steps.employerAbout"), "/apply/employer/about", [
+            [application.display_name || notSet, place(employer?.area, employer?.city)].join(" · "),
+          ])
+        : null}
+
+      {hiringAs === "BUSINESS" ? (
+        <>
+          {row(
+            t("apply.steps.employerBusiness"),
+            "/apply/employer/business",
+            [
+              business?.trade_name || business?.legal_name || notSet,
+              lines.join(" · "),
+              place(business?.area, business?.city),
+              gst,
+            ].filter(Boolean),
+          )}
+          {row(t("apply.steps.employerContact"), "/apply/employer/contact", [
+            [
+              application.display_name || notSet,
+              employer?.poster_role ? t(`apply.employer.contact.role.${employer.poster_role}`) : notSet,
+            ].join(" · "),
+          ])}
+        </>
+      ) : null}
+    </>
   );
 }
 

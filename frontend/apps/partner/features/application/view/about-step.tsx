@@ -15,7 +15,6 @@ export function AboutStep() {
   const { draft, update, isReadOnly, application } = useApplicationEditor();
   const isStayHost = application?.track === "STAY_HOST";
   const isRentalOwner = application?.track === "RENTAL_OWNER";
-  const isEmployer = application?.track === "EMPLOYER";
   const isListing = isListingTrack(application?.track);
 
   // The name given at sign-up. Offered as the starting value so nobody types it twice.
@@ -94,9 +93,7 @@ export function AboutStep() {
               ? t("apply.about.bio.placeholder.stayHost")
               : isRentalOwner
                 ? t("apply.about.bio.placeholder.rentalOwner")
-                : isEmployer
-                  ? t("apply.about.bio.placeholder.employer")
-                  : t("apply.about.bio.placeholder.services")
+                : t("apply.about.bio.placeholder.services")
           }
           value={draft.biography}
           disabled={isReadOnly}

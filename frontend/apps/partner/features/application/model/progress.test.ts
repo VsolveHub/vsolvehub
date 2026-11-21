@@ -88,8 +88,8 @@ describe("what counts as a step", () => {
     expect(steps.filter((step) => step.state === "waypoint").map((step) => step.href)).toEqual([
       "/apply",
     ]);
-    expect(summary.total).toBe(5);
-    expect(summary.done).toBe(5);
+    expect(summary.total).toBe(6);
+    expect(summary.done).toBe(6);
   });
 
   it("marks schedule step as todo until working hours are configured", () => {

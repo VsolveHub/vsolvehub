@@ -65,10 +65,15 @@ export function isSelfReview(error: unknown): boolean {
   );
 }
 
+export type ApplicantTrack = Schemas["TrackEnum"];
+
 export interface QueueFilters {
   status?: "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUIRED";
   assignedToMe?: boolean;
   unassigned?: boolean;
+  /** One kind of applicant. Combines with the others; left out, every kind is listed. */
+  track?: ApplicantTrack;
+  areaPending?: boolean;
 }
 
 /**
@@ -93,6 +98,8 @@ export function useApplicationQueue(filters: QueueFilters = {}) {
               ...(filters.status ? { status: filters.status } : {}),
               ...(filters.assignedToMe ? { assigned_to_me: true } : {}),
               ...(filters.unassigned ? { unassigned: true } : {}),
+              ...(filters.track ? { track: filters.track } : {}),
+              ...(filters.areaPending ? { area_pending: true } : {}),
               ...(pageParam ? { cursor: pageParam } : {}),
             },
           },
@@ -249,9 +256,11 @@ export function useTransitionApplication() {
         ),
       ),
     onSuccess: (application: Application) => {
+      // The decision's response is the plain application; the reviewer's detail also carries the
+      // employer hints and checks, which a decision does not change. Merge, so they are not lost.
       queryClient.setQueryData(
         queryKeys.operations.partnerApplication(application.id),
-        application,
+        (previous: Application | undefined) => ({ ...previous, ...application }),
       );
     },
     onError: (error, input) => {
@@ -266,6 +275,44 @@ export function useTransitionApplication() {
     },
     // Never retried. A retried transition is a second decision on someone's
     // livelihood, taken without anyone choosing to take it.
+    retry: false,
+  });
+}
+
+export interface EmployerCheckInput {
+  applicationId: string;
+  code: Schemas["EmployerCheckCodeEnum"];
+  result: Schemas["ResultEnum"];
+  /** Required by the server for a failed check; the reviewer's reason, kept in the record. */
+  note?: string;
+}
+
+/**
+ * Passes or fails one manual check on an employer application.
+ *
+ * Only the reviewer holding the application may; the server refuses anyone else. The checks are
+ * part of the application detail, so it is refetched on either outcome: a refused write must not
+ * leave a tick on screen that the server did not record.
+ */
+export function useSetEmployerCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: EmployerCheckInput) =>
+      request(() =>
+        getApiClient().PUT(
+          "/api/v1/operations/partner-applications/{application_id}/employer-checks/{code}/",
+          {
+            params: { path: { application_id: input.applicationId, code: input.code } },
+            body: { result: input.result, note: input.note ?? "" },
+          },
+        ),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerApplication(input.applicationId),
+      });
+    },
     retry: false,
   });
 }
@@ -306,6 +353,55 @@ export function useReviewDocument() {
     onSettled: (_data, _error, input) => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.operations.partnerApplication(input.applicationId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export function useServiceAreas() {
+  return useQuery({
+    queryKey: ["service-areas"] as const,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/service-areas/", {})),
+    ...SESSION_STATE,
+  });
+}
+
+export interface RemoveApplicationAreaInput {
+  applicationId: string;
+  serviceAreaId: string;
+  expectedVersion: number;
+  reason?: string;
+}
+
+export function useRemoveApplicationArea() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RemoveApplicationAreaInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/operations/partner-applications/{application_id}/remove-area/",
+          {
+            params: { path: { application_id: input.applicationId } },
+            body: {
+              service_area_id: input.serviceAreaId,
+              expected_version: input.expectedVersion,
+              reason: input.reason ?? "",
+            },
+          },
+        ),
+      ),
+    onSuccess: (application: Application) => {
+      queryClient.setQueryData(
+        queryKeys.operations.partnerApplication(application.id),
+        application,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerApplication(application.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["operations", "partnerApplicationQueue"],
       });
     },
     retry: false,

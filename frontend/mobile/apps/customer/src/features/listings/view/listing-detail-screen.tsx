@@ -14,7 +14,6 @@ import { ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import {
   ArrowLeft,
   Briefcase,
-  Building,
   Clock,
   FileCheck2,
   Flag,
@@ -40,6 +39,7 @@ import {
   type JobMatch,
 } from "../seeker-queries";
 import { AlreadyAppliedCard } from "./already-applied-card";
+import { EmployerMark, VerifiedBadge, employerDetailLine, employerName, listingEmployer } from "./employer-identity";
 import { ApplySheet } from "./apply-sheet";
 import { MatchCard } from "./match-card";
 import { QuickApplyCard } from "./quick-apply-card";
@@ -290,8 +290,10 @@ function humanize(val: string | undefined, map: Record<string, string>): string 
 
   const structuredFields = (listing.structured_fields || {}) as Record<string, any>;
   // Every fact on this page is the employer's own; a missing one is left out, never stood in
-  // for. Only approved employers can post, so the web's "Verified Employer" is true of any.
-  const posterName = listing.poster_name || listing.company_name || "Verified Employer";
+  // for. "Verified" shows only when the server says the employer is.
+  const employer = listingEmployer(listing);
+  const posterName = employerName(employer);
+  const employerDetail = employerDetailLine(employer);
   const locationText: string | null = listing.location_text || null;
   const applicationCount = listing.application_count ?? 0;
 
@@ -370,10 +372,14 @@ function humanize(val: string | undefined, map: Record<string, string>): string 
 
           {/* Badges & Publication Meta */}
           <View className="flex-row flex-wrap items-center gap-2">
-            <View className="flex-row items-center gap-1.5 rounded-full bg-[#f4f1ec] border border-line px-3 py-1">
-              <Building size={13} color="#6B6560" />
+            <View className="flex-row items-center gap-2 rounded-full bg-[#f4f1ec] border border-line py-1 pl-1 pr-3">
+              <View className="size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface">
+                <EmployerMark employer={employer} />
+              </View>
               <Text className="text-xs font-semibold text-text-secondary">{posterName}</Text>
             </View>
+            <VerifiedBadge employer={employer} />
+            {employerDetail ? <Text className="text-xs text-text-muted">{employerDetail}</Text> : null}
 
             {isFeatured ? (
               <View className="flex-row items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1">

@@ -367,7 +367,7 @@ function ListingsBrowseContent() {
         <div className="mt-4 pt-3.5 border-t border-[#E8E3DE] flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-[#46536A]">
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck className="size-4 text-[#047857]" />
-            Every employer phone &amp; GST verified
+            Every employer phone &amp; ID verified
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Check className="size-4 text-[#047857]" />

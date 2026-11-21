@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
+import { cn } from "./cn";
 import { useTOrDefault } from "./i18n";
 
 export interface DrawerProps {
@@ -18,30 +19,62 @@ export interface DrawerProps {
   side?: "left" | "right";
   /** Controlled open state (if not using internal state) */
   open?: boolean;
+  /** Drawer width preset: 'sm' (320px) | 'md' (384px) | 'lg' (480px) | 'xl' (576px) | '2xl' (704px) */
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  /** Optional additional className for the drawer aside element */
+  className?: string;
 }
+
+const SIZE_CLASSES = {
+  sm: "w-80 max-w-[85vw]",
+  md: "w-96 max-w-[85vw]",
+  lg: "w-[30rem] max-w-[90vw]",
+  xl: "w-[36rem] max-w-[92vw]",
+  "2xl": "w-[44rem] max-w-[95vw]",
+} as const;
 
 /**
  * A side-sheet drawer primitive for mobile filters, details panels, or navigation.
  * Includes focus trapping, Escape-to-close, and body scroll locking.
  */
-export function Drawer({ children, trigger, title, onOpenChange, side = "right", open }: DrawerProps) {
+export function Drawer({
+  children,
+  trigger,
+  title,
+  onOpenChange,
+  side = "right",
+  open,
+  size = "sm",
+  className,
+}: DrawerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const tf = useTOrDefault();
 
   const isOpen = open !== undefined ? open : internalOpen;
   
+  // Keep the latest callback without re-running the open effect when a parent passes a new one.
+  const onOpenChangeRef = useRef(onOpenChange);
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  }, [onOpenChange]);
+
   const handleOpenChange = useCallback((newOpen: boolean) => {
     setInternalOpen(newOpen);
-    onOpenChange?.(newOpen);
-  }, [onOpenChange]);
+    onOpenChangeRef.current?.(newOpen);
+  }, []);
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+  const triggerFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    
+
     const triggerNode = triggerRef.current;
+    // Record what was focused prior to opening (e.g. the table row or Configure button)
+    triggerFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -71,18 +104,24 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
 
     document.addEventListener("keydown", handleKeyDown);
     
-    // Focus first element on open
-    setTimeout(() => {
-      const focusable = drawerRef.current?.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      (focusable?.[0] as HTMLElement)?.focus();
-    }, 50); // slight delay for animation
+    // Focus first element on initial open only if focus isn't already inside the drawer
+    const timer = setTimeout(() => {
+      if (drawerRef.current && !drawerRef.current.contains(document.activeElement)) {
+        const focusable = drawerRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        (focusable?.[0] as HTMLElement)?.focus();
+      }
+    }, 50);
 
     return () => {
+      clearTimeout(timer);
       document.body.style.overflow = originalOverflow;
       document.removeEventListener("keydown", handleKeyDown);
-      triggerNode?.querySelector("button")?.focus();
+      
+      // Restore focus to the trigger element when drawer closes
+      const restoreEl = triggerFocusRef.current ?? triggerNode?.querySelector("button");
+      restoreEl?.focus();
     };
   }, [isOpen, handleOpenChange]);
 
@@ -109,7 +148,13 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
           />
           <aside
             ref={drawerRef}
-            className={`fixed top-0 bottom-0 z-50 w-80 max-w-[85vw] bg-surface shadow-xl flex flex-col border-line duration-300 overscroll-contain ${positionClass} ${slideInClass}`}
+            className={cn(
+              "fixed top-0 bottom-0 z-50 bg-surface shadow-xl flex flex-col border-line duration-300 overscroll-contain",
+              SIZE_CLASSES[size ?? "sm"],
+              positionClass,
+              slideInClass,
+              className,
+            )}
           >
             <div className="flex items-center justify-between p-4 border-b border-line shrink-0">
               <span className="font-semibold text-base text-text">{title}</span>

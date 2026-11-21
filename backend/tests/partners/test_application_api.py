@@ -115,8 +115,11 @@ def test_applicant_reference_data_is_bounded_and_publishes_canonical_values(
             "id": str(partner_setup.service_area.id),
             "slug": "west-hyderabad",
             "name": "West Hyderabad",
+            "zone": "",
             "timezone": "Asia/Kolkata",
             "is_accepting_partners": True,
+            # The PINs each open area covers, so the app can match a typed PIN on the device.
+            "postal_codes": [],
         },
     ]
     assert skills.status_code == HTTPStatus.OK

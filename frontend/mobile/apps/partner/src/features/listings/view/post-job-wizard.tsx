@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react-native";
 
+import { usePartnerApplication } from "@/features/application/queries";
 import { setFocusedBackHandler } from "@/features/session/focused-back";
 
 import {
@@ -53,6 +54,7 @@ import {
   fetchPartnerListing,
   fetchSubscriptionPlans,
 } from "../queries";
+import { jobCategoryLayout, rankRoleMatches } from "../job-categories";
 import { usePlanPurchase } from "../use-plan-purchase";
 import type { PartnerListing } from "../model";
 import { SubscriptionDialog } from "./subscription-dialog";
@@ -345,6 +347,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editingText, setEditingText] = useState(false);
   const [preview, setPreview] = useState<PartnerListing | null>(null);
@@ -377,14 +380,52 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   };
 
   const opts = options.data as JobOptions | undefined;
+  // Someone hiring for themselves sees household roles straight away; every other category stays
+  // one tap away. A business sees the whole grid.
+  const hiringAs = usePartnerApplication().data?.employer?.hiring_as;
+  const layout = useMemo(() => jobCategoryLayout(opts?.categories ?? [], hiringAs), [opts, hiringAs]);
+  const homeName = layout.home?.name ?? null;
   const roles = useMemo(() => {
     const q = search.trim().toLowerCase();
     const all = (opts?.categories ?? []).flatMap((cat) =>
       cat.roles.map((role) => ({ category: cat.name, role })),
     );
-    if (q) return all.filter(({ role, category }) => `${role.name} ${category}`.toLowerCase().includes(q));
+    if (q) {
+      return rankRoleMatches(
+        all.filter(({ role, category }) => `${role.name} ${category}`.toLowerCase().includes(q)),
+        hiringAs,
+      );
+    }
+    // The household roles already have their own tiles above.
+    if (homeName !== null && draft.category === homeName) return [];
     return all.filter(({ category }) => category === draft.category);
-  }, [opts, search, draft.category]);
+  }, [opts, search, draft.category, hiringAs, homeName]);
+  // The grid opens when they ask, or when the job being edited already sits in one of its categories.
+  const gridOpen =
+    homeName === null || showAllCategories || (draft.category !== "" && draft.category !== homeName);
+
+  const roleChip = (category: string, role: JobRoleTemplate) => {
+    const isSelected = draft.templateId === role.id;
+    return (
+      <Pressable
+        key={role.id}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        onPress={() => {
+          setDraft((d) => fromTemplate(d, category, role));
+          setStep(1);
+        }}
+        className={`rounded-full border px-4 py-2 ${
+          isSelected ? "border-amber-500 bg-amber-50" : "border-line bg-surface"
+        }`}
+      >
+        <Text className={`text-xs font-bold ${isSelected ? "text-amber-800" : "text-navy-900"}`}>
+          {role.name}
+          {search ? ` · ${category}` : ""}
+        </Text>
+      </Pressable>
+    );
+  };
 
   const save = useMutation({
     mutationFn: async (current: Draft) => {
@@ -555,12 +596,37 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               ) : null}
             </View>
 
+            {/* Someone hiring for themselves: household roles straight away */}
+            {!search && layout.home ? (
+              <View className="gap-2">
+                <Text className="text-xs font-semibold text-text-muted">Help for your home — tap one</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {layout.home.roles.map((role) => roleChip(layout.home!.name, role))}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Every other category, one tap away */}
+            {!search && !gridOpen ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: false }}
+                onPress={() => setShowAllCategories(true)}
+                className="min-h-11 flex-row items-center justify-between gap-2 rounded-xl border border-dashed border-line px-3.5 py-2.5"
+              >
+                <Text className="flex-1 text-xs font-bold text-amber-800">
+                  Hiring for something else? Show all categories
+                </Text>
+                <ChevronDown size={16} color="#64748b" />
+              </Pressable>
+            ) : null}
+
             {/* Category Grid when no search text */}
-            {!search ? (
+            {!search && gridOpen ? (
               <View className="gap-2">
                 <Text className="text-xs font-semibold text-text-muted">Choose a category</Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {opts.categories.map((cat) => {
+                  {layout.others.map((cat) => {
                     const isSelected = draft.category === cat.name;
                     return (
                       <Pressable
@@ -593,32 +659,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                   {search ? "Matching jobs — tap to autofill" : "Common jobs in category — tap one"}
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {roles.map(({ category, role }) => {
-                    const isSelected = draft.templateId === role.id;
-                    return (
-                      <Pressable
-                        key={role.id}
-                        onPress={() => {
-                          setDraft((d) => fromTemplate(d, category, role));
-                          setStep(1);
-                        }}
-                        className={`rounded-full border px-4 py-2 ${
-                          isSelected
-                            ? "border-amber-500 bg-amber-50"
-                            : "border-line bg-surface"
-                        }`}
-                      >
-                        <Text
-                          className={`text-xs font-bold ${
-                            isSelected ? "text-amber-800" : "text-navy-900"
-                          }`}
-                        >
-                          {role.name}
-                          {search ? ` · ${category}` : ""}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  {roles.map(({ category, role }) => roleChip(category, role))}
                 </View>
               </View>
             ) : null}

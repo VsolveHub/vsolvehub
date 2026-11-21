@@ -63,6 +63,21 @@ describe("signed URL expiry", () => {
   });
 });
 
+describe("a selfie", () => {
+  it("accepts only a JPEG or PNG photo, never a PDF", () => {
+    for (const type of ["image/jpeg", "image/png"]) {
+      expect(rejectFile({ size: 1_000, type }, { imageOnly: true })).toBeNull();
+    }
+    const pdf = rejectFile({ size: 1_000, type: "application/pdf" }, { imageOnly: true });
+    expect(pdf).toEqual({
+      code: "unsupported_type",
+      message: "A selfie must be a JPG or PNG photo.",
+    });
+    // The same PDF is fine for any other document.
+    expect(rejectFile({ size: 1_000, type: "application/pdf" })).toBeNull();
+  });
+});
+
 describe("retryability", () => {
   it("offers a retry for the failures a second attempt can fix", () => {
     expect(isRetryableUploadFailure("expired")).toBe(true);

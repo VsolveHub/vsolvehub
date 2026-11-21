@@ -2,7 +2,7 @@
 import { Button, EmptyState, Sheet, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 
 import { AsyncSection, asyncStateFrom } from "@/components/async-section";
 
@@ -13,6 +13,9 @@ import {
   type Notification,
   type NotificationPage,
 } from "../queries";
+
+/** At most this share of the screen for the list, leaving the sheet's title and buttons in view. */
+export const LIST_SHARE_OF_SCREEN = 0.5;
 
 export function NotificationPanel({
   open,
@@ -57,6 +60,11 @@ function NotificationPanelBody({
   const [dismissedAll, setDismissedAll] = useState(false);
   const state = asyncStateFrom<NotificationPage, NotificationPage>(feed, (page) => page);
   const hasUnread = unreadCount !== null && unreadCount > 0;
+  // The sheet only has a maximum height and grows to fit what is in it. A list told to fill the
+  // remaining space (`flex-1`) inside it works out to 0 pixels on a phone, which hid every notice
+  // behind a badge that said there were some. The list sizes to its rows and scrolls past this.
+  const { height: windowHeight } = useWindowDimensions();
+  const listMaxHeight = Math.floor(windowHeight * LIST_SHARE_OF_SCREEN);
 
   return (
     <Sheet
@@ -93,7 +101,7 @@ function NotificationPanelBody({
         </View>
       }
     >
-      <View className="flex-1 min-h-0">
+      <View>
         {markRead.isError ? (
           <Text className="mb-2 text-sm text-danger-text">We could not mark that as read. It is still unread.</Text>
         ) : null}
@@ -120,7 +128,8 @@ function NotificationPanelBody({
             const visible = dismissedAll ? [] : page.results.filter((item) => !dismissedIds.has(item.id));
             return (
               <ScrollView
-                className="flex-1"
+                testID="notification-list"
+                style={{ maxHeight: listMaxHeight }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ gap: 10, paddingBottom: 12 }}
                 keyboardShouldPersistTaps="handled"

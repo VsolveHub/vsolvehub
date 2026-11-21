@@ -37,6 +37,7 @@ import {
   type ListingDetail,
 } from "../queries";
 import { useResumeUpload } from "../use-document-upload";
+import { employerName, listingEmployer } from "./employer-identity";
 
 export interface ApplySheetProps {
   listing: ListingDetail;
@@ -220,7 +221,7 @@ export function ApplySheet({
               <Text className="text-xs text-text-muted mt-0.5">
                 {isAlreadySubmitted
                   ? "Application on file"
-                  : `Step ${step} of 2 · ${listing.poster_name || "Verified Employer"}`}
+                  : `Step ${step} of 2 · ${employerName(listingEmployer(listing))}`}
               </Text>
             </View>
             <Pressable accessibilityRole="button" onPress={handleClose} className="p-1">

@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 from django.core.cache import cache
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -24,7 +26,9 @@ from apps.identity.models import PrivacyRequest, Role, User, UserRole, UserSessi
 from apps.locations.models import Address
 from apps.notifications.models import NotificationIntent
 from apps.partners.models import (
+    EmployerProfile,
     PartnerApplication,
+    PartnerBusinessProfile,
     PartnerDocument,
     PartnerProfile,
 )
@@ -255,6 +259,70 @@ def test_partner_erasure_deletes_files_offboards_and_retires_the_payout_account(
     account = PartnerPayoutAccount.objects.get(partner=partner)
     assert account.status == PartnerPayoutAccount.Status.REPLACED
     assert account.account_last4 == "4321"
+
+
+def test_employer_erasure_blanks_personal_and_business_details_and_the_logo(
+    monkeypatch: pytest.MonkeyPatch,
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    monkeypatch.setattr("apps.partners.storage.get_document_storage", _FakeStorage)
+    user = User.objects.create_user(phone_number=CANONICAL, full_name="Priya Sharma")
+    partner = PartnerProfile.objects.create(user=user, display_name="Priya Sharma")
+    PartnerApplication.objects.create(
+        partner=partner,
+        track=PartnerApplication.Track.EMPLOYER,
+        status=PartnerApplication.Status.APPROVED,
+    )
+    EmployerProfile.objects.create(
+        partner=partner,
+        hiring_as=EmployerProfile.HiringAs.BUSINESS,
+        poster_role=EmployerProfile.PosterRole.OWNER,
+        email="priya@example.com",
+    )
+    logo_name = default_storage.save(
+        "images/employer-logos/erasure-test/logo.png", ContentFile(b"x")
+    )
+    PartnerBusinessProfile.objects.create(
+        partner=partner,
+        business_type=PartnerBusinessProfile.BusinessType.EMPLOYER,
+        legal_name="Sri Sai Mobiles",
+        trade_name="Sai Mobiles",
+        address="12 Main Road",
+        area="Kondapur",
+        city="Hyderabad",
+        pin_code="500084",
+        latitude=Decimal("17.469000"),
+        longitude=Decimal("78.358000"),
+        website_url="https://saimobiles.example",
+        gst_registered=True,
+        gstin="27AAPFU0939F1ZV",
+        business_proof_type="GST_CERTIFICATE",
+        logo=logo_name,
+    )
+    privacy_request = request_account_deletion(user=user, current_session_key=None)
+    _make_due(privacy_request)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        assert process_due_account_deletions()["erased"] == 1
+
+    employer = EmployerProfile.objects.get(partner=partner)
+    assert (employer.email, employer.area, employer.city, employer.pin_code) == ("", "", "", "")
+    business = PartnerBusinessProfile.objects.get(partner=partner)
+    assert business.legal_name == ""
+    assert (business.trade_name, business.address, business.area, business.pin_code) == (
+        "",
+        "",
+        "",
+        "",
+    )
+    assert business.website_url == ""
+    assert business.latitude is None
+    assert business.longitude is None
+    assert business.gstin == ""
+    assert business.gst_registered is False
+    assert business.business_proof_type == ""
+    assert not business.logo
+    assert not default_storage.exists(logo_name)
 
 
 def test_a_hold_moves_the_request_to_review_and_is_rechecked_every_run(

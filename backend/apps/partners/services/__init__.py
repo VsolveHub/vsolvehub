@@ -63,6 +63,12 @@ from .documents import (
     scan_partner_document,
     scan_pending_partner_documents,
 )
+from .employer import (
+    remove_employer_logo,
+    set_employer_check,
+    set_employer_logo,
+    update_employer_details,
+)
 from .presence import (
     _assert_operational_eligibility,
     _presence_payload,
@@ -77,6 +83,7 @@ from .presence import (
 from .review import (
     claim_partner_application,
     release_partner_application_review,
+    remove_partner_application_area,
     transition_partner_application,
 )
 from .schedule import (
@@ -141,13 +148,18 @@ __all__ = [
     "issue_partner_document_upload",
     "record_partner_document_scan_result",
     "release_partner_application_review",
+    "remove_employer_logo",
+    "remove_partner_application_area",
     "replace_partner_schedule",
     "replace_partner_schedule_for_operations",
     "review_partner_document",
     "scan_partner_document",
     "scan_pending_partner_documents",
+    "set_employer_check",
+    "set_employer_logo",
     "submit_partner_application",
     "sync_partner_push_subscription",
     "transition_partner_application",
+    "update_employer_details",
     "update_partner_application",
 ]

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   canSubmit,
   isEditable,
+  offeredDocumentKinds,
   outstandingRequirements,
   replaceableRejectedDocuments,
   requirements,
@@ -37,7 +38,10 @@ function application(overrides: Partial<Application> = {}): Application {
   return {
     can_edit: status === "DRAFT" || status === "CHANGES_REQUIRED",
     required_document_kinds: ["GOVERNMENT_ID"],
+    offered_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF"],
+    employer: null,
     consents_complete: false,
+    business_details_complete: false,
     id: "app-1",
     partner_id: "partner-1",
     status: "DRAFT",
@@ -258,5 +262,169 @@ describe("a stay host", () => {
     const stay = requirements(application({ track: "STAY_HOST" })).map((item) => item.code);
     const rental = requirements(application({ track: "RENTAL_OWNER" })).map((item) => item.code);
     expect(rental).toEqual(stay);
+  });
+});
+
+function employer(
+  hiringAs: "" | "INDIVIDUAL" | "BUSINESS",
+  missingFields: string[],
+): Application["employer"] {
+  return {
+    hiring_as: hiringAs,
+    poster_role: "",
+    id_document_type: "",
+    email: "",
+    area: "",
+    city: "",
+    pin_code: "",
+    business: null,
+    missing_fields: missingFields,
+  } as unknown as Application["employer"];
+}
+
+const byCode = (items: ReturnType<typeof requirements>) =>
+  Object.fromEntries(items.map((item) => [item.code, item]));
+
+describe("an employer's details", () => {
+  it("asks only who is hiring until they choose", () => {
+    const items = requirements(
+      application({ track: "EMPLOYER", employer: employer("", ["hiring_as"]) }),
+    );
+
+    expect(items.map((item) => item.code).slice(0, 2)).toEqual(["HIRING_AS", "GOVERNMENT_ID"]);
+    expect(byCode(items).HIRING_AS).toMatchObject({ href: "/apply/hiring-as", isMet: false });
+  });
+
+  it("asks the same of an employer with no employer record yet", () => {
+    const items = requirements(application({ track: "EMPLOYER", employer: undefined }));
+
+    expect(byCode(items).HIRING_AS).toMatchObject({ isMet: false });
+  });
+
+  it("puts everything an individual gives on one screen, read from the server's missing fields", () => {
+    const missing = requirements(
+      application({
+        track: "EMPLOYER",
+        employer: employer("INDIVIDUAL", ["area", "pin_code", "display_name", "id_document_type"]),
+      }),
+    );
+    expect(byCode(missing).HIRING_AS?.isMet).toBe(true);
+    expect(byCode(missing).EMPLOYER_ABOUT).toMatchObject({ href: "/apply/employer/about", isMet: false });
+    expect(byCode(missing)).not.toHaveProperty("EMPLOYER_BUSINESS");
+    expect(byCode(missing)).not.toHaveProperty("DISPLAY_NAME");
+
+    const done = requirements(
+      application({ track: "EMPLOYER", employer: employer("INDIVIDUAL", []) }),
+    );
+    expect(byCode(done).EMPLOYER_ABOUT?.isMet).toBe(true);
+  });
+
+  it("splits a business's fields between its two screens", () => {
+    const items = requirements(
+      application({
+        track: "EMPLOYER",
+        employer: employer("BUSINESS", ["legal_name", "pin_code", "poster_role"]),
+      }),
+    );
+
+    expect(byCode(items).EMPLOYER_BUSINESS).toMatchObject({
+      href: "/apply/employer/business",
+      isMet: false,
+    });
+    expect(byCode(items).EMPLOYER_CONTACT).toMatchObject({
+      href: "/apply/employer/contact",
+      isMet: false,
+    });
+  });
+
+  it("marks only the screen that still has something missing", () => {
+    const items = requirements(
+      application({
+        track: "EMPLOYER",
+        employer: employer("BUSINESS", ["display_name", "id_document_type"]),
+      }),
+    );
+
+    expect(byCode(items).EMPLOYER_BUSINESS?.isMet).toBe(true);
+    expect(byCode(items).EMPLOYER_CONTACT?.isMet).toBe(false);
+  });
+
+  it("is never asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"] as const) {
+      const codes = requirements(application({ track })).map((item) => item.code);
+      expect(codes).not.toContain("HIRING_AS");
+      expect(codes).not.toContain("EMPLOYER_ABOUT");
+      expect(codes).not.toContain("EMPLOYER_BUSINESS");
+      expect(codes).not.toContain("EMPLOYER_CONTACT");
+    }
+  });
+});
+
+describe("an employer's documents", () => {
+  it("require exactly what the server lists for their type", () => {
+    const individual = application({
+      track: "EMPLOYER",
+      employer: employer("INDIVIDUAL", []),
+      required_document_kinds: ["GOVERNMENT_ID", "SELFIE"],
+    });
+    const codes = outstandingRequirements(individual).map((item) => item.code);
+
+    expect(codes).toContain("GOVERNMENT_ID");
+    expect(codes).toContain("SELFIE");
+    expect(codes).not.toContain("BUSINESS_PROOF");
+  });
+
+  it("need the owner's letter only when the server asks for it", () => {
+    const business = application({
+      track: "EMPLOYER",
+      employer: employer("BUSINESS", []),
+      required_document_kinds: ["GOVERNMENT_ID", "BUSINESS_PROOF", "AUTHORIZATION_LETTER"],
+    });
+
+    expect(outstandingRequirements(business).map((item) => item.code)).toEqual(
+      expect.arrayContaining(["BUSINESS_PROOF", "AUTHORIZATION_LETTER"]),
+    );
+  });
+
+  it("are met by an uploaded selfie", () => {
+    const done = application({
+      track: "EMPLOYER",
+      employer: employer("INDIVIDUAL", []),
+      required_document_kinds: ["GOVERNMENT_ID", "SELFIE"],
+      documents: [
+        document({ id: "doc-id", kind: "GOVERNMENT_ID" }),
+        document({ id: "doc-selfie", kind: "SELFIE" }),
+      ],
+    });
+
+    expect(outstandingRequirements(done).map((item) => item.code)).toEqual(["CONSENTS"]);
+  });
+});
+
+describe("the document slots offered", () => {
+  it("are the server's list", () => {
+    expect(
+      offeredDocumentKinds(application({ offered_document_kinds: ["GOVERNMENT_ID", "SELFIE"] })),
+    ).toEqual(["GOVERNMENT_ID", "SELFIE"]);
+  });
+
+  it("fall back to the two every other track has always offered before the first save", () => {
+    expect(offeredDocumentKinds(null)).toEqual(["GOVERNMENT_ID", "ADDRESS_PROOF"]);
+  });
+});
+
+describe("asked PINs (FLOW.md Step 3)", () => {
+  it("a PIN Operations marked not valid no longer satisfies Where you work", () => {
+    const withRequest = (status: string) =>
+      application({
+        service_area_ids: [],
+        // The server leaves a dismissed PIN out of this list but keeps its row in area_requests.
+        requested_postal_codes: status === "NOT_VALID" ? [] : ["509216"],
+        area_requests: [{ status }],
+      } as unknown as Partial<Application>);
+    const met = (app: Application) =>
+      requirements(app).find((r) => r.code === "SERVICE_AREAS")?.isMet;
+    expect(met(withRequest("WAITING"))).toBe(true);
+    expect(met(withRequest("NOT_VALID"))).toBe(false);
   });
 });

@@ -6,9 +6,12 @@ import {
   Coins,
   Contact,
   FileText,
+  Globe,
   HardHat,
   Home,
   Inbox,
+  MapPin,
+  MapPinCheck,
   MessageSquareHeart,
   Percent,
   RotateCcw,
@@ -72,6 +75,9 @@ export const NAV_GROUPS: NavGroup[] = [
       // Applications and crew documents: both "check a partner's papers" queues, as two tabs.
       { href: "/reviews", label: "Applications", icon: UserCheck },
       { href: "/operations/partners", label: "All partners", icon: Users },
+      { href: "/operations/areas", label: "Service areas", icon: MapPin },
+      { href: "/operations/area-requests", label: "Area requests", icon: MapPinCheck },
+      { href: "/operations/coverage", label: "Coverage", icon: Globe },
       // Working hours are edited on a partner's record (All partners), not from a menu item.
       // Job plans live on Jobs › Plans, next to the jobs they sell; stay plans on Stays › Plans.
       { href: "/operations/partners/import", label: "Import partners", icon: Upload },

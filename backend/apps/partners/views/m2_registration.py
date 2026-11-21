@@ -41,7 +41,7 @@ from apps.partners.capability_options import (
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.gates import GATE_BLOCKS, GATE_COPY, GateState
 from apps.partners.models import PartnerCapability, PartnerLanguage, PartnerProfile
-from apps.partners.permissions import IsPartnerUser
+from apps.partners.permissions import IsPartnerOrApplicant, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
 from apps.partners.serializers import (
     CapabilityOptionsSerializer,
@@ -101,7 +101,7 @@ def _unmet_gates() -> list[dict[str, object]]:
 
 
 class PartnerBusinessProfileView(APIView):
-    permission_classes = (IsAuthenticated, IsPartnerUser)
+    permission_classes = (IsAuthenticated, IsPartnerOrApplicant)
 
     @extend_schema(
         tags=["M2 - Partner registration"],
@@ -160,6 +160,9 @@ class PartnerBusinessProfileView(APIView):
                 gstin=values.get("gstin", ""),
                 years_in_operation=values.get("years_in_operation", 0),
                 upi_vpa=values.get("upi_vpa", ""),
+                business_category=values.get("business_category", ""),
+                city=values.get("city", ""),
+                address=values.get("address", ""),
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)

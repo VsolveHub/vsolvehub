@@ -9,7 +9,6 @@ the draft. Reviewer-side decisions on the same row live in `review`; document ha
 import uuid
 from collections.abc import Iterable, Sequence
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -19,11 +18,14 @@ from apps.identity.models import Role, User, UserRole
 from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.partners.exceptions import (
     PartnerApplicationIncompleteError,
+    PartnerDomainError,
+    PartnerServiceAreasUnavailableError,
     PartnerTransitionError,
     PartnerVersionConflictError,
 )
 from apps.partners.models import (
     PartnerApplication,
+    PartnerAreaRequest,
     PartnerAvailabilityRule,
     PartnerConsent,
     PartnerConsentDocument,
@@ -34,6 +36,7 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
+from apps.partners.selectors import employer_missing_fields, required_document_kinds
 
 from .base import (
     PARTNER_APPLICATION_PROGRESS_PURPOSE,
@@ -106,11 +109,13 @@ def _validate_service_configuration(
     variants: Sequence[ServiceVariant],
     service_areas: Sequence[ServiceArea],
     require_complete: bool = False,
+    allow_area_requests: bool = False,
 ) -> None:
+    has_areas = bool(service_areas)
     if require_complete and (
         not skills
         or not variants
-        or not service_areas
+        or (not has_areas and not allow_area_requests)
         or any(not skill.is_active for skill in skills)
         or any(
             not variant.is_active or variant.service.status != Service.Status.ACTIVE
@@ -131,17 +136,19 @@ def _validate_service_configuration(
             f"Select the required skills for: {', '.join(missing_skills)}.",
         )
 
-    area_ids = {area.id for area in service_areas}
-    for variant in variants if service_areas or require_complete else ():
-        if not ServiceAreaService.objects.filter(
-            variant=variant,
-            service_area_id__in=area_ids,
-            is_active=True,
-            service_area__is_active=True,
-        ).exists():
-            raise PartnerApplicationIncompleteError(
-                f"{variant.name} is not enabled in any selected service area.",
-            )
+    # T9: Checked only when at least 1 area is ticked; unchanged otherwise
+    if has_areas:
+        area_ids = {area.id for area in service_areas}
+        for variant in variants:
+            if not ServiceAreaService.objects.filter(
+                variant=variant,
+                service_area_id__in=area_ids,
+                is_active=True,
+                service_area__is_active=True,
+            ).exists():
+                raise PartnerApplicationIncompleteError(
+                    f"{variant.name} is not enabled in any selected service area.",
+                )
 
 
 def _draft_application_for_update(
@@ -240,9 +247,9 @@ def _resolve_application_service_areas(
         ),
     )
     if len(service_areas) != len(set(service_area_ids)):
-        raise PartnerApplicationIncompleteError(
-            "One or more selected service areas are unavailable.",
-        )
+        available_ids = {area.id for area in service_areas}
+        unavailable_ids = [uid for uid in set(service_area_ids) if uid not in available_ids]
+        raise PartnerServiceAreasUnavailableError(unavailable_ids)
     return service_areas
 
 
@@ -302,6 +309,76 @@ def _record_partner_consents(
             receipt.save(update_fields=("document",))
 
 
+MAX_PARTNER_AREA_REQUESTS = 5
+
+
+def _set_requested_postal_codes(
+    *,
+    application: PartnerApplication,
+    requested_postal_codes: Sequence[str] | None,
+) -> None:
+    if requested_postal_codes is None:
+        return
+
+    if application.track not in (PartnerApplication.Track.SERVICES, "", None):
+        raise PartnerDomainError(
+            code="track_does_not_use_areas",
+            message="Area requests are only available for services partners.",
+            status_code=400,
+        )
+
+    from django.core.exceptions import ValidationError  # noqa: PLC0415
+
+    from apps.locations.models import indian_postal_code_validator  # noqa: PLC0415
+
+    cleaned_pins: list[str] = []
+    seen: set[str] = set()
+    for raw in requested_postal_codes:
+        pin = str(raw).strip()
+        if not pin or pin in seen:
+            continue
+        try:
+            indian_postal_code_validator(pin)
+            # Indian PINs never start with 0 (FLOW.md: first digit 1-9, as the apps check).
+            if pin.startswith("0"):
+                raise ValidationError("Enter a valid six-digit Indian postal code.")
+        except ValidationError as exc:
+            raise PartnerDomainError(
+                code="invalid_postal_code",
+                message="Enter a valid six-digit Indian postal code.",
+                status_code=400,
+            ) from exc
+        seen.add(pin)
+        cleaned_pins.append(pin)
+
+    if len(cleaned_pins) > MAX_PARTNER_AREA_REQUESTS:
+        raise PartnerDomainError(
+            code="partner_area_requests_limit",
+            message=f"You can request at most {MAX_PARTNER_AREA_REQUESTS} postal codes.",
+            status_code=400,
+        )
+
+    existing_qs = PartnerAreaRequest.objects.filter(application=application)
+    existing_by_pin = {r.postal_code: r for r in existing_qs}
+
+    # A PIN Operations marked "Not valid" stays on record as dismissed: removing and re-adding it
+    # must not bring it back as a fresh request.
+    to_delete = {
+        pin
+        for pin, row in existing_by_pin.items()
+        if pin not in cleaned_pins and row.dismissed_at is None
+    }
+    if to_delete:
+        existing_qs.filter(postal_code__in=to_delete).delete()
+
+    for pin in cleaned_pins:
+        if pin not in existing_by_pin:
+            PartnerAreaRequest.objects.create(
+                application=application,
+                postal_code=pin,
+            )
+
+
 @transaction.atomic
 def update_partner_application(
     *,
@@ -313,6 +390,7 @@ def update_partner_application(
     skill_codes: Sequence[str] | None,
     service_variant_ids: Sequence[uuid.UUID] | None,
     service_area_ids: Sequence[uuid.UUID] | None,
+    requested_postal_codes: Sequence[str] | None = None,
     consents: Sequence[dict[str, str]] | None,
     request_ip: str,
     device_identifier: str,
@@ -354,6 +432,11 @@ def update_partner_application(
         _set_active_services(partner=partner, variants=variants)
     if service_area_ids is not None:
         _set_active_service_areas(partner=partner, service_areas=service_areas)
+    if requested_postal_codes is not None:
+        _set_requested_postal_codes(
+            application=application,
+            requested_postal_codes=requested_postal_codes,
+        )
 
     _record_partner_consents(
         partner=partner,
@@ -365,6 +448,27 @@ def update_partner_application(
     application.version += 1
     application.save(update_fields=("track", "version", "updated_at"))
     return application
+
+
+EMPLOYER_MISSING_MESSAGES = {
+    "hiring_as": "Choose who is hiring before sending.",
+    "display_name": "Add your name before sending.",
+    "legal_name": "Add your business's legal name before sending.",
+    "legal_structure": "Choose your business's legal structure before sending.",
+    "business_category": "Choose your business's industry before sending.",
+    "company_size": "Choose your business's size before sending.",
+    "business_proof_type": "Choose which business proof you will upload before sending.",
+    "gstin": "Add a valid GSTIN before sending.",
+    "address": "Add your business address before sending.",
+    "area": "Add your area before sending.",
+    "city": "Add your city before sending.",
+    "state": "Add your state before sending.",
+    "pin_code": "Add your pin code before sending.",
+    "latitude": "Pin your business on the map before sending.",
+    "longitude": "Pin your business on the map before sending.",
+    "poster_role": "Choose your role before sending.",
+    "id_document_type": "Choose which ID you will upload before sending.",
+}
 
 
 @transaction.atomic
@@ -410,11 +514,13 @@ def submit_partner_application(
             raise PartnerApplicationIncompleteError(
                 "Tell us how many years of experience you have before submitting.",
             )
+        has_requests = application.area_requests.filter(dismissed_at__isnull=True).exists()
         _validate_service_configuration(
             skills=skills,
             variants=variants,
             service_areas=service_areas,
             require_complete=True,
+            allow_area_requests=has_requests,
         )
         for area in service_areas:
             if not PartnerAvailabilityRule.objects.filter(
@@ -425,21 +531,30 @@ def submit_partner_application(
                 raise PartnerApplicationIncompleteError(
                     "Set your weekly working hours for each service area before submitting.",
                 )
-    if not _base_application_is_complete(application):
+    if application.track == PartnerApplication.Track.EMPLOYER:
+        missing = employer_missing_fields(partner)
+        if missing:
+            raise PartnerApplicationIncompleteError(EMPLOYER_MISSING_MESSAGES[missing[0]])
+    if not _base_application_is_complete(application, allow_area_requests=True):
         raise PartnerApplicationIncompleteError(
             "Complete your profile, services, areas, skills, and required consents "
             "before submitting.",
         )
-    required_kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
     if any(
         not PartnerDocument.objects.filter(application=application, kind=kind).exists()
-        for kind in required_kinds
+        for kind in required_document_kinds(application)
     ):
         raise PartnerApplicationIncompleteError(
             "Upload every required identity document before submitting.",
         )
 
     previous_status = application.status
+    if (
+        application.track == PartnerApplication.Track.EMPLOYER
+        and previous_status == PartnerApplication.Status.CHANGES_REQUIRED
+    ):
+        # Old ticks may be about details that have since changed.
+        application.employer_checks.all().delete()
     application.status = PartnerApplication.Status.SUBMITTED
     application.submitted_at = timezone.now()
     application.change_request_message = ""

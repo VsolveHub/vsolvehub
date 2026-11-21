@@ -93,7 +93,13 @@ function ApplyHeader() {
   const steps = stepProgress(application, availability.data);
   const path = steps.filter((step) => step.state !== "waypoint");
   const position = path.findIndex((step) => step.href === pathname);
-  const back = canWalkSteps ? previousStep(pathname, track) : null;
+  // The profile preview is not a step: its way back is the overview, even after sending.
+  const back =
+    pathname === "/apply/profile"
+      ? { href: "/apply", labelKey: "apply.steps.overview" }
+      : canWalkSteps
+        ? previousStep(pathname, track, application?.employer?.hiring_as)
+        : null;
 
   return (
     <>

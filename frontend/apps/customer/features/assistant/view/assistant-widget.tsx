@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Loader2, MessageCircle, Send, X } from "lucide-react";
+import { Check, Loader2, MessageCircle, Pencil, Send, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
@@ -14,6 +14,7 @@ import {
   type AssistantAction,
   type AssistantMessage,
 } from "../queries";
+import { WelcomeHero } from "./welcome-hero";
 
 /**
  * The floating booking assistant.
@@ -28,6 +29,8 @@ import {
 const ENABLED = process.env.NEXT_PUBLIC_ASSISTANT_ENABLED === "true";
 const HIDDEN_PREFIXES = ["/cart", "/checkout", "/login", "/signup", "/book/", "/bookings/"];
 const MAX_MESSAGE_LENGTH = 1000;
+/** `create_session` in backend/apps/assistant/services.py writes the greeting first. */
+const OPENING_GREETING_SEQUENCE = 1;
 
 export function AssistantWidget() {
   const pathname = usePathname() ?? "/";
@@ -57,7 +60,7 @@ function AssistantLauncher({ pathname }: { pathname: string }) {
 }
 
 function AssistantPanel({ pathname, onClose }: { pathname: string; onClose: () => void }) {
-  const { token, loaded, save: saveToken } = useAssistantToken();
+  const { token, loaded, hidden, save: saveToken, hideMessages } = useAssistantToken();
   const start = useStartConversation(saveToken);
   const forget = useCallback(() => saveToken(null), [saveToken]);
   const conversation = useConversation(token, forget);
@@ -73,7 +76,15 @@ function AssistantPanel({ pathname, onClose }: { pathname: string; onClose: () =
     if (needsConversation) startConversation();
   }, [needsConversation, startConversation]);
 
-  const messages = conversation.data?.messages ?? [];
+  // The server opens every conversation with a greeting as message #1; the welcome block replaces
+  // it, so that one message is not shown. Messages edited or deleted in this browser are not shown
+  // either. Every other message is. Same as the phone app.
+  const hiddenHere = new Set(hidden);
+  const messages = (conversation.data?.messages ?? []).filter(
+    (message) =>
+      !hiddenHere.has(message.sequence) &&
+      !(message.sequence === OPENING_GREETING_SEQUENCE && message.sender === "assistant"),
+  );
   const answering = send.isPending || Boolean(conversation.data?.is_answering);
 
   useEffect(() => {
@@ -104,6 +115,23 @@ function AssistantPanel({ pathname, onClose }: { pathname: string; onClose: () =
     ?.sequence;
   const error = start.error ?? send.error ?? conversation.error;
 
+  /*
+   * Edit and delete, on the customer's latest message only, and only while no answer is being
+   * written, so neither can contradict a step the assistant has already taken. The server keeps
+   * every message, so both work by hiding in this browser: that message and the replies after it.
+   * An edit then sends the new text as a fresh message, so it reads as replaced.
+   */
+  const lastCustomerSequence = [...messages].reverse().find((m) => m.sender === "customer")?.sequence;
+  const canEdit = Boolean(token) && !answering && pending === null;
+  const hideFrom = (sequence: number) => {
+    if (!token) return;
+    hideMessages(messages.filter((m) => m.sequence >= sequence).map((m) => m.sequence));
+  };
+  const saveEdit = (sequence: number, text: string) => {
+    hideFrom(sequence);
+    sendText(text);
+  };
+
   return (
     <section
       role="dialog"
@@ -121,15 +149,30 @@ function AssistantPanel({ pathname, onClose }: { pathname: string; onClose: () =
       </header>
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4" aria-live="polite">
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.sequence}
-            message={message}
-            pathname={pathname}
-            interactive={message.sequence === lastAssistantSequence && !answering}
-            onSend={sendText}
-          />
-        ))}
+        {/* Always at the top of the chat, so the starter chips stay one tap away. */}
+        <WelcomeHero
+          key={token ?? "new"}
+          disabled={!token || send.isPending}
+          onPick={(categoryName) => sendText(`I need ${categoryName}`)}
+        />
+        {messages.map((message) =>
+          canEdit && message.sequence === lastCustomerSequence ? (
+            <OwnMessage
+              key={`${token}-${message.sequence}`}
+              text={message.text}
+              onSave={(text) => saveEdit(message.sequence, text)}
+              onDelete={() => hideFrom(message.sequence)}
+            />
+          ) : (
+            <MessageBubble
+              key={message.sequence}
+              message={message}
+              pathname={pathname}
+              interactive={message.sequence === lastAssistantSequence && !answering}
+              onSend={sendText}
+            />
+          ),
+        )}
         {pending ? <Bubble sender="customer" text={pending} muted /> : null}
         {answering ? (
           <p className="flex items-center gap-2 text-xs text-slate-500">
@@ -184,6 +227,92 @@ function Bubble({ sender, text, muted }: { sender: string; text: string; muted?:
       >
         {text}
       </p>
+    </div>
+  );
+}
+
+const ICON_BUTTON =
+  "grid size-9 place-items-center rounded-full text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00112e] disabled:opacity-40";
+
+/**
+ * The customer's latest message. Clicking it shows an edit and a delete button; editing turns the
+ * bubble into a text box with cancel and send. Its state lives here, so it resets by itself when
+ * the message stops being the editable one (a new message, another chat). Same as the phone app.
+ */
+function OwnMessage({
+  text,
+  onSave,
+  onDelete,
+}: {
+  text: string;
+  onSave: (text: string) => void;
+  onDelete: () => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "tools" | "editing">("idle");
+  const [value, setValue] = useState(text);
+
+  if (mode === "editing") {
+    const edited = value.trim().slice(0, MAX_MESSAGE_LENGTH);
+    const cancel = () => {
+      setValue(text);
+      setMode("idle");
+    };
+    const save = () => {
+      // Nothing changed: there is nothing new to send.
+      if (edited === text.trim()) setMode("idle");
+      else if (edited) onSave(edited);
+    };
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <textarea
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") cancel();
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              save();
+            }
+          }}
+          autoFocus
+          rows={2}
+          maxLength={MAX_MESSAGE_LENGTH}
+          aria-label="Edit your message"
+          className="w-[85%] resize-none rounded-2xl bg-[#00112e] px-3 py-2 text-sm text-white outline-none"
+        />
+        <div className="flex">
+          <button type="button" onClick={cancel} aria-label="Cancel edit" className={ICON_BUTTON}>
+            <X className="size-4" aria-hidden />
+          </button>
+          <button type="button" onClick={save} disabled={!edited} aria-label="Send edited message" className={ICON_BUTTON}>
+            <Check className="size-4 text-[#00112e]" aria-hidden />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={() => setMode(mode === "tools" ? "idle" : "tools")}
+        aria-expanded={mode === "tools"}
+        aria-label={`${text}. Show edit and delete`}
+        className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-[#00112e] px-3 py-2 text-left text-sm text-white hover:opacity-90"
+      >
+        {text}
+      </button>
+      {mode === "tools" ? (
+        <div className="flex">
+          <button type="button" onClick={() => setMode("editing")} aria-label="Edit message" className={ICON_BUTTON}>
+            <Pencil className="size-4" aria-hidden />
+          </button>
+          <button type="button" onClick={onDelete} aria-label="Delete message" className={ICON_BUTTON}>
+            <Trash2 className="size-4 text-red-600" aria-hidden />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

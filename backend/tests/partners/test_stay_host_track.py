@@ -18,7 +18,13 @@ from apps.catalog.models import (
 from apps.identity.models import User
 from apps.partners.capabilities import is_approved_stay_host, workspace_grants
 from apps.partners.exceptions import PartnerApplicationIncompleteError
-from apps.partners.models import PartnerApplication, PartnerConsentDocument, PartnerDocument
+from apps.partners.models import (
+    EmployerProfile,
+    PartnerApplication,
+    PartnerConsentDocument,
+    PartnerDocument,
+)
+from apps.partners.serializers import PartnerApplicationSerializer
 from apps.partners.services import submit_partner_application, update_partner_application
 from apps.stay.services import create_property, public_properties, submit_property
 
@@ -50,8 +56,8 @@ def _start(user: User, *, track: str) -> PartnerApplication:
     )
 
 
-def _upload_required_documents(application: PartnerApplication) -> None:
-    for index, kind in enumerate(settings.PARTNER_REQUIRED_DOCUMENT_KINDS):
+def _upload_required_documents(application: PartnerApplication, *extra_kinds: str) -> None:
+    for index, kind in enumerate((*settings.PARTNER_REQUIRED_DOCUMENT_KINDS, *extra_kinds)):
         PartnerDocument.objects.create(
             application=application,
             kind=kind,
@@ -61,6 +67,19 @@ def _upload_required_documents(application: PartnerApplication) -> None:
             size_bytes=1024,
             sha256="0" * 64,
         )
+
+
+def _individual_employer_details(application: PartnerApplication, **overrides: str) -> None:
+    """An employer hiring for themselves: where they are and which ID they upload."""
+    values = {
+        "hiring_as": EmployerProfile.HiringAs.INDIVIDUAL,
+        "area": "Kondapur",
+        "city": "Hyderabad",
+        "pin_code": "500084",
+        "id_document_type": EmployerProfile.IdDocumentType.PAN,
+    }
+    values.update(overrides)
+    EmployerProfile.objects.create(partner=application.partner, **values)
 
 
 @pytest.fixture
@@ -95,12 +114,43 @@ def test_employer_submits_without_trades_areas_or_hours(host_user):
     employers, so an employer (who is never shown those steps) could not send an application.
     """
     application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
-    _upload_required_documents(application)
+    _individual_employer_details(application)
+    _upload_required_documents(application, PartnerDocument.Kind.SELFIE)
 
     submitted = submit_partner_application(user=host_user, expected_version=application.version)
 
     assert submitted.status == PartnerApplication.Status.SUBMITTED
     assert submitted.track == PartnerApplication.Track.EMPLOYER
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("missing", ["area", "city", "pin_code"])
+def test_individual_employer_needs_area_city_and_pin_code(host_user, missing):
+    application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+    _individual_employer_details(application, **{missing: ""})
+    _upload_required_documents(application, PartnerDocument.Kind.SELFIE)
+
+    with pytest.raises(
+        PartnerApplicationIncompleteError, match=f"Add your {missing.replace('_', ' ')}"
+    ):
+        submit_partner_application(user=host_user, expected_version=application.version)
+
+
+@pytest.mark.django_db
+def test_application_says_whether_employer_details_are_complete(host_user):
+    """The apps' employer-details checklist step reads the server's own rule."""
+    application = _start(host_user, track=PartnerApplication.Track.EMPLOYER)
+    assert PartnerApplicationSerializer(application).data["business_details_complete"] is False
+
+    _individual_employer_details(application)
+    application = PartnerApplication.objects.get(pk=application.pk)
+    assert PartnerApplicationSerializer(application).data["business_details_complete"] is True
+
+
+@pytest.mark.django_db
+def test_other_tracks_are_never_asked_for_business_details(host_user):
+    application = _start(host_user, track=PartnerApplication.Track.STAY_HOST)
+    assert PartnerApplicationSerializer(application).data["business_details_complete"] is True
 
 
 @pytest.mark.django_db

@@ -1,14 +1,18 @@
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
-import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useCurrentSession } from "@vsolve/query/native";
 import { useRouter } from "expo-router";
-import { CheckCircle2, MapPin, Pencil, User } from "lucide-react-native";
+import { Check, CheckCircle2, MapPin, Pencil, User } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
 import { useWorkCatalog } from "@/features/catalog/queries";
 
+import { hiringAsOf } from "../model/employer";
+import { SIZES } from "../model/employer-form";
+import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { isEditable, requiredDocumentKinds } from "../model/readiness";
 import { WEEKDAYS } from "../model/schedule";
 import {
@@ -17,10 +21,10 @@ import {
   documentStatusPresentation,
   trackLabel,
 } from "../model/status";
-import { applicationSteps } from "../model/steps";
+import { isListingTrack } from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability } from "../queries";
 import { useApplicationReference, type ApplicationReference } from "../reference-queries";
-import { StatusPill } from "./status-banner";
+import { STATUS_ACCENT, StatusPill } from "./status-banner";
 
 const SUBMITTED_AT = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
@@ -38,13 +42,17 @@ interface SectionProps {
 /**
  * Read-only preview of everything the applicant has entered, one section per step of their own
  * track (6 for services, 3 for stays and rentals). Opened from Profile in the profile menu.
- * Phone-only: the website has no such page (owner decision 2026-11-18).
+ * The website's `/apply/profile` is the same page: keep the two in step.
  *
  * Every value comes from queries the steps already use, so they are usually cached.
  * A new step only needs an entry in `SECTIONS`.
  */
 const SECTIONS: Record<string, (props: SectionProps) => ReactNode> = {
   "/apply/about": AboutSection,
+  "/apply/hiring-as": HiringAsSection,
+  "/apply/employer/about": IndividualSection,
+  "/apply/employer/business": BusinessSection,
+  "/apply/employer/contact": ContactSection,
   "/apply/work": WorkSection,
   "/apply/areas": AreasSection,
   "/apply/schedule": HoursSection,
@@ -58,6 +66,7 @@ export function ProfilePreview() {
   const reference = useApplicationReference();
   const session = useCurrentSession(getApiClient());
   const phone = session.data?.user?.phone_number;
+  const availability = usePartnerAvailability();
   const missing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending || reference.isPending) {
@@ -98,43 +107,48 @@ export function ProfilePreview() {
   const editable = isEditable(application);
   const status = applicationStatusPresentation(application.status);
   const name = application.display_name.trim();
+  // The same progress the overview checklist shows, so a card never disagrees with it.
+  const progress = stepProgress(application, availability.data).filter((step) => SECTIONS[step.href]);
+  const summary = progressSummary(application, availability.data);
 
   return (
     <View style={styles.page}>
-      {/* Who, which track, and where the application is now */}
-      <View style={styles.card}>
-        <View style={styles.identity}>
-          <View style={styles.avatar}>
-            {name ? (
-              <Text style={styles.avatarText}>{name[0]?.toUpperCase()}</Text>
-            ) : (
-              <User size={22} color="#ffffff" strokeWidth={2.2} />
-            )}
+      {/* Who, which track, where the application is, and how much of it is done */}
+      <View style={[styles.card, styles.headerCard]}>
+        <View style={{ height: 4, backgroundColor: STATUS_ACCENT[status.tone] }} />
+        <View style={styles.headerBody}>
+          <View style={styles.identity}>
+            <View style={styles.avatar}>
+              {name ? (
+                <Text style={styles.avatarText}>{name[0]?.toUpperCase()}</Text>
+              ) : (
+                <User size={22} color="#ffffff" strokeWidth={2.2} />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name} numberOfLines={1}>
+                {name || "Your profile"}
+              </Text>
+              <Text style={styles.muted}>{[phone, trackLabel(application.track)].filter(Boolean).join(" · ")}</Text>
+            </View>
+            <ProgressRing done={summary.done} total={summary.total} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{name || "Your profile"}</Text>
-            <Text style={styles.muted}>{[phone, trackLabel(application.track)].filter(Boolean).join(" · ")}</Text>
+
+          <View style={styles.statusLine}>
+            <StatusPill tone={status.tone} label={status.label} />
+            {application.submitted_at ? (
+              <Text style={styles.small}>{`Submitted on ${SUBMITTED_AT.format(new Date(application.submitted_at))}`}</Text>
+            ) : null}
           </View>
         </View>
-        <View style={styles.divider} />
-        <View style={styles.statusRow}>
-          <Text style={styles.label}>Application status</Text>
-          <StatusPill tone={status.tone} label={status.label} />
-        </View>
-        {application.submitted_at ? (
-          <Text style={styles.muted}>{`Submitted on ${SUBMITTED_AT.format(new Date(application.submitted_at))}`}</Text>
-        ) : null}
       </View>
 
-      {applicationSteps(application.track).map((step, index) => {
-        const Section = SECTIONS[step.href];
-        if (!Section) return null;
+      {progress.map((step, index) => {
+        const Section = SECTIONS[step.href]!;
         return (
           <View key={step.href} style={styles.card}>
             <View style={styles.cardHeader}>
-              <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>{index + 1}</Text>
-              </View>
+              <StepMark step={step} number={index + 1} />
               <Text style={styles.cardTitle}>{step.label}</Text>
               {editable ? (
                 <Pressable
@@ -160,6 +174,71 @@ export function ProfilePreview() {
   );
 }
 
+const RING_SIZE = 56;
+const RING_RADIUS = 23;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+/**
+ * How much of the application is filled in: a ring that closes as steps are done, the count
+ * inside. The full sentence is what a screen reader hears. Same as the website's ring.
+ */
+function ProgressRing({ done, total }: { done: number; total: number }) {
+  const fraction = total > 0 ? Math.min(done / total, 1) : 0;
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={`${done} of ${total} steps complete`}
+      accessibilityValue={{ min: 0, max: total, now: done }}
+      style={styles.ring}
+    >
+      <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}>
+        <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} stroke="#efebe5" strokeWidth={4} fill="none" />
+        <Circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={RING_RADIUS}
+          stroke={fraction >= 1 ? "#15803d" : "#f87000"}
+          strokeWidth={4}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
+        />
+      </Svg>
+      <Text style={styles.ringText}>{`${done}/${total}`}</Text>
+    </View>
+  );
+}
+
+/**
+ * The step's number circle doubles as its state: a tick when complete, "!" while something is
+ * missing, the number when the step is optional. The words are what a screen reader hears.
+ */
+function StepMark({ step, number }: { step: StepProgress; number: number }) {
+  const description =
+    step.state === "done"
+      ? "Done"
+      : step.state === "optional"
+        ? "Optional — you can set this later"
+        : step.outstanding === 1
+          ? "1 thing needed"
+          : `${step.outstanding} things needed`;
+  const look =
+    step.state === "done" ? styles.markDone : step.state === "todo" ? styles.markTodo : styles.markOptional;
+  return (
+    <View accessible accessibilityRole="image" accessibilityLabel={description} style={[styles.mark, look]}>
+      {step.state === "done" ? (
+        <Check size={13} color="#ffffff" strokeWidth={3} />
+      ) : (
+        <Text style={[styles.markText, step.state === "todo" ? { color: "#b45309" } : null]}>
+          {step.state === "todo" ? "!" : number}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.row}>
@@ -173,11 +252,126 @@ function NotSet() {
   return <Text style={styles.muted}>Not set</Text>;
 }
 
+/** A row of the employer's answers; a blank one says it is not set. */
+function EmployerRow({ label, value }: { label: string; value?: string | null }) {
+  return <Row label={label} value={value || "Not set"} />;
+}
+
+/** An employer's "Who is hiring" step. */
+function HiringAsSection({ application }: SectionProps) {
+  const t = useT();
+  const hiringAs = hiringAsOf(application.employer);
+  return (
+    <EmployerRow
+      label={t("apply.steps.hiringAs")}
+      value={
+        hiringAs
+          ? t(
+              hiringAs === "INDIVIDUAL"
+                ? "apply.employer.hiringAs.individual.title"
+                : "apply.employer.hiringAs.business.title",
+            )
+          : ""
+      }
+    />
+  );
+}
+
+/** Someone hiring for themselves. The pin code and ID are Operations' to see, not candidates'. */
+function IndividualSection({ application }: SectionProps) {
+  const t = useT();
+  const employer = application.employer;
+  return (
+    <>
+      <EmployerRow label={t("apply.employer.field.name.label")} value={application.display_name} />
+      {employer?.email ? <EmployerRow label={t("apply.employer.field.email.label")} value={employer.email} /> : null}
+      <EmployerRow label={t("apply.employer.field.area.label")} value={employer?.area} />
+      <EmployerRow label={t("apply.employer.field.city.label")} value={employer?.city} />
+      <EmployerRow label={t("apply.employer.field.pinCode.label")} value={employer?.pin_code} />
+      <EmployerRow
+        label={t("apply.employer.field.idType.label")}
+        value={employer?.id_document_type ? t(`apply.employer.field.idType.${employer.id_document_type}`) : ""}
+      />
+    </>
+  );
+}
+
+/** Someone hiring for a business: its names, kind, GST answer, proof and place. */
+function BusinessSection({ application }: SectionProps) {
+  const t = useT();
+  const business = application.employer?.business;
+  const size = SIZES.find((option) => option.value === business?.company_size)?.label;
+  return (
+    <>
+      <EmployerRow
+        label={t("apply.employer.business.tradeName.label")}
+        value={business?.trade_name || business?.legal_name}
+      />
+      <EmployerRow label={t("apply.employer.business.legalName.label")} value={business?.legal_name} />
+      <EmployerRow
+        label={t("apply.employer.business.structure.label")}
+        value={business?.legal_structure ? t(`apply.employer.business.structure.${business.legal_structure}`) : ""}
+      />
+      <EmployerRow
+        label={t("apply.employer.business.industry.label")}
+        value={business?.business_category ? t(`apply.employer.category.${business.business_category}`) : ""}
+      />
+      <EmployerRow label={t("apply.employer.business.size.label")} value={size} />
+      <EmployerRow
+        label={t("apply.employer.business.gst.label")}
+        value={
+          business?.gst_registered
+            ? t("apply.employer.review.gstin", { gstin: business.gstin })
+            : business?.business_proof_type
+              ? t("apply.employer.review.noGst")
+              : ""
+        }
+      />
+      <EmployerRow
+        label={t("apply.employer.business.proof.label")}
+        value={business?.business_proof_type ? t(`apply.employer.business.proof.${business.business_proof_type}`) : ""}
+      />
+      <EmployerRow
+        label={t("apply.employer.business.address.label")}
+        value={[business?.address, business?.area, business?.city, business?.state, business?.pin_code]
+          .filter(Boolean)
+          .join(", ")}
+      />
+      {business?.website_url ? (
+        <EmployerRow label={t("apply.employer.business.website.label")} value={business.website_url} />
+      ) : null}
+    </>
+  );
+}
+
+/** The person posting the jobs for a business. */
+function ContactSection({ application }: SectionProps) {
+  const t = useT();
+  const employer = application.employer;
+  return (
+    <>
+      <EmployerRow label={t("apply.employer.field.name.label")} value={application.display_name} />
+      <EmployerRow
+        label={t("apply.employer.contact.role.label")}
+        value={employer?.poster_role ? t(`apply.employer.contact.role.${employer.poster_role}`) : ""}
+      />
+      {employer?.email ? <EmployerRow label={t("apply.employer.field.email.label")} value={employer.email} /> : null}
+      <EmployerRow
+        label={t("apply.employer.field.idType.label")}
+        value={employer?.id_document_type ? t(`apply.employer.field.idType.${employer.id_document_type}`) : ""}
+      />
+    </>
+  );
+}
+
 function AboutSection({ application }: SectionProps) {
   return (
     <>
-      <Row label="Name" value={application.display_name || "Not set"} />
-      <Row label="About you" value={application.biography || "Not set"} />
+      <Row label="Full Name" value={application.display_name || "Not set"} />
+      <Row
+        label={isListingTrack(application.track) ? "About you (optional)" : "About Your Work (Bio)"}
+        value={application.biography || "Not set"}
+      />
     </>
   );
 }
@@ -329,7 +523,27 @@ const styles = StyleSheet.create({
     padding: 16,
     rowGap: 12,
   },
+  headerCard: { padding: 0, rowGap: 0, overflow: "hidden" },
+  headerBody: { padding: 16, rowGap: 16 },
   identity: { flexDirection: "row", alignItems: "center", columnGap: 12 },
+  small: { fontSize: 12, color: "#756c5e" },
+  statusLine: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    columnGap: 12,
+    rowGap: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#efebe5",
+    paddingTop: 14,
+  },
+  ring: { width: RING_SIZE, height: RING_SIZE, alignItems: "center", justifyContent: "center" },
+  ringText: { fontSize: 12, fontWeight: "800", color: "#00112e" },
+  mark: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  markDone: { backgroundColor: "#15803d" },
+  markTodo: { backgroundColor: "#fef3c7", borderWidth: 1, borderColor: "#fcd34d" },
+  markOptional: { backgroundColor: "#f4f1ec" },
+  markText: { fontSize: 12, fontWeight: "800", color: "#453f37" },
   avatar: {
     width: 48,
     height: 48,
@@ -340,18 +554,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 20, fontWeight: "800", color: "#ffffff" },
   name: { fontSize: 18, fontWeight: "800", color: "#00112e", letterSpacing: -0.3 },
-  divider: { height: 1, backgroundColor: "#efebe5" },
-  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardHeader: { flexDirection: "row", alignItems: "center", columnGap: 10 },
-  stepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#f4f1ec",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepNumberText: { fontSize: 12, fontWeight: "700", color: "#453f37" },
   cardTitle: { flex: 1, fontSize: 15, fontWeight: "800", color: "#00112e" },
   editButton: {
     flexDirection: "row",
@@ -364,9 +567,9 @@ const styles = StyleSheet.create({
   },
   editButtonPressed: { backgroundColor: "#ffedd5" },
   editLink: { fontSize: 13, fontWeight: "700", color: "#c2410c" },
-  cardBody: { rowGap: 14, paddingLeft: 34 },
+  cardBody: { rowGap: 14, borderTopWidth: 1, borderTopColor: "#efebe5", paddingTop: 14 },
   row: { rowGap: 4 },
-  spread: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", columnGap: 12 },
+  spread: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 12, rowGap: 4 },
   label: { fontSize: 12, fontWeight: "600", color: "#756c5e" },
   value: { fontSize: 14, lineHeight: 20, color: "#00112e" },
   strong: { fontWeight: "700" },

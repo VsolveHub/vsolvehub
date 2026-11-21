@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from apps.listings.models import Application, Interview
 from apps.listings.seekers import _notify
+from apps.listings.selectors import employer_name
 from apps.listings.services import ListingStateError, _require_poster, update_application_status
 
 _OPEN = (
@@ -90,7 +91,7 @@ def propose_interview(
         purpose="jobs.interview.invite",
         key=f"job-interview:{interview.id}",
         context={
-            "business_name": application.listing.poster.display_name,
+            "business_name": employer_name(application.listing.poster),
             "job_title": application.listing.title,
             "when": _when(interview),
             "mode": interview.get_mode_display(),

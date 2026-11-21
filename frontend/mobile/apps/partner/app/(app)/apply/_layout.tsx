@@ -16,10 +16,11 @@ import {
   User,
   X,
 } from "lucide-react-native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -27,6 +28,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -43,6 +45,9 @@ import { HelpSheet } from "@/features/application/view/help-sheet";
 import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
 
 const logoMark = require("../../../assets/logo-mark.png");
+
+/** How far above the keyboard the field being typed in is kept. */
+const KEYBOARD_GAP = 56;
 
 export default function ApplyLayout() {
   const pathname = usePathname();
@@ -127,6 +132,55 @@ export default function ApplyLayout() {
 
   // Pull down on the overview to check for a decision without restarting the app. Only there: on a
   // form step a refetch could reset what is being typed.
+  /*
+   * The keyboard. On Android it does not resize the screen, so it simply covers whatever is
+   * behind it, and nothing here can rely on the screen shrinking. Instead, while it is open:
+   *   - the page gets as much empty space under its content as the keyboard is tall, so even the
+   *     last field can be scrolled clear of it;
+   *   - the Continue bar steps aside, so it cannot cover a field either;
+   *   - the field being typed in is scrolled to sit just above the keyboard (`scrollFieldIntoView`,
+   *     which each step calls from its fields' `onFocus`, and which runs again when the keyboard
+   *     opens, since a field focused before it appears does not yet know where it will be).
+   */
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardOpen = keyboardHeight > 0;
+  /** Where the top edge of the keyboard is on screen, while it is open. */
+  const keyboardTop = useRef<number | null>(null);
+  const scrollOffset = useRef(0);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+
+  const scrollFieldIntoView = useCallback(() => {
+    // Runs twice: once as the keyboard opens, and again once the extra space under the page is in
+    // place (the first scroll can be clamped to the old, shorter page).
+    const align = () => {
+      const field = TextInput.State.currentlyFocusedInput();
+      const top = keyboardTop.current;
+      if (!field || top === null) return;
+      field.measureInWindow((_x, y, _width, height) => {
+        const hidden = y + height + KEYBOARD_GAP - top;
+        if (hidden > 0) scrollRef.current?.scrollTo({ y: scrollOffset.current + hidden, animated: true });
+      });
+    };
+    setTimeout(align, 250);
+    setTimeout(align, 700);
+  }, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (event) => {
+      keyboardTop.current = event.endCoordinates.screenY;
+      setKeyboardHeight(event.endCoordinates.height);
+      scrollFieldIntoView();
+    });
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => {
+      keyboardTop.current = null;
+      setKeyboardHeight(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [scrollFieldIntoView]);
+
   const [refreshing, setRefreshing] = useState(false);
   const { refetch: refetchApplication } = query;
   const { refetch: refetchAvailability } = availability;
@@ -140,11 +194,13 @@ export default function ApplyLayout() {
   }, [refetchApplication, refetchAvailability]);
 
   const isSubmitted = application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW";
-  const back = isSideScreen ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track));
-  const shouldShowDock = !isSubmitted && !isSideScreen && !isOverview;
+  const back = isSideScreen ? { href: "/apply" } : (isSubmitted ? null : previousStep(pathname, application?.track, application?.employer?.hiring_as));
+  // "Who is hiring?" moves on when a choice is tapped, as on the website: Back only, no Continue.
+  const isHiringAsChoice = pathname === "/apply/hiring-as";
+  const shouldShowDock = !isSubmitted && !isSideScreen && !isOverview && !isHiringAsChoice;
 
   // Find the current step in this partner's own sequence
-  const steps = applicationSteps(application?.track);
+  const steps = applicationSteps(application?.track, application?.employer?.hiring_as);
   const currentStepIdx = Math.max(
     0,
     steps.findIndex((s) => s.href === pathname || pathname.startsWith(s.href)),
@@ -166,7 +222,7 @@ export default function ApplyLayout() {
       onCommitRef.current();
       return;
     }
-    const next = nextStep(pathname, application?.track);
+    const next = nextStep(pathname, application?.track, application?.employer?.hiring_as);
     if (next) {
       router.push(next.href as any);
     }
@@ -177,7 +233,7 @@ export default function ApplyLayout() {
   if (application?.status === "APPROVED") return <Redirect href="/home" />;
 
   return (
-    <ApplyDockContext.Provider value={{ dockConfig, registerDock }}>
+    <ApplyDockContext.Provider value={{ dockConfig, registerDock, scrollFieldIntoView }}>
       <View style={styles.rootContainer}>
         {/* Top Header with Safe Area Spacing */}
         <View style={[styles.headerContainer, { paddingTop: topInset }]}>
@@ -296,15 +352,24 @@ export default function ApplyLayout() {
 
         {/* Scrollable Main Content */}
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
             {
               maxWidth: isDesktop ? 672 : "100%",
-              paddingBottom: (shouldShowDock || isStatusPage) ? bottomInset + 88 : 40,
+              // Under the last field while typing: as tall as the keyboard, so it can scroll clear.
+              paddingBottom: keyboardOpen
+                ? keyboardHeight + KEYBOARD_GAP
+                : (shouldShowDock || isStatusPage) ? bottomInset + 88 : 40,
             },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          onScroll={(event) => {
+            scrollOffset.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           refreshControl={
             isOverview ? (
@@ -316,7 +381,7 @@ export default function ApplyLayout() {
         </ScrollView>
 
         {/* Fixed Bottom Action Dock Matching Mockups */}
-        {shouldShowDock ? (
+        {shouldShowDock && !keyboardOpen ? (
           <View style={[styles.dockContainer, { paddingBottom: bottomInset + 12 }]}>
             <View style={[styles.dockInner, { maxWidth: isDesktop ? 672 : "100%" }]}>
               {/* Conflict / Error alerts if any */}

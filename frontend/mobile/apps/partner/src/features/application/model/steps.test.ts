@@ -3,6 +3,7 @@ import {
   APPLICATION_STEPS,
   SERVICE_APPLICATION_STEPS,
   applicationSteps,
+  firstStepHref,
   isLastStep,
   isUnchosenDraft,
   nextStep,
@@ -51,10 +52,10 @@ describe("the services path", () => {
   });
 });
 
-describe("the stays, rentals and hiring path", () => {
+describe("the stays and rentals path", () => {
   it("is the short form: About you, Documents, Agree & send", () => {
-    // Hiring staff (EMPLOYER) is the same short form: it never shows trades, areas or hours.
-    for (const track of ["STAY_HOST", "RENTAL_OWNER", "EMPLOYER"]) {
+    // Hiring staff (EMPLOYER) adds Business details to this short form; see "the employer path".
+    for (const track of ["STAY_HOST", "RENTAL_OWNER"]) {
       expect(applicationSteps(track).map((step) => step.href)).toEqual([
         "/apply/about",
         "/apply/documents",
@@ -98,5 +99,60 @@ describe("what the first screen shows before starting", () => {
     expect(trackPreview("RENTAL_OWNER").time).toBe("About 3 minutes");
     expect(trackPreview("STAY_HOST").after).toMatch(/property and rooms/);
     expect(trackPreview("RENTAL_OWNER").after).toMatch(/add your items/);
+  });
+});
+
+describe("the employer path", () => {
+  const hrefs = (hiringAs?: string) =>
+    applicationSteps("EMPLOYER", hiringAs).map((step) => step.href);
+
+  it("starts with who is hiring, and shows nothing more until they choose", () => {
+    expect(hrefs()).toEqual(["/apply/hiring-as"]);
+    expect(hrefs("")).toEqual(["/apply/hiring-as"]);
+  });
+
+  it("walks an individual through About you, Documents, then Agree & send", () => {
+    expect(hrefs("INDIVIDUAL")).toEqual([
+      "/apply/hiring-as",
+      "/apply/employer/about",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("walks a business through its details and the person's role first", () => {
+    expect(hrefs("BUSINESS")).toEqual([
+      "/apply/hiring-as",
+      "/apply/employer/business",
+      "/apply/employer/contact",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+    expect(nextStep("/apply/employer/business", "EMPLOYER", "BUSINESS")?.href).toBe(
+      "/apply/employer/contact",
+    );
+    expect(isLastStep("/apply/review", "EMPLOYER", "BUSINESS")).toBe(true);
+  });
+
+  it("starts an employer on the choice and everyone else on About you", () => {
+    expect(firstStepHref("EMPLOYER")).toBe("/apply/hiring-as");
+    expect(firstStepHref("SERVICES")).toBe("/apply/about");
+  });
+
+  it("previews one 'Your details' stage rather than either path", () => {
+    expect(trackPreview("EMPLOYER").steps.map((step) => step.href)).toEqual([
+      "/apply/hiring-as",
+      "/apply/employer",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("is never asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"]) {
+      for (const href of applicationSteps(track).map((step) => step.href)) {
+        expect(href).not.toMatch(/employer|hiring-as/);
+      }
+    }
   });
 });

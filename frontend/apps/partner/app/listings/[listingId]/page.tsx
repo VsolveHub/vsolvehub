@@ -12,6 +12,7 @@ import {
   fetchPartnerListingDetail,
   reportApplicantApplication,
   revealApplicationContact,
+  runListingAction,
   updateApplicationStatus,
   type ApplicationStatus,
   type PartnerApplication,
@@ -33,7 +34,7 @@ const TAB_STATUSES: Record<string, string> = {
   NEW: "SUBMITTED,UNDER_REVIEW",
   SHORTLISTED: "SHORTLISTED",
   INTERVIEW: "INTERVIEW",
-  CONNECTED: "CONNECTED,CONTACTED",
+  CONNECTED: "CONNECTED,CONTACTED,HIRED",
   CLOSED: "REJECTED,WITHDRAWN,EXPIRED",
 };
 
@@ -131,12 +132,31 @@ export default function PartnerListingLeadsPage() {
       );
       return { previous };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.previous) {
         queryClient.setQueryData(queryKey, context.previous);
       }
+      notify(friendlyErrorMessage(err));
     },
     onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: baseKey });
+      // The job's hired count decides whether "close as filled" is offered.
+      queryClient.invalidateQueries({ queryKey: ["partner-listing-detail", listingId] });
+      queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
+    },
+  });
+
+  // Hired for every vacancy: offer to close the job as filled (the server turns down the rest).
+  const hiredCount = listing?.counts?.hired ?? 0;
+  const offerFill =
+    listing?.status === "PUBLISHED" && hiredCount > 0 && hiredCount >= (listing.vacancies ?? 1);
+  const fillMutation = useMutation({
+    mutationFn: () => runListingAction(listingId, "fill"),
+    onSuccess: () => notify(t("listings.fill.done")),
+    onError: (err) => notify(friendlyErrorMessage(err)),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["partner-listing-detail", listingId] });
       queryClient.invalidateQueries({ queryKey: baseKey });
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
       queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
@@ -198,6 +218,28 @@ export default function PartnerListingLeadsPage() {
           )}
         </div>
       </div>
+
+      {offerFill ? (
+        <section
+          aria-labelledby="fill-title"
+          className="flex flex-col gap-3 rounded-card border border-success-line bg-success-surface p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h2 id="fill-title" className="text-sm font-bold text-text">
+              {t("listings.fill.title")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-secondary">{t("listings.fill.body")}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => fillMutation.mutate()}
+            disabled={fillMutation.isPending}
+            className="shrink-0 rounded-control bg-success-text px-4 py-2 text-sm font-bold text-surface hover:opacity-90 disabled:opacity-60"
+          >
+            {t("listings.fill.confirm")}
+          </button>
+        </section>
+      ) : null}
 
       <div role="tablist" className="grid grid-cols-2 gap-1 rounded-control border border-line bg-surface-sunken p-1 sm:max-w-sm">
         {(

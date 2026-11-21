@@ -15,6 +15,9 @@ const KIND_LABELS: Record<Schemas["PartnerDocumentKindEnum"], string> = {
   TAX: "Tax document",
   BANK: "Bank document",
   BACKGROUND_CHECK: "Background check",
+  SELFIE: "Selfie",
+  BUSINESS_PROOF: "Business proof",
+  AUTHORIZATION_LETTER: "Letter from the owner",
   OTHER: "Document",
 };
 

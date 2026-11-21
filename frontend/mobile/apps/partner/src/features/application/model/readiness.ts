@@ -1,5 +1,8 @@
 // Ported from frontend/apps/partner/features/application/model/readiness.ts
 import type { Schemas } from "@vsolve/api-client";
+import { isServiceAreaRequirementMet, isWorkingHoursRequirementMet } from "@vsolve/query/native";
+
+import { employerStepFor, hiringAsOf, type EmployerStepHref } from "./employer";
 
 /**
  * What is still missing before an application can be submitted.
@@ -14,6 +17,10 @@ type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
 export type RequirementCode =
   | "DISPLAY_NAME"
+  | "HIRING_AS"
+  | "EMPLOYER_ABOUT"
+  | "EMPLOYER_BUSINESS"
+  | "EMPLOYER_CONTACT"
   | "EXPERIENCE_YEARS"
   | "SKILLS"
   | "SERVICES"
@@ -21,6 +28,9 @@ export type RequirementCode =
   | "WORKING_HOURS"
   | "GOVERNMENT_ID"
   | "ADDRESS_PROOF"
+  | "SELFIE"
+  | "BUSINESS_PROOF"
+  | "AUTHORIZATION_LETTER"
   | "CONSENTS";
 
 export interface Requirement {
@@ -31,10 +41,21 @@ export interface Requirement {
   isMet: boolean;
 }
 
-const DOCUMENT_LABELS: readonly { kind: DocumentKind; code: RequirementCode; label: string }[] = [
-  { kind: "GOVERNMENT_ID", code: "GOVERNMENT_ID", label: "Government photo ID" },
-  { kind: "ADDRESS_PROOF", code: "ADDRESS_PROOF", label: "Proof of address" },
-];
+/**
+ * The requirement each document kind satisfies, and what it is called.
+ *
+ * Which kinds are *required* and which are *offered* is the server's answer
+ * (`required_document_kinds`, `offered_document_kinds`), never a list kept here.
+ */
+const DOCUMENT_REQUIREMENTS: Partial<
+  Record<DocumentKind, { code: RequirementCode; label: string }>
+> = {
+  GOVERNMENT_ID: { code: "GOVERNMENT_ID", label: "Government photo ID" },
+  ADDRESS_PROOF: { code: "ADDRESS_PROOF", label: "Proof of address" },
+  SELFIE: { code: "SELFIE", label: "A selfie" },
+  BUSINESS_PROOF: { code: "BUSINESS_PROOF", label: "Business proof" },
+  AUTHORIZATION_LETTER: { code: "AUTHORIZATION_LETTER", label: "Authorization letter" },
+};
 
 /**
  * What the server requires before review. Before an application exists there is no answer to
@@ -42,6 +63,47 @@ const DOCUMENT_LABELS: readonly { kind: DocumentKind; code: RequirementCode; lab
  */
 export function requiredDocumentKinds(application: Application | null): readonly DocumentKind[] {
   return application?.required_document_kinds ?? ["GOVERNMENT_ID"];
+}
+
+/**
+ * The document slots to show. Before an application exists there is no answer to read, so the two
+ * every non-employer track has always offered stand in until the first save.
+ */
+export function offeredDocumentKinds(application: Application | null): readonly DocumentKind[] {
+  return application?.offered_document_kinds ?? ["GOVERNMENT_ID", "ADDRESS_PROOF"];
+}
+
+const EMPLOYER_STEP_REQUIREMENTS: Record<
+  EmployerStepHref,
+  { code: RequirementCode; label: string }
+> = {
+  "/apply/hiring-as": { code: "HIRING_AS", label: "Who is hiring" },
+  "/apply/employer/about": { code: "EMPLOYER_ABOUT", label: "About you" },
+  "/apply/employer/business": { code: "EMPLOYER_BUSINESS", label: "Business details" },
+  "/apply/employer/contact": { code: "EMPLOYER_CONTACT", label: "You and your role" },
+};
+
+/**
+ * What an employer still has to give, one requirement per screen they are walked through.
+ *
+ * Whether anything is missing is the server's `employer.missing_fields`; this only groups it by
+ * the screen that asks for it. Before the application exists, or before they choose, only the
+ * choice is asked.
+ */
+function employerRequirements(application: Application | null): Requirement[] {
+  const hiringAs = hiringAsOf(application?.employer);
+  const missing = application?.employer?.missing_fields ?? ["hiring_as"];
+  const screens: EmployerStepHref[] =
+    hiringAs === "INDIVIDUAL"
+      ? ["/apply/hiring-as", "/apply/employer/about"]
+      : hiringAs === "BUSINESS"
+        ? ["/apply/hiring-as", "/apply/employer/business", "/apply/employer/contact"]
+        : ["/apply/hiring-as"];
+  return screens.map((href) => ({
+    ...EMPLOYER_STEP_REQUIREMENTS[href],
+    href,
+    isMet: !missing.some((field) => employerStepFor(field, hiringAs) === href),
+  }));
 }
 
 function hasUsableDocument(application: Application | null, kind: DocumentKind): boolean {
@@ -53,17 +115,27 @@ function hasUsableDocument(application: Application | null, kind: DocumentKind):
   );
 }
 
+/** Requests the reviewer has not dismissed: the server ignores "Not valid" ones at submit too. */
+function openAreaRequestCount(application: Application): number {
+  return (application.area_requests ?? []).filter((request) => request.status !== "NOT_VALID").length;
+}
+
 export function requirements(
   application: Application | null,
   availability?: Schedule | null,
 ): Requirement[] {
   const list: Requirement[] = [
-    {
-      code: "DISPLAY_NAME",
-      label: "Your name",
-      href: "/apply/about",
-      isMet: (application?.display_name ?? "").trim().length > 0,
-    },
+    // An employer's name is asked on their own screens, with the rest of who is hiring.
+    ...(application?.track === "EMPLOYER"
+      ? employerRequirements(application)
+      : ([
+          {
+            code: "DISPLAY_NAME",
+            label: "Your name",
+            href: "/apply/about",
+            isMet: (application?.display_name ?? "").trim().length > 0,
+          },
+        ] satisfies Requirement[])),
     ...(application?.track === "SERVICES"
       ? ([
           {
@@ -88,7 +160,12 @@ export function requirements(
             code: "SERVICE_AREAS",
             label: "Where you work",
             href: "/apply/areas",
-            isMet: application.service_area_ids.length > 0,
+            // A ticked area, or a PIN asked for that no open area covers yet.
+            isMet: isServiceAreaRequirementMet({
+              serviceAreaIds: application.service_area_ids,
+              requestedPostalCodes: application.requested_postal_codes ?? [],
+              areaRequestsCount: openAreaRequestCount(application),
+            }),
           },
           {
             // The server refuses to send an application without hours for every chosen area,
@@ -98,13 +175,13 @@ export function requirements(
             href: "/apply/schedule",
             isMet:
               availability === undefined ||
-              (application.service_area_ids.length > 0 &&
-                Boolean(availability) &&
-                application.service_area_ids.every((areaId) =>
-                  (availability?.rules ?? []).some(
-                    (rule) => rule.service_area_id === areaId && rule.is_active,
-                  ),
-                )),
+              (Boolean(availability) &&
+                isWorkingHoursRequirementMet({
+                  serviceAreaIds: application.service_area_ids,
+                  requestedPostalCodes: application.requested_postal_codes ?? [],
+                  areaRequestsCount: openAreaRequestCount(application),
+                  availabilityRules: availability?.rules ?? [],
+                })),
           },
         ] satisfies Requirement[])
       : []),
@@ -115,7 +192,7 @@ export function requirements(
       isMet: application?.consents_complete ?? false,
     },
     ...requiredDocumentKinds(application).map((kind) => {
-      const labelled = DOCUMENT_LABELS.find((item) => item.kind === kind);
+      const labelled = DOCUMENT_REQUIREMENTS[kind];
       return {
         code: labelled?.code ?? ("GOVERNMENT_ID" as const),
         label: labelled?.label ?? "Document",

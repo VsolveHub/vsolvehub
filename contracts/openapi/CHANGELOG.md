@@ -1,6 +1,6 @@
 # API Contract Changelog
 
-## 1.103.0 - Cashfree Payouts webhook
+## 1.110.0 - Cashfree Payouts webhook
 
 Additive.
 
@@ -9,6 +9,194 @@ Additive.
   `TRANSFER_REJECTED`), verified by `x-webhook-signature` over `x-webhook-timestamp` and the raw
   body. Unauthenticated, like the RazorpayX one; answers `PayoutWebhookAccepted`, or
   `400 webhook_signature_invalid` / `400 webhook_invalid`. Used when `PAYOUT_PROVIDER=cashfree`.
+
+## 1.109.0 - Employer onboarding: who is hiring
+
+Additive, with behaviour changes to submitting an `EMPLOYER` application, to approving one, and to
+`GET /partner/application/`. An employer now chooses whether they hire for themselves or for a
+business; what they give, upload and have checked follows from that. Agencies are not supported.
+
+**Applicant (`PartnerApplication`)**
+
+- **Added** `employer` (null for other tracks): `hiring_as` (`INDIVIDUAL` | `BUSINESS`),
+  `poster_role`, `id_document_type`, `email`, the individual's `area`, `city` and `pin_code`, a
+  `business` object (null for an individual) and `missing_fields`, the details still needed, in
+  screen order. `business` carries `trade_name`, `legal_name`, `legal_structure`,
+  `business_category`, `company_size`, `gst_registered`, `gstin`, `business_proof_type`,
+  `address`, `area`, `city`, `state`, `pin_code`, `latitude`, `longitude`, `logo_url` (absolute)
+  and `website_url`.
+- **Added** `offered_document_kinds`: the document slots to show. For an employer it is exactly
+  `required_document_kinds`.
+- **Added** document kinds `SELFIE`, `BUSINESS_PROOF` and `AUTHORIZATION_LETTER`. A `SELFIE` that is
+  a PDF is refused with `409 document_selfie_image_only`.
+- **Behaviour** `required_document_kinds` depends on the application. An employer needs
+  `GOVERNMENT_ID` until they choose; then an individual also needs `SELFIE`, and a business
+  `BUSINESS_PROOF`, plus `AUTHORIZATION_LETTER` when the person hiring is not the owner.
+- **Behaviour** `business_details_complete` now means every detail the employer's type needs is
+  given (`missing_fields` is empty). It is still always `true` for other tracks.
+- **Behaviour** `POST /partner/application/submit/` for an `EMPLOYER` answers
+  `409 partner_application_incomplete` naming the first missing detail ("Add your business address
+  before sending.") and needs the documents for its type. An individual no longer needs business
+  details.
+- **Behaviour** `GET /partner/application/` is now the applicant's own view: it no longer shows the
+  reviewer's id, decline reasons or reviewer hand-offs, as the other application reads already did.
+
+**Saving an employer's details**
+
+- **Added** `PATCH /partner/application/employer/`: `expected_version` and any of `display_name`,
+  `hiring_as`, `poster_role`, `id_document_type`, `email`, `area`, `city`, `pin_code` and a
+  `business` object. Returns the `PartnerApplication`. Switching `hiring_as` clears what the other
+  type carried (for an individual: the business and its logo). `409 employer_track_required`
+  (not a hire-staff application), `409 partner_application_version_conflict`,
+  `409 partner_transition_not_allowed` (no longer editable). `400` with the field named, and one
+  of: `pin_code_invalid`, `pin_incomplete`, `gstin_format`, `gstin_state`, `gstin_pan`,
+  `gstin_checksum`, `gstin_needs_gst_registered`, `business_proof_mismatch`,
+  `employer_field_not_for_type`.
+- **Added** `POST` and `DELETE /partner/application/employer/logo/`: a business's public logo
+  (multipart `file`; JPEG, PNG or WebP, up to 2 MB, checked by its first bytes). Returns the
+  `PartnerApplication`. `400` `employer_logo_type`, `employer_logo_empty`,
+  `employer_logo_too_large`, `employer_field_not_for_type` (not hiring for a business) and
+  `file_required`.
+- **Changed** `business_category` gains `SCHOOL`, `FACTORY`, `CONSTRUCTION`, `FACILITY`,
+  `LOGISTICS`, `HOTEL` and `SALON`. Saved values stay valid.
+
+**Operations**
+
+- **Added** `OperationsPartnerApplicationDetail` as the response of
+  `GET /operations/partner-applications/{id}/`: the `PartnerApplication` plus `employer_hints`
+  (`code`, `level` `OK` | `WARN`, `message`; read-only, they never block anything) and
+  `employer_checks` (every check this employer needs, each with `label`, `result`, `note`,
+  `checked_by_name` and `checked_at`; `result` is null until set). Both are empty for other tracks
+  and are never in the applicant's own read.
+- **Added** `PUT /operations/partner-applications/{id}/employer-checks/{code}/` (`result` `PASS` |
+  `FAIL`, `note`): returns the updated `employer_checks`. Only the reviewer holding the application
+  (`409 partner_review_ownership_conflict` otherwise). `400 employer_check_not_applicable` (a check
+  for the other type) and `400 employer_check_note_required` (a failed check needs a note).
+- **Behaviour** `POST /operations/partner-applications/{id}/transition/` to `APPROVED` for an
+  `EMPLOYER` answers `409 employer_checks_incomplete` until every required check is `PASS`; the
+  missing codes are in `error.details.missing_codes`.
+- **Added** the optional `track` filter on `GET /operations/partner-applications/` (an unknown
+  value is a `400`), and `track` on each row.
+
+**Jobs**
+
+- **Added** `employer` on listings (`ListingSummary`, so on job cards and job detail): `name`,
+  `kind` (`BUSINESS` | `INDIVIDUAL`), `locality`, `is_verified`, `logo_url`, `industry_label` and
+  `size_label`. An individual is shown as a short name ("Priya S.") with their area and city only,
+  never a full name or address.
+- **Behaviour** `poster_name` on listings and `employer_name` on applications are that public name.
+  For a business it is the trade name, else the legal name (as before).
+- **Added** `400 job_text_asks_for_money` when a job's title, description or lists ask candidates
+  to pay ("registration fee", "security deposit" and similar), on posting, editing and publishing,
+  for every employer.
+- **Added** the "Home & Personal" category to `GET /jobs/options`: nine household roles (house
+  help, home cook, family driver, elderly caretaker, nanny, patient attendant, home tutor, gardener
+  and watchman), open to every employer.
+
+## 1.108.0 - Phase 2: supply targets, coverage flags, customers turned away, trend, recruitment
+
+Additive changes for Operations (FLOW.md Phase 2).
+
+- **Added** `GET` and `PUT /api/v1/operations/service-areas/{area_id}/targets/`: an area's overall and
+  per-trade supply targets (empty or zero removes one) with approved partners and a flag each.
+- **Added** `GET /api/v1/operations/recruitment-push/` (JSON or `format=csv`): red and amber areas with
+  the shortfall per trade and a tagged apply link.
+- **Added** to each area of `GET /api/v1/operations/coverage-lite/`: `approved_partners`,
+  `target_partners`, `alert_below`, `flag` (RED, AMBER, GREEN, NONE), `trade_targets`,
+  `turned_away_28d_count` and a 12-week `trend` (null for a week with no snapshot). The summary gains
+  `total_turned_away_28d`, `red_areas`, `amber_areas`, `green_areas`, `trend_weeks` and `trend`.
+- **Added** `customer_lookups_28d` to each group of `GET /api/v1/operations/area-requests/`.
+- **Added** `area_details[]` (zone, hours set, offers the partner's services) and
+  `services_not_offered[]` to the Operations partner-application read, empty in the applicant's own
+  view; and `skill_code` on each service of an Operations service-area detail and on each trade of an
+  area-request group. A new area now lists every offerable service, switched on or off.
+- **Changed** (no schema change) the customer PIN check now records a turned-away customer, once per
+  PIN, service and reason in five minutes.
+
+## 1.107.0 - Area requests: dismiss one application's request, and notify results
+
+Additive changes to the Phase 1b Operations area-request endpoints.
+
+- **Added** optional `application_id` to `POST /api/v1/operations/area-requests/{postal_code}/dismiss/`.
+  With it, only that application's request for the PIN is marked not valid (the application review
+  screen). Without it, every open request for the PIN is dismissed (the Area requests screen).
+- **Added** `skipped_applications` to the notify result: approved partners whose area could not be
+  added with their usual hours (for example no hours to copy).
+- **Changed** (no schema change) `POST .../area-requests/{postal_code}/notify/` now answers `409`
+  `area_request_not_ready` when no open service area covers the PIN, and adds the area directly for
+  approved partners (FLOW.md section 2). The list endpoint reports `DONE` for requests whose partner
+  already holds a covering area, and leaves them out of the default list and the counts.
+
+## 1.106.0 - Phase 1b: Operations Area Management, Area Requests, Partner Add Area, and Coverage Lite
+
+Additive changes for Operations management tools (proposal 0030, FLOW.md Phase 1b).
+
+- **Added** `ServiceArea.zone` field on `ServiceArea` reads (`ServiceAreaSerializer` and `PartnerServiceAreaOptionSerializer`).
+- **Added** Operations Areas management endpoints:
+  - `GET /api/v1/operations/service-areas/` and `POST /api/v1/operations/service-areas/`
+  - `GET /api/v1/operations/service-areas/{area_id}/` and `PATCH /api/v1/operations/service-areas/{area_id}/`
+  - `POST /api/v1/operations/service-areas/{area_id}/pins/` and `DELETE /api/v1/operations/service-areas/{area_id}/pins/{postal_code}/`
+  - `POST /api/v1/operations/service-areas/{area_id}/services/`
+  - `POST /api/v1/operations/service-areas/bulk-pins/preview/` and `POST /api/v1/operations/service-areas/bulk-pins/apply/`
+- **Added** Operations Area Requests endpoints:
+  - `GET /api/v1/operations/area-requests/` (grouped by PIN code with trades breakdown and live statuses)
+  - `POST /api/v1/operations/area-requests/{postal_code}/notify/` (triggers area opened notifications to requesting partners)
+  - `POST /api/v1/operations/area-requests/{postal_code}/dismiss/` ("Mark not valid")
+- **Added** Command to add area to approved partner with schedule copying:
+  - `POST /api/v1/operations/partners/{partner_id}/add-area/`
+- **Added** Coverage Lite read-only reporting endpoint:
+  - `GET /api/v1/operations/coverage-lite/` (supports `format=csv`)
+
+## 1.105.0 - Step 3 "Where you work": asked PINs and area requests
+
+Additive changes for the simplified Step 3 "Where you work" flow (proposal 0030, FLOW.md).
+
+- **Added** `PartnerServiceAreaOption.postal_codes[]` on `GET /api/v1/service-areas/`.
+- **Added** `requested_postal_codes[]` and `area_requests[]` (`id`, `postal_code`, `place`, `status`, `covering_area_id`, `covering_area_name`, `created_at`, `notified_at`, `dismissed_at`) on `PartnerApplication` reads.
+- **Added** `requested_postal_codes` write field on `PATCH /api/v1/partner/application/` (SERVICES track only, max 5).
+- **Added** `409 partner_service_areas_unavailable` error with details `unavailable_service_area_ids[]` when saving closed areas.
+- **Added** `area_pending=true` filter on `GET /api/v1/operations/partner-applications/`.
+- **Added** `area_pending` and `area_tag` on `OperationsApplicationQueueItem`.
+- **Added** `POST /api/v1/operations/partner-applications/{id}/remove-area/` (`service_area_id`, `expected_version`, `reason`).
+- **Behaviour** Submitting a partner application now succeeds with 0 service areas if at least 1 postal code is requested. Approval strictly requires at least 1 active linked service area.
+
+## 1.104.0 - Employer business details
+
+Additive, with one behaviour change to submitting an `EMPLOYER` application.
+
+- **Added** `business_category` (`SHOP`, `CLINIC`, `OFFICE`, `RESTAURANT`, `OTHER`), `city` and
+  `address` to `PartnerBusinessProfile` and to `PUT /partner/business-profile/` (all optional
+  there). `legal_name` is the business name.
+- **Added** `business_details_complete` (boolean) on `PartnerApplication`: an `EMPLOYER` has a
+  business name, kind of business and city. Always `true` for other tracks.
+- **Behaviour** `POST /partner/application/submit/` for an `EMPLOYER` answers
+  `409 partner_application_incomplete` ("Add your business name, type and city before
+  submitting.") until those three are given.
+- **Behaviour** `poster_name` on listings and `employer_name` on applications are the employer's
+  business name when one is given, else the person's name (as before).
+
+## 1.103.0 - Hiring outcome: Hired, allowed stage moves, close a job as filled
+
+Additive, with one behaviour change to applicant status updates.
+
+- **Added** `HIRED` to the job application status (`Application.status`): the employer took the
+  person on. Final. The candidate is told ("Congratulations! The employer has hired you.").
+- **Added** `counts.hired` on `PartnerListing`, so the apps can offer to close a job as filled once
+  hires reach `vacancies`.
+- **Added** action `fill` on `POST /partner/listings/{listing_id}/{action}`: closes the job, moves
+  every applicant still being considered to `REJECTED` (audited as "Position filled", told "This
+  position has been filled"), and cancels their open interviews. Needs at least one `HIRED`
+  applicant (`409 listing_state_conflict` otherwise). On a closed job it changes nothing.
+- **Behaviour** `POST /partner/listing-applications/{id}/status` now allows only these moves and
+  answers `409 listing_state_conflict` for any other: Submitted/Under review → Shortlisted,
+  Interview, Connected, Not selected; Shortlisted → Interview, Connected, Not selected; Interview →
+  Connected, Hired, Not selected; Contacted → Interview, Connected, Hired, Not selected; Connected →
+  Hired, Not selected; Not selected → Interview (re-invite). Hired, Withdrawn and Expired are final.
+  Asking for the current status again changes nothing (safe to retry).
+- **Behaviour** `reveal-contact` moves only a new, in-review or shortlisted applicant to
+  `CONTACTED`; an interviewee or hire keeps their stage.
+- **Behaviour** the employer is now notified (`job_application_received`) for every application,
+  not only quick applies.
 
 ## 1.102.0 - Account deletion: grace period, holds, erasure and an Operations queue
 
