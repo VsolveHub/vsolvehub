@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { usePartnerApplication } from "@/features/application/queries";
 
-import { orderJobCategories } from "../job-categories";
+import { jobCategoryLayout, rankRoleMatches } from "../job-categories";
 import {
   fetchJobOptions,
   hhmm,
@@ -346,6 +346,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editingText, setEditingText] = useState(false);
   const [preview, setPreview] = useState<PartnerListing | null>(null);
@@ -365,18 +366,48 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
   };
 
   const opts = options.data as JobOptions | undefined;
-  const categories = useMemo(
-    () => orderJobCategories(opts?.categories ?? [], hiringAs),
-    [opts, hiringAs],
-  );
+  // Someone hiring for themselves sees household roles straight away; every other category stays
+  // one tap away. A business sees the whole grid.
+  const layout = useMemo(() => jobCategoryLayout(opts?.categories ?? [], hiringAs), [opts, hiringAs]);
+  const homeName = layout.home?.name ?? null;
   const roles = useMemo(() => {
     const q = search.trim().toLowerCase();
     const all = (opts?.categories ?? []).flatMap((cat) =>
       cat.roles.map((role) => ({ category: cat.name, role })),
     );
-    if (q) return all.filter(({ role, category }) => `${role.name} ${category}`.toLowerCase().includes(q));
+    if (q) {
+      return rankRoleMatches(
+        all.filter(({ role, category }) => `${role.name} ${category}`.toLowerCase().includes(q)),
+        hiringAs,
+      );
+    }
+    // The household roles already have their own tiles above.
+    if (homeName !== null && draft.category === homeName) return [];
     return all.filter(({ category }) => category === draft.category);
-  }, [opts, search, draft.category]);
+  }, [opts, search, draft.category, hiringAs, homeName]);
+  // The grid opens when they ask, or when the job being edited already sits in one of its categories.
+  const gridOpen =
+    homeName === null || showAllCategories || (draft.category !== "" && draft.category !== homeName);
+
+  const roleChip = (category: string, role: JobRoleTemplate) => (
+    <button
+      key={role.id}
+      type="button"
+      aria-pressed={draft.templateId === role.id}
+      onClick={() => {
+        setDraft((d) => fromTemplate(d, category, role));
+        setStep(1);
+      }}
+      className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+        draft.templateId === role.id
+          ? "border-action bg-action text-action-text"
+          : "border-line bg-surface text-text hover:border-action"
+      }`}
+    >
+      {role.name}
+      {search ? <span className="ml-1 font-normal opacity-70">· {category}</span> : null}
+    </button>
+  );
 
   const save = useMutation({
     // Takes the draft explicitly so a just-edited description is never sent stale.
@@ -482,9 +513,28 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
-          {!search ? (
+          {!search && layout.home ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-navy-900">{t("listings.wizard.homeRoles")}</p>
+              <div className="flex flex-wrap gap-2">
+                {layout.home.roles.map((role) => roleChip(layout.home!.name, role))}
+              </div>
+            </div>
+          ) : null}
+          {!search && !gridOpen ? (
+            <button
+              type="button"
+              aria-expanded={false}
+              onClick={() => setShowAllCategories(true)}
+              className="flex min-h-11 items-center justify-between gap-2 rounded-card border border-dashed border-line px-4 text-left text-sm font-semibold text-action hover:border-action"
+            >
+              {t("listings.wizard.showAllCategories")}
+              <ChevronDown className="size-4 shrink-0" aria-hidden />
+            </button>
+          ) : null}
+          {!search && gridOpen ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {categories.map((cat) => (
+              {layout.others.map((cat) => (
                 <button
                   key={cat.name}
                   type="button"
@@ -507,25 +557,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                 {search ? t("listings.wizard.matchingJobs") : t("listings.wizard.commonJobs")}
               </p>
               <div className="flex flex-wrap gap-2">
-                {roles.map(({ category, role }) => (
-                  <button
-                    key={role.id}
-                    type="button"
-                    aria-pressed={draft.templateId === role.id}
-                    onClick={() => {
-                      setDraft((d) => fromTemplate(d, category, role));
-                      setStep(1);
-                    }}
-                    className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
-                      draft.templateId === role.id
-                        ? "border-action bg-action text-action-text"
-                        : "border-line bg-surface text-text hover:border-action"
-                    }`}
-                  >
-                    {role.name}
-                    {search ? <span className="ml-1 font-normal opacity-70">· {category}</span> : null}
-                  </button>
-                ))}
+                {roles.map(({ category, role }) => roleChip(category, role))}
               </div>
             </div>
           ) : null}

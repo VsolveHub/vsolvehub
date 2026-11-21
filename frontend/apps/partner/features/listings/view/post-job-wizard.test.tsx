@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { withI18n } from "@/i18n/test-utils";
 
 /**
- * The job form for an employer: which categories come first, and what is said when the server
- * refuses a job that asks candidates to pay.
+ * The job form for an employer: what the first step shows to someone hiring for themselves versus
+ * a business, and what is said when the server refuses a job that asks candidates to pay.
  */
 
 const push = vi.fn();
@@ -51,7 +51,11 @@ const OPTIONS = {
   categories: [
     { name: "Retail & Sales", roles: [role("r1", "Sales Executive")] },
     { name: "Healthcare", roles: [role("r2", "Staff Nurse")] },
-    { name: "Home & Personal", roles: [role("r3", "House Help / Maid")] },
+    { name: "Driver & Delivery", roles: [role("r4", "Heavy Vehicle Driver")] },
+    {
+      name: "Home & Personal",
+      roles: [role("r3", "House Help / Maid"), role("r5", "Personal / Family Driver")],
+    },
   ],
   job_types: [{ value: "FULL_TIME", label: "Full time" }],
   experience_bands: [],
@@ -106,32 +110,65 @@ const categoryNames = () =>
     .map((button) => button.textContent)
     .filter((name) => OPTIONS.categories.some((category) => category.name === name));
 
-describe("the job categories", () => {
-  it("put household help first for someone hiring for themselves", async () => {
+const SHOW_ALL = "Hiring for something else? Show all categories";
+
+describe("someone hiring for themselves", () => {
+  it("sees the household roles straight away, and no category grid", async () => {
     serve("INDIVIDUAL");
     render(<PostJobWizard />, { wrapper });
 
-    await screen.findByRole("button", { name: "Home & Personal" });
-    await waitFor(() =>
-      expect(categoryNames()).toEqual(["Home & Personal", "Retail & Sales", "Healthcare"]),
-    );
+    expect(await screen.findByRole("button", { name: "House Help / Maid" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Personal / Family Driver" })).toBeInTheDocument();
+    expect(screen.getByText("Help for your home — tap one")).toBeInTheDocument();
+    expect(categoryNames()).toEqual([]);
   });
 
-  it("keep every category available to them", async () => {
+  it("goes straight on to the basics when they tap a household role", async () => {
     serve("INDIVIDUAL");
     render(<PostJobWizard />, { wrapper });
 
-    await screen.findByRole("button", { name: "Home & Personal" });
-    expect(screen.getByRole("button", { name: "Retail & Sales" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Healthcare" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "House Help / Maid" }));
+
+    expect(await screen.findByText("The basics")).toBeInTheDocument();
   });
 
-  it("stay in the server's order for a business", async () => {
+  it("can still reach every other category, with the household one not repeated", async () => {
+    serve("INDIVIDUAL");
+    render(<PostJobWizard />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: SHOW_ALL }));
+
+    expect(categoryNames()).toEqual(["Retail & Sales", "Healthcare", "Driver & Delivery"]);
+    expect(screen.queryByRole("button", { name: SHOW_ALL })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retail & Sales" }));
+
+    expect(await screen.findByRole("button", { name: "Sales Executive" })).toBeInTheDocument();
+  });
+
+  it("finds household roles first when they search", async () => {
+    serve("INDIVIDUAL");
+    render(<PostJobWizard />, { wrapper });
+    await screen.findByRole("button", { name: "House Help / Maid" });
+
+    fireEvent.change(screen.getByPlaceholderText("Search a job, e.g. cashier, driver, nurse"), {
+      target: { value: "driver" },
+    });
+
+    const matches = screen.getAllByRole("button", { name: /Driver/ }).map((button) => button.textContent);
+    expect(matches).toEqual(["Personal / Family Driver· Home & Personal", "Heavy Vehicle Driver· Driver & Delivery"]);
+  });
+});
+
+describe("a business", () => {
+  it("sees every category in the server's order, with no household shortcut", async () => {
     serve("BUSINESS");
     render(<PostJobWizard />, { wrapper });
 
     await screen.findByRole("button", { name: "Home & Personal" });
-    expect(categoryNames()).toEqual(["Retail & Sales", "Healthcare", "Home & Personal"]);
+    expect(categoryNames()).toEqual(["Retail & Sales", "Healthcare", "Driver & Delivery", "Home & Personal"]);
+    expect(screen.queryByRole("button", { name: SHOW_ALL })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "House Help / Maid" })).not.toBeInTheDocument();
   });
 });
 
