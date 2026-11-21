@@ -362,7 +362,7 @@ PLAN: Final[dict[str, Route]] = {
     "rental_booking_confirmed": Route(
         WHATSAPP,
         "V Solve Hub: Booking confirmed\n\nYour rental of {asset_title} is confirmed from "
-        "{start_date} to {end_date}. Your handover PIN is in the app; show it at handover.",
+        "{start_date} to {end_date}. Open the app for the handover details.",
     ),
     # Customer · High priority
     "rental_claim_decided_customer": Route(

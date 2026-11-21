@@ -25,6 +25,7 @@ from apps.partners.exceptions import (
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_application_for_user, partner_profile_for_user
 from apps.partners.serializers import APPLICANT_AUDIENCE, PartnerApplicationSerializer
+from common.http import client_ip
 from common.observability.context import get_request_id
 
 
@@ -62,7 +63,7 @@ def _audit_self_review_denial(*, actor: User, error: PartnerSelfReviewError) -> 
 
 
 def _request_ip(request: Request) -> str:
-    return str(request.META.get("REMOTE_ADDR") or "unknown")
+    return client_ip(request)
 
 
 def _application_response(user: User, request: Request | None = None) -> Response:

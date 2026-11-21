@@ -127,6 +127,11 @@ if WHATSAPP_ENABLED and not (WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID)
 # Notification SMS go through MESSAGE_TRANSPORT; with SMS on, only MSG91 may carry them.
 if SMS_NOTIFICATIONS_ENABLED and MESSAGE_TRANSPORT != "msg91":
     raise ImproperlyConfigured("MESSAGE_TRANSPORT must be msg91 when SMS_NOTIFICATIONS_ENABLED.")
+# Production runs behind Caddy (infra/compose.production.yaml), so the visitor is one hop back.
+# Left at 0, every visitor would share Caddy's address and one OTP limit for the whole site.
+TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=1)
+if TRUSTED_PROXY_COUNT < 1:
+    raise ImproperlyConfigured("TRUSTED_PROXY_COUNT must be at least 1 behind Caddy.")
 if OTP_PROVIDER == "msg91" and not (MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID):
     raise ImproperlyConfigured(
         "MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID must be set when OTP_PROVIDER is msg91."

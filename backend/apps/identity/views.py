@@ -75,13 +75,13 @@ from apps.identity.services import (
     verify_login_otp,
 )
 from common.errors.serializers import ApiErrorSerializer
+from common.http import client_ip
 from common.observability.context import get_request_id
 from common.schema import OTP_RATE_LIMIT_EXAMPLE, SESSION_EXPIRED_EXAMPLE
 
 
 def _request_ip(request: Request) -> str:
-    value = request.META.get("REMOTE_ADDR")
-    return str(value) if value else "unknown"
+    return client_ip(request)
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
