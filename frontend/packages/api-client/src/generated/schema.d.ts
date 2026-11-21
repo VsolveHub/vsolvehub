@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.115.0)
- * Checksum: 7950d21085a67d4f
+ * Source:   contracts/openapi/v1.yaml (version 1.116.0)
+ * Checksum: 3fbd9c6b8d251b3f
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3361,6 +3361,28 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["m2_operations_commercial_policy_activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/commercial-policies/tax-categories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every tax category the catalogue's active services use, with the services under it.
+         *
+         *     Read-only. The policy form offers these instead of asking Operations to type category codes,
+         *     which had to match a service's code exactly and failed silently when they did not.
+         */
+        get: operations["m2_operations_tax_categories_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21286,6 +21308,16 @@ export interface components {
          * @enum {string}
          */
         TargetStatusEnum: "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "DECLINED" | "SUSPENDED" | "OFFBOARDED";
+        TaxCategoryUsage: {
+            /** @description The `tax_category_code` services carry. */
+            code: string;
+            /** @description Active services using this category. */
+            service_count: number;
+            /** @description Of those, crew (A3) and project (A5) services: the ones this policy prices. */
+            crew_and_project_service_count: number;
+            /** @description A few of their names, alphabetical. */
+            example_services: string[];
+        };
         TaxDocument: {
             /** Format: uuid */
             readonly id: string;
@@ -29484,6 +29516,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_tax_categories_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxCategoryUsage"][];
                 };
             };
         };

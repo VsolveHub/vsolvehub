@@ -1,5 +1,14 @@
 # API Contract Changelog
 
+## 1.116.0 - Tax categories for the commercial policy form
+
+Additive.
+
+- **Added** `GET /operations/commercial-policies/tax-categories/` (`TaxCategoryUsage[]`): every
+  tax category active services use, with `service_count`, `crew_and_project_service_count`
+  (the A3/A5 services the commercial policy prices) and up to four `example_services`, so the
+  policy form offers categories instead of asking Operations to type their codes.
+
 ## 1.115.0 - Who started a refund, and what it was for
 
 Additive.

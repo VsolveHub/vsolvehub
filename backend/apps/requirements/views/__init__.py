@@ -96,6 +96,7 @@ from .enquiries import (
 from .financial_policy import (
     OperationsCommercialPolicyActivateView,
     OperationsCommercialPolicyListView,
+    OperationsTaxCategoryListView,
 )
 from .operations_requests import (
     OperationsAssistedClarificationView,
@@ -306,6 +307,7 @@ __all__ = [
     "OperationsRematchView",
     "OperationsRequestTimelineView",
     "OperationsSafetyIncidentDecisionView",
+    "OperationsTaxCategoryListView",
     "OperationsTouchMetricView",
     "OperationsTouchRollupView",
     "OperationsWorkItemCollectionView",

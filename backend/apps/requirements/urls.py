@@ -75,6 +75,7 @@ from apps.requirements.views import (
     OperationsRematchView,
     OperationsRequestTimelineView,
     OperationsSafetyIncidentDecisionView,
+    OperationsTaxCategoryListView,
     OperationsTouchMetricView,
     OperationsTouchRollupView,
     OperationsWorkItemCollectionView,
@@ -749,6 +750,11 @@ urlpatterns = [
         "operations/commercial-policies/",
         OperationsCommercialPolicyListView.as_view(),
         name="m2-operations-commercial-policies",
+    ),
+    path(
+        "operations/commercial-policies/tax-categories/",
+        OperationsTaxCategoryListView.as_view(),
+        name="m2-operations-tax-categories",
     ),
     path(
         "operations/commercial-policies/activate/",

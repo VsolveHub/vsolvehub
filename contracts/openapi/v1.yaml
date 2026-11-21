@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.115.0
+  version: 1.116.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -7964,6 +7964,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/commercial-policies/tax-categories/:
+    get:
+      operationId: m2_operations_tax_categories_list
+      description: |-
+        Every tax category the catalogue's active services use, with the services under it.
+
+        Read-only. The policy form offers these instead of asking Operations to type category codes,
+        which had to match a service's code exactly and failed silently when they did not.
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxCategoryUsage'
           description: ''
   /api/v1/operations/compatibility-rules/:
     get:
@@ -52940,6 +52961,29 @@ components:
         * `DECLINED` - DECLINED
         * `SUSPENDED` - SUSPENDED
         * `OFFBOARDED` - OFFBOARDED
+    TaxCategoryUsage:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The `tax_category_code` services carry.
+        service_count:
+          type: integer
+          description: Active services using this category.
+        crew_and_project_service_count:
+          type: integer
+          description: 'Of those, crew (A3) and project (A5) services: the ones this
+            policy prices.'
+        example_services:
+          type: array
+          items:
+            type: string
+          description: A few of their names, alphabetical.
+      required:
+      - code
+      - crew_and_project_service_count
+      - example_services
+      - service_count
     TaxDocument:
       type: object
       properties:
