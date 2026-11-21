@@ -3,6 +3,7 @@
 from typing import cast
 
 from django.conf import settings
+from django.db import models
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -148,11 +149,40 @@ class RefundAllocationSerializer(serializers.ModelSerializer[RefundAllocation]):
         }
 
 
+#: Roles whose members start a refund as staff rather than as the customer.
+REFUND_STAFF_ROLE_CODES = frozenset({"operations", "finance"})
+
+
+class RefundStartedByEnum(models.TextChoices):
+    #: The system asked for it: a cancellation, a lapsed booking, money that arrived too late.
+    AUTOMATIC = "AUTOMATIC", "Automatic"
+    #: The customer's own action, such as cancelling a home visit.
+    CUSTOMER = "CUSTOMER", "Customer"
+    #: Someone in Operations or Finance, from the console.
+    OPERATIONS = "OPERATIONS", "Operations"
+
+
+def refund_started_by(refund: Refund) -> str:
+    """Who set this refund going. Reads prefetched roles when the list view supplied them."""
+
+    user = refund.requested_by
+    if user is None:
+        return RefundStartedByEnum.AUTOMATIC
+    grants = user.userrole_set.all()
+    if any(
+        grant.revoked_at is None and grant.role.code in REFUND_STAFF_ROLE_CODES for grant in grants
+    ):
+        return RefundStartedByEnum.OPERATIONS
+    return RefundStartedByEnum.CUSTOMER
+
+
 class RefundSerializer(serializers.ModelSerializer[Refund]):
     order_id = serializers.UUIDField(read_only=True, allow_null=True)
     payment_attempt_id = serializers.UUIDField(read_only=True, allow_null=True)
     amount = serializers.SerializerMethodField()
     allocations = RefundAllocationSerializer(many=True, read_only=True)
+    started_by = serializers.SerializerMethodField()
+    paid_for = serializers.SerializerMethodField()
 
     class Meta:
         model = Refund
@@ -167,6 +197,8 @@ class RefundSerializer(serializers.ModelSerializer[Refund]):
             "provider_refund_id",
             "amount",
             "allocations",
+            "started_by",
+            "paid_for",
             "created_at",
             "submitted_at",
             "completed_at",
@@ -177,6 +209,31 @@ class RefundSerializer(serializers.ModelSerializer[Refund]):
     @extend_schema_field(MoneySerializer)
     def get_amount(refund: Refund) -> dict[str, object]:
         return {"amount_paise": refund.amount_paise, "currency": refund.currency}
+
+    @staticmethod
+    @extend_schema_field(
+        serializers.ChoiceField(
+            choices=RefundStartedByEnum.choices,
+            help_text=(
+                "Who set the refund going: AUTOMATIC (the system, e.g. a cancellation), "
+                "CUSTOMER (their own action) or OPERATIONS (staff, from the console)."
+            ),
+        )
+    )
+    def get_started_by(refund: Refund) -> str:
+        return refund_started_by(refund)
+
+    @staticmethod
+    @extend_schema_field(
+        serializers.ChoiceField(
+            choices=PaymentAttempt.Purpose.choices,
+            allow_null=True,
+            help_text="What the refunded payment was for: its payment attempt's purpose.",
+        )
+    )
+    def get_paid_for(refund: Refund) -> str | None:
+        attempt = refund.payment_attempt
+        return attempt.purpose if attempt is not None else None
 
 
 class RefundPageSerializer(serializers.Serializer[dict[str, object]]):

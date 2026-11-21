@@ -1,12 +1,17 @@
 """Automated-test settings."""
 
 from config.settings.base import *
-from config.settings.guards import guard_cashfree_sandbox, guard_razorpayx_test_keys
+from config.settings.guards import (
+    guard_cashfree_sandbox,
+    guard_cashfree_verification_sandbox,
+    guard_razorpayx_test_keys,
+)
 
 DEBUG = False
 # Automated suites never call RazorpayX, but a live key in the environment is still refused.
 guard_razorpayx_test_keys(RAZORPAYX_KEY_ID)
 guard_cashfree_sandbox(CASHFREE_PAYOUT_API_BASE_URL)
+guard_cashfree_verification_sandbox(CASHFREE_VERIFICATION_API_BASE_URL)
 # Suites that settle a visit and pay it in the same test would otherwise wait three days. The
 # clearing window has its own tests, which set it back to the production value.
 PAYOUT_CLEARING_HOURS = 0
@@ -39,3 +44,8 @@ ONESIGNAL_PARTNER_APP_ID = "test-partner-app-id"
 ONESIGNAL_PARTNER_REST_API_KEY = "test-partner-rest-key"
 ONESIGNAL_CUSTOMER_APP_ID = "test-customer-app-id"
 ONESIGNAL_CUSTOMER_REST_API_KEY = "test-customer-rest-key"
+
+# The paid-stay mechanics stay under test even though production keeps them closed (see
+# `STAY_PAID_RESERVATIONS_ENABLED` in base). The closed default has its own test:
+# `tests/stay/test_paid_reservations_closed.py`.
+STAY_PAID_RESERVATIONS_ENABLED = True

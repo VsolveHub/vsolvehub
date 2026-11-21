@@ -418,9 +418,10 @@ def test_step_up_with_someone_elses_number_is_refused_and_stamps_nothing() -> No
     phone = "+919800011124"
     client = _signed_in_operator(phone)
 
-    status, _ = _step_up(client, "other-number-token", _valid_claims("+919800099999"))
+    status, body = _step_up(client, "other-number-token", _valid_claims("+919800099999"))
 
     assert status == HTTPStatus.FORBIDDEN
+    assert body["error"]["code"] == "step_up_identity_mismatch"
     session = UserSession.objects.get(user__phone_number=phone, revoked_at__isnull=True)
     assert session.stepped_up_at is None
     assert AccessAuditEvent.objects.filter(

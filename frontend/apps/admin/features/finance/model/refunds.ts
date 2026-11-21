@@ -143,3 +143,67 @@ export function validateRefund(draft: RefundDraft): Record<string, string> {
 
   return errors;
 }
+
+/* -------------------------------------------------------------------------
+   Reading a refund at a glance (contract 1.115.0)
+   ------------------------------------------------------------------------- */
+
+export type RefundStartedBy = Schemas["StartedByEnum"];
+export type RefundPaidFor = Schemas["PaidForEnum"];
+
+export const STARTED_BY_LABEL: Record<RefundStartedBy, string> = {
+  AUTOMATIC: "Automatic",
+  CUSTOMER: "Customer",
+  OPERATIONS: "Operations",
+};
+
+export const STARTED_BY_MEANING: Record<RefundStartedBy, string> = {
+  AUTOMATIC: "The system asked for it, for example after a cancellation.",
+  CUSTOMER: "The customer's own action, such as cancelling a visit.",
+  OPERATIONS: "Someone on the team issued it from this console.",
+};
+
+export const STARTED_BY_TONE: Record<RefundStartedBy, "info" | "neutral" | "warning"> = {
+  AUTOMATIC: "info",
+  CUSTOMER: "neutral",
+  OPERATIONS: "warning",
+};
+
+/** What the refunded payment bought, in the words Operations uses. Unknown purposes fall back. */
+export function paidForLabel(purpose: RefundPaidFor | null | undefined): string {
+  if (!purpose) return "—";
+  if (purpose === "BOOKING_GROUP" || purpose === "SCOPE_AMENDMENT_REVISION") return "Home visit";
+  if (purpose.startsWith("A7_")) return "Rental";
+  if (purpose.startsWith("A9_")) return "Stay";
+  if (purpose.startsWith("A10_")) return "Vendor plan";
+  if (purpose === "WALLET_TOP_UP") return "Wallet top-up";
+  if (purpose.startsWith("M2_")) return "Project or crew job";
+  return humanize(purpose);
+}
+
+const REASON_LABEL: Record<string, string> = {
+  customer_cancelled: "Customer cancelled the visit",
+  customer_cancelled_rental: "Customer cancelled the rental",
+  customer_cancelled_stay_reservation: "Customer cancelled the stay",
+  rental_paid_after_cancellation: "Paid after the booking was already cancelled",
+  capture_without_capacity: "Paid, but the booking could not be held",
+  capture_after_terminal: "Paid after the booking had ended",
+  "service-not-delivered": "Service not delivered",
+  m2_requirement_cancelled: "Customer cancelled the job",
+  m2_requirement_reclassified: "Job was re-classified",
+  m2_estimate_window_missed: "No estimate in time",
+  m2_visit_slot_never_filled: "No one took the visit slot",
+  m2_scope_reduced_by_amendment: "Scope was reduced",
+  m2_project_transferred: "Project moved to another vendor",
+  m2_project_terminated: "Project was ended",
+};
+
+function humanize(code: string): string {
+  const words = code.replace(/[-_]+/g, " ").trim().toLowerCase();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : "—";
+}
+
+/** A reason code as a sentence. Known codes are written out; any other is made readable. */
+export function reasonLabel(code: string): string {
+  return REASON_LABEL[code] ?? humanize(code);
+}

@@ -3,6 +3,7 @@
 import {
   Button,
   FactList,
+  buttonStyles,
   Readout,
   Sheet,
   Timeline,
@@ -23,6 +24,7 @@ import {
 } from "@/features/rentals/booking-actions";
 import type { PartnerRentalBooking, RentalBooking } from "@/features/rentals/queries";
 import { DeliverySection } from "@/features/rentals/view/delivery-section";
+import { Phone } from "lucide-react";
 import { InvoiceNotice } from "@/features/workspace/view/invoice-notice";
 
 /**
@@ -133,6 +135,11 @@ export function RentalBookingDetailSheet({
   const showDispute = canDisputeDeposit(status, booking?.deposit?.status);
   const showCancel = canCancelBooking(status);
   const deposit = booking?.deposit;
+  // The owner's booking carries the renter's name and phone, as the rentals list shows them;
+  // the customer's own view of a booking does not.
+  const owned = booking !== null && "customer_name" in booking ? (booking as PartnerRentalBooking) : null;
+  const customerName = owned?.customer_name ?? "";
+  const customerPhone = owned?.customer_phone ?? "";
 
   return (
     <Sheet
@@ -177,12 +184,37 @@ export function RentalBookingDetailSheet({
       {booking ? (
         <div className="flex flex-col gap-5 py-3">
           <SheetSection title={t("rentals.sheet.customer")}>
-            <div className="rounded-card border border-dashed border-line-strong bg-surface-sunken p-3">
-              <p className="text-sm font-medium text-text-muted">{t("rentals.sheet.notProvided")}</p>
-              <p className="mt-1 text-xs text-text-secondary">
-                {t("rentals.sheet.customerNote")}
-              </p>
-            </div>
+            {customerName || customerPhone ? (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-navy-900">
+                    {customerName || t("rentals.home.customer")}
+                  </p>
+                  {customerPhone ? (
+                    <p data-numeric className="text-sm text-text-secondary">
+                      {customerPhone}
+                    </p>
+                  ) : null}
+                </div>
+                {customerPhone ? (
+                  <a
+                    href={`tel:${customerPhone}`}
+                    aria-label={t("rentals.home.callName", {
+                      name: customerName || t("rentals.home.customerLower"),
+                    })}
+                    className={buttonStyles({ size: "sm", variant: "outline" })}
+                  >
+                    <Phone className="size-4" />
+                    {t("rentals.home.call")}
+                  </a>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-card border border-dashed border-line-strong bg-surface-sunken p-3">
+                <p className="text-sm font-medium text-text-muted">{t("rentals.sheet.notProvided")}</p>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-text-secondary">{t("rentals.sheet.customerNote")}</p>
           </SheetSection>
 
           <SheetSection title={t("rentals.sheet.rental")}>
@@ -220,14 +252,6 @@ export function RentalBookingDetailSheet({
                   label: t("rentals.sheet.dailyRate"),
                   value: formatMoney(booking.asset.daily_rate_paise),
                 },
-                ...((booking.platform_fee_paise ?? 0) > 0
-                  ? [
-                      {
-                        label: t("rentals.sheet.platformFee", { percent: booking.platform_fee_percent ?? 0 }),
-                        value: `−${formatMoney(booking.platform_fee_paise ?? 0)}`,
-                      },
-                    ]
-                  : []),
                 ...((booking.transport_paise ?? 0) > 0
                   ? [
                       {
@@ -238,9 +262,10 @@ export function RentalBookingDetailSheet({
                   : []),
                 {
                   label: t("rentals.sheet.youReceive"),
+                  // The platform fee is the customer's, charged on top of the rent; the owner
+                  // keeps the whole rent. Only the platform's share of transport comes off.
                   value: formatMoney(
-                    booking.price_paise -
-                      (booking.platform_fee_paise ?? 0) +
+                    booking.price_paise +
                       (booking.transport_paise ?? 0) -
                       (booking.transport_fee_paise ?? 0),
                   ),

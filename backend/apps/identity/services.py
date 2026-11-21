@@ -154,6 +154,70 @@ def issue_login_otp(
     return IssuedOtp(challenge=challenge, development_code=development_code)
 
 
+def _consume_login_challenge(*, challenge_id: uuid.UUID, canonical_phone: str, code: str) -> bool:
+    """Consume the challenge if `code` is right for it. Call inside a transaction.
+
+    A wrong code counts against the challenge; an unknown, unsent, used, expired or locked one
+    is simply not accepted. The two are not told apart to the caller.
+    """
+
+    challenge = (
+        OtpChallenge.objects.select_for_update()
+        .filter(
+            id=challenge_id,
+            phone_number=canonical_phone,
+            purpose=OtpChallenge.Purpose.LOGIN,
+        )
+        .first()
+    )
+    if (
+        challenge is None
+        or challenge.delivery_status != OtpChallenge.DeliveryStatus.SENT
+        or challenge.is_consumed
+        or challenge.is_expired
+        or challenge.is_locked
+    ):
+        return False
+    if not check_password(code, challenge.code_hash):
+        challenge.failed_attempts += 1
+        challenge.save(update_fields=("failed_attempts",))
+        return False
+    challenge.consumed_at = timezone.now()
+    challenge.save(update_fields=("consumed_at",))
+    return True
+
+
+def issue_step_up_otp(*, user: User, request_ip: str) -> IssuedOtp:
+    """A code for the signed-in person's own number, and no other.
+
+    The number is never taken from the request: a step-up re-proves the person already signed
+    in, so a code sent anywhere else proves nothing about them.
+    """
+
+    if not user.phone_number:
+        raise OtpDeliveryError("The signed-in account has no phone number.")
+    return issue_login_otp(phone_number=user.phone_number, request_ip=request_ip)
+
+
+def verify_step_up_otp(*, user: User, challenge_id: uuid.UUID, code: str) -> None:
+    """Check a step-up code against the signed-in person's own number.
+
+    Unlike `verify_login_otp` it never provisions an account: a step-up is about a user who
+    already exists, and a code for any other number must not create one as a side effect.
+    """
+
+    with transaction.atomic():
+        accepted = _consume_login_challenge(
+            challenge_id=challenge_id,
+            canonical_phone=normalize_phone_number(user.phone_number),
+            code=code,
+        )
+    if not accepted:
+        raise OtpVerificationError("The code is invalid or expired.")
+    if not user.is_active:
+        raise AccountBlockedError("This account is blocked. Contact Vsolve support.")
+
+
 def verify_login_otp(
     *,
     challenge_id: uuid.UUID,
@@ -165,32 +229,11 @@ def verify_login_otp(
     verification_failed = False
 
     with transaction.atomic():
-        challenge = (
-            OtpChallenge.objects.select_for_update()
-            .filter(
-                id=challenge_id,
-                phone_number=canonical_phone,
-                purpose=OtpChallenge.Purpose.LOGIN,
-            )
-            .first()
-        )
-
-        if (
-            challenge is None
-            or challenge.delivery_status != OtpChallenge.DeliveryStatus.SENT
-            or challenge.is_consumed
-            or challenge.is_expired
-            or challenge.is_locked
+        if not _consume_login_challenge(
+            challenge_id=challenge_id, canonical_phone=canonical_phone, code=code
         ):
             verification_failed = True
-        elif not check_password(code, challenge.code_hash):
-            challenge.failed_attempts += 1
-            challenge.save(update_fields=("failed_attempts",))
-            verification_failed = True
         else:
-            challenge.consumed_at = timezone.now()
-            challenge.save(update_fields=("consumed_at",))
-
             blocked = User.objects.filter(phone_number=canonical_phone, is_active=False).exists()
             if blocked:
                 raise AccountBlockedError("This account is blocked. Contact Vsolve support.")

@@ -171,6 +171,15 @@ if PAYOUT_PROVIDER == "cashfree":
         )
     if not CASHFREE_PAYOUT_API_BASE_URL.startswith("https://"):
         raise ImproperlyConfigured("CASHFREE_PAYOUT_API_BASE_URL must use HTTPS.")
+    # Every bank account a Partner adds is checked with the bank first; without these keys
+    # adding one fails, so the deployment refuses to start instead of failing for Partners.
+    if not (CASHFREE_VERIFICATION_CLIENT_ID and CASHFREE_VERIFICATION_CLIENT_SECRET):
+        raise ImproperlyConfigured(
+            "CASHFREE_VERIFICATION_CLIENT_ID and CASHFREE_VERIFICATION_CLIENT_SECRET (Secure ID "
+            "keys) must be set when PAYOUT_PROVIDER is cashfree."
+        )
+    if not CASHFREE_VERIFICATION_API_BASE_URL.startswith("https://"):
+        raise ImproperlyConfigured("CASHFREE_VERIFICATION_API_BASE_URL must use HTTPS.")
 if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER not in ("razorpayx", "cashfree"):
     raise ImproperlyConfigured(
         "PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx or PAYOUT_PROVIDER=cashfree."

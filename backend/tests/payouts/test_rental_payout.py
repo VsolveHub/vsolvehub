@@ -24,8 +24,9 @@ from apps.rental.services import decide_deposit_dispute, raise_deposit_dispute
 pytestmark = pytest.mark.django_db
 
 GROSS_PAISE = 400000
+#: The customer's platform fee on top of the rent. It is not taken from the owner.
 COMMISSION_PAISE = 40000
-NET_PAISE = 360000
+NET_PAISE = 400000
 DEPOSIT_PAISE = 50000
 DISPUTE_CONSUME_PAISE = 20000
 
@@ -131,8 +132,10 @@ def test_settle_rental_earning_creates_available_earning_on_returned(rental_payo
     assert entry.kind == PartnerLedgerEntry.Kind.EARNING
     assert entry.status == PartnerLedgerEntry.Status.AVAILABLE
     assert entry.gross_paise == GROSS_PAISE
-    assert entry.commission_paise == COMMISSION_PAISE
+    # The customer paid the platform fee on top of the rent; the owner keeps the whole rent.
+    assert entry.commission_paise == 0
     assert entry.net_paise == NET_PAISE
+    assert entry.calculation_snapshot["platform_fee_paise"] == COMMISSION_PAISE
     assert entry.partner == rental_payout_setup["partner"]
     assert entry.rental_booking == booking
     assert entry.idempotency_key == f"rental-earning:{booking.id}"
@@ -200,3 +203,23 @@ def test_backfill_rental_earnings_command(rental_payout_setup):
     assert PartnerLedgerEntry.objects.filter(rental_booking=booking).exists()
     entry = PartnerLedgerEntry.objects.get(rental_booking=booking)
     assert entry.net_paise == NET_PAISE
+
+
+def test_the_customer_pays_the_platform_fee_once_and_the_owner_keeps_the_rent(
+    rental_payout_setup,
+):
+    """Regression: the fee was charged to the customer on top of the rent *and* deducted from
+    the owner, so V Solve Hub took it twice."""
+
+    from apps.rental.services import booking_amount_due  # noqa: PLC0415
+
+    booking = rental_payout_setup["booking"]
+    booking.status = RentalBooking.Status.RETURNED
+    booking.save(update_fields=("status",))
+    customer_paid_without_deposit = booking_amount_due(booking) - DEPOSIT_PAISE
+
+    entry = settle_rental_earning(rental_booking_id=booking.id)
+
+    assert entry is not None
+    platform_keeps = customer_paid_without_deposit - entry.net_paise
+    assert platform_keeps == COMMISSION_PAISE
