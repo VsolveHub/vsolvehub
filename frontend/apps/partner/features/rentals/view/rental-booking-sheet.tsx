@@ -252,14 +252,6 @@ export function RentalBookingDetailSheet({
                   label: t("rentals.sheet.dailyRate"),
                   value: formatMoney(booking.asset.daily_rate_paise),
                 },
-                ...((booking.platform_fee_paise ?? 0) > 0
-                  ? [
-                      {
-                        label: t("rentals.sheet.platformFee", { percent: booking.platform_fee_percent ?? 0 }),
-                        value: `−${formatMoney(booking.platform_fee_paise ?? 0)}`,
-                      },
-                    ]
-                  : []),
                 ...((booking.transport_paise ?? 0) > 0
                   ? [
                       {
@@ -270,9 +262,10 @@ export function RentalBookingDetailSheet({
                   : []),
                 {
                   label: t("rentals.sheet.youReceive"),
+                  // The platform fee is the customer's, charged on top of the rent; the owner
+                  // keeps the whole rent. Only the platform's share of transport comes off.
                   value: formatMoney(
-                    booking.price_paise -
-                      (booking.platform_fee_paise ?? 0) +
+                    booking.price_paise +
                       (booking.transport_paise ?? 0) -
                       (booking.transport_fee_paise ?? 0),
                   ),

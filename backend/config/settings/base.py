@@ -1533,6 +1533,12 @@ GEMINI_API_BASE_URL = env(
     "GEMINI_API_BASE_URL", default="https://generativelanguage.googleapis.com/v1beta"
 )
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+
+# Paid stay reservations (A9 `RESERVATION` mode). Off until hosts can be paid: a paid stay is
+# collected by V Solve Hub in full, and there is no host earning, commission or GST on
+# accommodation (owed by the platform for stays booked through it) built yet. Every live stay
+# today is in `ENQUIRY` mode, which takes no payment, so this changes nothing that works now.
+STAY_PAID_RESERVATIONS_ENABLED = env.bool("STAY_PAID_RESERVATIONS_ENABLED", default=False)
 OPENAI_MODEL = env("OPENAI_MODEL", default="")
 OPENAI_API_BASE_URL = env("OPENAI_API_BASE_URL", default="https://api.openai.com/v1")
 ASSISTANT_LLM_CONNECT_TIMEOUT_SECONDS = env.float(

@@ -73,6 +73,7 @@ from apps.payouts.selectors import (
     payable_entries,
     with_hold_flags,
 )
+from apps.pricing.tax import pre_gst_paise
 from apps.rental.models import RentalBooking
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,16 @@ def payout_idempotency_key(*, batch_id: UUID, partner_id: UUID) -> str:
 #: Ledger statuses a batch may take. `PENDING` is excluded on purpose — it is what a
 #: payout-holding case leaves behind.
 RESERVABLE_STATUSES = (PartnerLedgerEntry.Status.AVAILABLE, PartnerLedgerEntry.Status.RELEASED)
+
+
+def visit_work_value_paise(*, gross_paise: int, pricing: dict[str, Any]) -> int:
+    """The GST-inclusive visit amount with its GST taken out: what the work itself is worth.
+
+    Both the Partner's earning and the commission are shares of this, never of the GST, which is
+    owed to the government. The rate is the one frozen into the quote at checkout.
+    """
+
+    return pre_gst_paise(gross_paise, int(pricing["gst_rate_basis_points"]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,11 +161,12 @@ def estimated_booking_earning(booking: Booking) -> BookingEarningEstimate | None
     if unit is None:
         return None
     quote_unit = unit.quote_unit
-    gross_paise = quote_unit.task_subtotal_paise + quote_unit.minimum_visit_adjustment_paise
-    commission_paise = _commission_for(
-        gross_paise=gross_paise,
-        pricing=quote_unit.quote.pricing_policy_snapshot,
+    pricing = quote_unit.quote.pricing_policy_snapshot
+    gross_paise = visit_work_value_paise(
+        gross_paise=quote_unit.task_subtotal_paise + quote_unit.minimum_visit_adjustment_paise,
+        pricing=pricing,
     )
+    commission_paise = _commission_for(gross_paise=gross_paise, pricing=pricing)
     return BookingEarningEstimate(
         gross_paise=gross_paise,
         commission_paise=commission_paise,
@@ -226,11 +238,14 @@ def settle_booking_earning(
     unit = booking.fulfilment_unit
     if unit is None:
         return None
-    gross = settled_gross_paise(booking)
-    if gross <= 0:
+    delivered = settled_gross_paise(booking)
+    if delivered <= 0:
         return None
 
     pricing = unit.quote_unit.quote.pricing_policy_snapshot
+    # Task prices include GST. The Partner earns, and V Solve Hub takes commission on, the work's
+    # value without it; the GST stays with V Solve Hub to pay over.
+    gross = visit_work_value_paise(gross_paise=delivered, pricing=pricing)
     commission = _commission_for(gross_paise=gross, pricing=pricing)
     # A dispute or an open safety case holds the money back until somebody decides. The entry is
     # still written — the Partner earned it — it simply is not yet payable.
@@ -246,6 +261,9 @@ def settle_booking_earning(
         currency=unit.currency,
         calculation_snapshot={
             "booking_status": booking.status,
+            "delivered_including_gst_paise": delivered,
+            "gst_rate_basis_points": int(pricing["gst_rate_basis_points"]),
+            "gst_paise": delivered - gross,
             "settled_gross_paise": gross,
             "commission_basis_points": int(pricing["commission_basis_points"]),
             "commission_floor_paise": int(pricing["commission_floor_paise"]),
@@ -268,10 +286,13 @@ def settle_rental_earning(
     constraint ``payouts_one_earning_per_rental_booking``: a replayed settlement
     returns the existing row. Two concurrent callers cannot both win.
 
-    The owner's share is ``price_paise - platform_fee_paise``, plus any agreed
-    transport less its commission (0% today). The deposit is excluded — it is
-    the customer's refundable security. The platform fee is V Solve Hub's
-    revenue (commission).
+    The owner's share is the whole rent, plus any agreed transport less its
+    commission (0% today). The deposit is excluded — it is the customer's
+    refundable security.
+
+    The platform fee is **not** taken from the owner: the customer paid it on top
+    of the rent (``booking_amount_due``), so it is already V Solve Hub's. Deducting
+    it here as well took it twice — once from each side.
 
     Returns ``None`` for a booking that has not reached ``RETURNED`` or
     ``DISPUTED`` — the partner has not earned the fee yet.
@@ -296,7 +317,9 @@ def settle_rental_earning(
     transport = int(rb.transport_paise)
     transport_fee = int(rb.transport_fee_paise)
     gross = int(rb.price_paise) + transport
-    commission = int(rb.platform_fee_paise) + transport_fee
+    # Only the platform's share of the transport comes off the owner. The rental platform fee
+    # was charged to the customer on top of the rent and never passed through the owner.
+    commission = transport_fee
     net = gross - commission
     if net <= 0:
         return None
@@ -317,6 +340,7 @@ def settle_rental_earning(
             "price_paise": int(rb.price_paise),
             "platform_fee_percent": int(rb.platform_fee_percent),
             "platform_fee_paise": int(rb.platform_fee_paise),
+            "platform_fee_paid_by": "customer",
             "transport_paise": transport,
             "transport_fee_percent": int(rb.transport_fee_percent),
             "transport_fee_paise": transport_fee,

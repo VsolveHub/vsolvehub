@@ -44,3 +44,8 @@ ONESIGNAL_PARTNER_APP_ID = "test-partner-app-id"
 ONESIGNAL_PARTNER_REST_API_KEY = "test-partner-rest-key"
 ONESIGNAL_CUSTOMER_APP_ID = "test-customer-app-id"
 ONESIGNAL_CUSTOMER_REST_API_KEY = "test-customer-rest-key"
+
+# The paid-stay mechanics stay under test even though production keeps them closed (see
+# `STAY_PAID_RESERVATIONS_ENABLED` in base). The closed default has its own test:
+# `tests/stay/test_paid_reservations_closed.py`.
+STAY_PAID_RESERVATIONS_ENABLED = True

@@ -22,6 +22,7 @@ from apps.locations.pauses import is_area_paused
 from apps.notifications.services import request_notification
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
+from apps.pricing.tax import pre_gst_paise
 
 GROUP_TERMINAL_STATUSES = (
     BookingGroup.Status.BOOKED,
@@ -246,8 +247,11 @@ def _create_offer(
     # should ever cap a post-booking recovery offer.
     deadline = offer_timeout if post_booking_recovery else min(group.expires_at, offer_timeout)
     pricing = unit.quote_unit.quote.pricing_policy_snapshot
-    gross_paise = (
-        unit.quote_unit.task_subtotal_paise + unit.quote_unit.minimum_visit_adjustment_paise
+    # The price includes GST; the Partner is offered, and commission is taken from, the work's
+    # value without it — the same figure `apps.payouts.services` settles at.
+    gross_paise = pre_gst_paise(
+        unit.quote_unit.task_subtotal_paise + unit.quote_unit.minimum_visit_adjustment_paise,
+        int(pricing["gst_rate_basis_points"]),
     )
     calculated_commission = gross_paise * int(pricing["commission_basis_points"]) // 10_000
     commission_paise = min(

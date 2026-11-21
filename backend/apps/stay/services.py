@@ -1684,6 +1684,13 @@ def create_reservation(
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.RESERVATION:
         raise StayStateError("Property does not support reservations.")
+    if not settings.STAY_PAID_RESERVATIONS_ENABLED:
+        # Taking a stay's money with no way to pay the host is worse than not taking it. See
+        # `STAY_PAID_RESERVATIONS_ENABLED`.
+        raise StayStateError(
+            "Paid stay bookings are not open yet. Send the host an enquiry instead.",
+            code="stay_paid_reservations_closed",
+        )
     if prop.public_state != "PUBLISHED" or not has_approved_application(prop.host):
         raise StayStateError("Property is not published.")
     nights = _enforce_stay_dates(prop=prop, check_in=check_in, check_out=check_out)
