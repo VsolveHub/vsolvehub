@@ -7,7 +7,8 @@ import { useState } from "react";
 import { dayEndIso, dayStartIso, useProposePayoutBatch, useUnpayablePartners } from "../queries";
 
 /**
- * Propose a payout run for a period. A second person approves it, then it is paid.
+ * Propose a payout run for a period. It is approved (by a colleague, or by you after a review),
+ * then paid.
  *
  * Partners owed money in the period but with no usable bank account are listed first, because
  * they are left out of the run silently otherwise.

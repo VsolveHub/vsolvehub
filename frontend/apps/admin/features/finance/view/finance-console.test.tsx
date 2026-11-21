@@ -286,41 +286,56 @@ describe("the step-up", () => {
     expect(onStepUpRequired.mock.calls[0]![0]).toMatch(/nothing was changed/i);
   });
 
-  it("confirms against the signed-in session, then forgets the code", async () => {
-    const onSteppedUp = vi.fn();
+  const ISSUED = {
+    challenge_id: "chal-1",
+    code_length: 6,
+    expires_in_seconds: 300,
+    resend_after_seconds: 30,
+    development_code: null,
+    phone_number_masked: "+91 •••••• 0001",
+  };
+
+  function routeStepUp(confirmResult: unknown) {
     client.POST.mockImplementation((path: string) =>
-      path === "/api/v1/auth/otp/request/"
-        ? Promise.resolve(
-            ok({
-              challenge_id: "chal-1",
-              code_length: 6,
-              expires_in_seconds: 300,
-              resend_after_seconds: 30,
-              development_code: null,
-            }),
-          )
-        : Promise.resolve(ok({ stepped_up_at: "2026-08-05T12:00:00Z" })),
+      Promise.resolve(path === "/api/v1/auth/finance/step-up/code/" ? ok(ISSUED, 202) : confirmResult),
     );
+  }
+
+  async function sendAndConfirm() {
+    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
+    fireEvent.change(await screen.findByLabelText(/the code we sent you/i), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+  }
+
+  it("sends the code to the signed-in number without asking for one, then forgets the code", async () => {
+    const onSteppedUp = vi.fn();
+    routeStepUp(ok({ stepped_up_at: "2026-08-05T12:00:00Z" }));
     render(<StepUpGate session={null} onSteppedUp={onSteppedUp} />, { wrapper });
 
-    fireEvent.change(screen.getByLabelText(/your mobile number/i), {
-      target: { value: "9000000001" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
-
-    const codeField = await screen.findByLabelText(/the code we sent you/i);
-    fireEvent.change(codeField, { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+    expect(screen.queryByRole("textbox", { name: /mobile number/i })).not.toBeInTheDocument();
+    await sendAndConfirm();
 
     await waitFor(() => expect(onSteppedUp).toHaveBeenCalledTimes(1));
+    expect(client.POST.mock.calls[0]![0]).toBe("/api/v1/auth/finance/step-up/code/");
+    expect(client.POST.mock.calls[0]![1]).toBeUndefined();
     expect(client.POST.mock.calls[1]![0]).toBe("/api/v1/auth/finance/step-up/");
-    expect(client.POST.mock.calls[1]![1].body).toEqual({
-      challenge_id: "chal-1",
-      phone_number: "9000000001",
-      code: "123456",
-    });
-    // Single-use and now spent: the form is back at the phone step.
-    expect(screen.getByLabelText(/your mobile number/i)).toBeInTheDocument();
+    // No number travels with the code: Django checks it against the signed-in account.
+    expect(client.POST.mock.calls[1]![1].body).toEqual({ challenge_id: "chal-1", code: "123456" });
+    // Single-use and now spent: the form is back at the send step.
+    expect(screen.getByRole("button", { name: /send me a code/i })).toBeInTheDocument();
+  });
+
+  it("shows the masked number the code went to", async () => {
+    routeStepUp(ok({ stepped_up_at: "2026-08-05T12:00:00Z" }));
+    render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
+    await screen.findByLabelText(/the code we sent you/i);
+    fireEvent.click(screen.getByRole("button", { name: /send a new code/i }));
+
+    expect(screen.getByText("+91 •••••• 0001")).toBeInTheDocument();
   });
 
   it("shows the instant Django stamped, and claims nothing beyond it", () => {
@@ -333,33 +348,23 @@ describe("the step-up", () => {
     expect(screen.getByRole("time")).toHaveAttribute("datetime", "2026-08-05T12:00:00Z");
   });
 
-  it("does not say which of a wrong code or a wrong session was refused", async () => {
-    // Django does not distinguish them, and neither should the console.
-    client.POST.mockImplementation((path: string) =>
-      path === "/api/v1/auth/otp/request/"
-        ? Promise.resolve(
-            ok({
-              challenge_id: "chal-1",
-              code_length: 6,
-              expires_in_seconds: 300,
-              resend_after_seconds: 30,
-              development_code: null,
-            }),
-          )
-        : Promise.resolve(refusal("invalid_otp", 400)),
-    );
+  it("calls a wrong code wrong", async () => {
+    routeStepUp(refusal("invalid_otp", 400));
     render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
 
-    fireEvent.change(screen.getByLabelText(/your mobile number/i), {
-      target: { value: "9000000001" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
-    fireEvent.change(await screen.findByLabelText(/the code we sent you/i), {
-      target: { value: "123456" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+    await sendAndConfirm();
 
     expect(await screen.findByText(/not right, or it has expired/i)).toBeInTheDocument();
+  });
+
+  it("does not call a correct code wrong when it was for a different number", async () => {
+    routeStepUp(refusal("step_up_identity_mismatch", 403));
+    render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
+
+    await sendAndConfirm();
+
+    expect(await screen.findByText(/for a different number/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not right, or it has expired/i)).not.toBeInTheDocument();
   });
 });
 

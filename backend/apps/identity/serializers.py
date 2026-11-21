@@ -312,6 +312,33 @@ class ActiveRoleSerializer(serializers.Serializer[dict[str, object]]):
     active_role = serializers.CharField(read_only=True, allow_null=True)
 
 
+class StepUpCodeIssuedSerializer(OtpIssuedSerializer):
+    """A step-up code sent to the signed-in person's own number, which is shown masked."""
+
+    phone_number_masked = serializers.CharField(
+        read_only=True, help_text="The number the code went to, all but the last four hidden."
+    )
+
+
+class StepUpVerifySerializer(serializers.Serializer[dict[str, object]]):
+    challenge_id = serializers.UUIDField()
+    code = serializers.CharField(
+        min_length=settings.OTP_CODE_LENGTH,
+        max_length=settings.OTP_CODE_LENGTH,
+        trim_whitespace=False,
+        write_only=True,
+    )
+    phone_number = PhoneNumberField(
+        max_length=32,
+        trim_whitespace=True,
+        required=False,
+        help_text=(
+            "Deprecated and optional. The code is always checked against the signed-in "
+            "person's own number; a different number here is refused."
+        ),
+    )
+
+
 class StepUpSessionSerializer(serializers.Serializer[dict[str, object]]):
     stepped_up_at = serializers.DateTimeField(read_only=True)
 

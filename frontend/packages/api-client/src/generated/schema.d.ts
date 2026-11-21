@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.110.0)
- * Checksum: 4db43b57878a331c
+ * Source:   contracts/openapi/v1.yaml (version 1.114.0)
+ * Checksum: a866012075faf80e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -131,7 +131,30 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Confirms the step-up code, against the signed-in person's own number only. */
         post: operations["auth_finance_step_up_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/finance/step-up/code/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Sends a step-up code to the signed-in person's own number. Takes no number.
+         *
+         *     A step-up re-proves the person already signed in, so the number comes from their account,
+         *     never from the request.
+         */
+        post: operations["auth_finance_step_up_code_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4222,11 +4245,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Maker-checker plus a fresh OTP.
+         * @description Approval with a fresh OTP, by a second person or by the proposer after the preview.
          *
-         *     Two different people is a control against one person acting alone. The step-up is a control
-         *     against neither of them actually being present — an unlocked laptop with an Operations
-         *     session open should not be able to release a week of payouts.
+         *     A proposer's own approval is recorded as `SELF` and logged (`PayoutAuditEvent`), so a
+         *     one-person team can pay without it passing for a second person's. The step-up is a control
+         *     against nobody actually being present — an unlocked laptop with an Operations session open
+         *     should not be able to release a week of payouts.
          */
         post: operations["operations_payout_batch_approve"];
         delete?: never;
@@ -4271,6 +4295,28 @@ export interface paths {
          *     hours apart and the second decision deserves its own proof of presence.
          */
         post: operations["operations_payout_batch_pay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-batches/{batch_id}/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What Approve or Pay would do now: who is sent what, who is skipped and why.
+         *
+         *     Read-only and needs no step-up: looking changes nothing. The confirm that follows carries the
+         *     `version` shown here, so a batch that changed in between is refused rather than acted on.
+         */
+        get: operations["operations_payout_batch_preview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -14664,6 +14710,13 @@ export interface components {
             readonly ifsc: string;
             readonly holder_name: string;
             readonly is_registered_with_provider: boolean;
+            readonly bank_check_provider: string;
+            /** Format: date-time */
+            readonly bank_checked_at: string | null;
+            readonly name_at_bank: string;
+            readonly name_match_result: string;
+            readonly name_match_score: string;
+            readonly is_missing_required_bank_check: boolean;
             /** Format: date-time */
             readonly verified_at: string | null;
             /** Format: uuid */
@@ -14919,6 +14972,7 @@ export interface components {
             /** Format: date-time */
             readonly cancelled_at: string | null;
             readonly transfer: components["schemas"]["OperationsWithdrawalTransfer"] | null;
+            readonly history: components["schemas"]["PayoutAuditEvent"][];
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -15993,6 +16047,8 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly booking_id: string | null;
+            /** @description What this line was for: the visit, rental, project stage or correction behind it, with its name, dates and the id the Partner app opens. */
+            readonly origin: components["schemas"]["PartnerLedgerSource"];
             readonly kind: components["schemas"]["LedgerEntryKindEnum"];
             readonly status: components["schemas"]["LedgerEntryStatusEnum"];
             readonly gross_paise: number;
@@ -16020,6 +16076,37 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["PartnerLedgerEntry"][];
         };
+        /** @description What a ledger line was for, so a statement reads as bookings rather than amounts. */
+        PartnerLedgerSource: {
+            type: components["schemas"]["PartnerLedgerSourceTypeEnum"];
+            title: string;
+            stage_position: number | null;
+            stage_label: string;
+            /** Format: date */
+            starts_on: string | null;
+            /** Format: date */
+            ends_on: string | null;
+            /** Format: uuid */
+            booking_id: string | null;
+            /** Format: uuid */
+            rental_booking_id: string | null;
+            /** Format: uuid */
+            engagement_id: string | null;
+        };
+        /**
+         * @description * `HOME_VISIT` - Home-service visit
+         *     * `RENTAL` - Rental
+         *     * `PROJECT_STAGE` - Project or workforce stage
+         *     * `PROJECT_RETENTION` - Project retention released
+         *     * `BOOKING_FEE` - Booking fee kept as compensation
+         *     * `SITE_VISIT` - Site visit share
+         *     * `ADJUSTMENT` - Correction by Vsolve
+         *     * `WITHDRAWAL_FEE` - Withdrawal fee
+         *     * `WITHDRAWAL_FEE_REFUND` - Withdrawal fee refunded
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        PartnerLedgerSourceTypeEnum: "HOME_VISIT" | "RENTAL" | "PROJECT_STAGE" | "PROJECT_RETENTION" | "BOOKING_FEE" | "SITE_VISIT" | "ADJUSTMENT" | "WITHDRAWAL_FEE" | "WITHDRAWAL_FEE_REFUND" | "OTHER";
         PartnerListing: {
             description: string;
             /** Format: uuid */
@@ -17068,6 +17155,49 @@ export interface components {
          */
         PayoutAccountStatusEnum: "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
         /**
+         * @description * `OPERATIONS` - Operations
+         *     * `PARTNER` - Partner
+         *     * `SYSTEM` - System
+         * @enum {string}
+         */
+        PayoutAuditActorRoleEnum: "OPERATIONS" | "PARTNER" | "SYSTEM";
+        /**
+         * @description One line of a run's or withdrawal's history.
+         *
+         *     Names are looked up when read, never stored: an account deleted later shows as an empty name
+         *     rather than being kept in the log (`PayoutAuditEvent`).
+         */
+        PayoutAuditEvent: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly event_type: components["schemas"]["PayoutAuditEventTypeEnum"];
+            readonly actor_role: components["schemas"]["PayoutAuditActorRoleEnum"];
+            /** Format: uuid */
+            readonly actor_id: string | null;
+            readonly actor_name: string;
+            readonly approval_basis: string;
+            /** Format: uuid */
+            readonly partner_id: string | null;
+            readonly partner_name: string;
+            readonly amount_paise: number | null;
+            readonly reason: string;
+            readonly details: unknown;
+            /** Format: date-time */
+            readonly occurred_at: string;
+        };
+        /**
+         * @description * `RUN_PROPOSED` - Run proposed
+         *     * `RUN_APPROVED` - Run approved
+         *     * `RUN_PAY_STARTED` - Payment started
+         *     * `RUN_CANCELLED` - Run cancelled
+         *     * `PARTNER_SKIPPED` - Partner skipped
+         *     * `WITHDRAWAL_REQUESTED` - Withdrawal requested
+         *     * `WITHDRAWAL_APPROVED` - Withdrawal approved
+         *     * `WITHDRAWAL_DECLINED` - Withdrawal declined
+         * @enum {string}
+         */
+        PayoutAuditEventTypeEnum: "RUN_PROPOSED" | "RUN_APPROVED" | "RUN_PAY_STARTED" | "RUN_CANCELLED" | "PARTNER_SKIPPED" | "WITHDRAWAL_REQUESTED" | "WITHDRAWAL_APPROVED" | "WITHDRAWAL_DECLINED";
+        /**
          * @description A run, with both signatures on it.
          *
          *     `proposed_by_id` and `approved_by_id` are both published so a console can render the
@@ -17100,6 +17230,7 @@ export interface components {
             readonly currency: string;
             readonly item_count: number;
             readonly items: components["schemas"]["PayoutBatchItem"][];
+            readonly history: components["schemas"]["PayoutAuditEvent"][];
             /** Format: date-time */
             readonly server_now: string;
             /** Format: date-time */
@@ -17107,10 +17238,11 @@ export interface components {
         };
         /**
          * @description * `OPERATIONS` - Approved by Operations
+         *     * `SELF` - Approved by the proposer
          *     * `POLICY` - Approved by withdrawal policy
          * @enum {string}
          */
-        PayoutBatchApprovalBasisEnum: "OPERATIONS" | "POLICY";
+        PayoutBatchApprovalBasisEnum: "OPERATIONS" | "SELF" | "POLICY";
         /** @description One transfer to one Partner: the sum of its ledger lines, refunds included. */
         PayoutBatchItem: {
             /** Format: uuid */
@@ -17183,6 +17315,30 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["PayoutBatchList"][];
+        };
+        /** @description What Approve or Pay would do right now. Building it changes nothing. */
+        PayoutBatchPreview: {
+            /** Format: uuid */
+            batch_id: string;
+            version: number;
+            status: components["schemas"]["PayoutBatchStatusEnum"];
+            items: components["schemas"]["PayoutBatchPreviewItem"][];
+            send_count: number;
+            send_total_paise: number;
+            skip_count: number;
+            skip_total_paise: number;
+            includes_actor: boolean;
+        };
+        PayoutBatchPreviewItem: {
+            /** Format: uuid */
+            item_id: string;
+            /** Format: uuid */
+            partner_id: string;
+            partner_name: string;
+            amount_paise: number;
+            account_last4: string;
+            ifsc: string;
+            skip_reason: string;
         };
         /**
          * @description * `DRAFT` - Draft
@@ -20974,9 +21130,27 @@ export interface components {
             /** Format: time */
             end_time: string;
         };
+        /** @description A step-up code sent to the signed-in person's own number, which is shown masked. */
+        StepUpCodeIssued: {
+            /** Format: uuid */
+            readonly challenge_id: string;
+            readonly expires_in_seconds: number;
+            readonly resend_after_seconds: number;
+            readonly code_length: number;
+            readonly development_code: string | null;
+            /** @description The number the code went to, all but the last four hidden. */
+            readonly phone_number_masked: string;
+        };
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
+        };
+        StepUpVerifyRequest: {
+            /** Format: uuid */
+            challenge_id: string;
+            code: string;
+            /** @description Deprecated and optional. The code is always checked against the signed-in person's own number; a different number here is refused. */
+            phone_number?: string;
         };
         /**
          * @description * `SINGLE_PARTNER_SEQUENTIAL` - Single Partner sequential
@@ -22254,9 +22428,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OtpVerifyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["OtpVerifyRequest"];
-                "multipart/form-data": components["schemas"]["OtpVerifyRequest"];
+                "application/json": components["schemas"]["StepUpVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StepUpVerifyRequest"];
+                "multipart/form-data": components["schemas"]["StepUpVerifyRequest"];
             };
         };
         responses: {
@@ -22266,6 +22440,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StepUpSession"];
+                };
+            };
+            /** @description `invalid_otp`: the code is wrong, used or expired. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `step_up_identity_mismatch`: a number other than the signed-in person's was sent; or `account_blocked`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    auth_finance_step_up_code_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpCodeIssued"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -22350,7 +22577,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description The verified number is not the signed-in person's. */
+            /** @description `step_up_identity_mismatch`: the verified number is not the signed-in person's. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -31814,6 +32041,51 @@ export interface operations {
             };
         };
     };
+    operations_payout_batch_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatchPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     "operations_payout_batches_bank_export.csv_retrieve": {
         parameters: {
             query?: never;
@@ -38927,6 +39199,7 @@ export interface operations {
                     "application/json": components["schemas"]["PartnerPayoutAccount"];
                 };
             };
+            /** @description `validation_error`, `payout_account_rejected`, or `payout_account_not_valid_at_bank`: the bank checked the account and it cannot receive money; `details.bank_status` says why (`INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`, `INVALID_IFSC_FAIL`, `NRE_ACCOUNT_FAIL`, `FRAUD_ACCOUNT`). Nothing was saved. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -38943,6 +39216,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description `payout_account_in_use`: another partner's live account is this bank account. Nothing was saved. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -38951,6 +39233,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description `payout_accounts_unavailable`, `payout_account_provider_unavailable`, or `payout_account_bank_check_unavailable`: the bank check did not finish. Nothing was saved; submitting again later is safe. */
             503: {
                 headers: {
                     [name: string]: unknown;

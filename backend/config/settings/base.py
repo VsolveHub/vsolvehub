@@ -424,7 +424,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.110.0",
+    "VERSION": "1.114.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -508,6 +508,9 @@ SPECTACULAR_SETTINGS = {
         # so each new choice set is named here rather than left to a positional hash.
         "PayoutBatchKindEnum": "apps.payouts.models.PayoutBatch.Kind",
         "PayoutBatchApprovalBasisEnum": "apps.payouts.models.PayoutBatch.ApprovalBasis",
+        "PayoutAuditEventTypeEnum": "apps.payouts.models.PayoutAuditEvent.EventType",
+        "PartnerLedgerSourceTypeEnum": "apps.payouts.ledger_sources.SOURCE_TYPES",
+        "PayoutAuditActorRoleEnum": "apps.payouts.models.PayoutAuditEvent.ActorRole",
         "PartnerWithdrawalStatusEnum": "apps.payouts.serializers.WITHDRAWAL_STATUSES",
         "WithdrawalRefusalReasonEnum": "apps.payouts.services.WITHDRAWAL_REFUSAL_REASONS",
         "WithdrawalReviewReasonEnum": "apps.payouts.services.WITHDRAWAL_REVIEW_REASONS",
@@ -762,6 +765,21 @@ CASHFREE_PAYOUT_API_VERSION = env("CASHFREE_PAYOUT_API_VERSION", default="2024-0
 CASHFREE_PAYOUT_CLIENT_ID = env("CASHFREE_PAYOUT_CLIENT_ID", default="")
 CASHFREE_PAYOUT_CLIENT_SECRET = env("CASHFREE_PAYOUT_CLIENT_SECRET", default="")
 CASHFREE_PAYOUT_PUBLIC_KEY = env("CASHFREE_PAYOUT_PUBLIC_KEY", default="").replace("\\n", "\n")
+# Cashfree Bank Account Verification (Secure ID), run on every account a Partner adds when
+# `PAYOUT_PROVIDER=cashfree`. Its own keys from the Secure ID dashboard, not the Payouts ones;
+# without them adding a bank account is refused rather than left unchecked. A penny-drop waits
+# on the bank over IMPS, so its read timeout is longer than a payout call's.
+CASHFREE_VERIFICATION_API_BASE_URL = env(
+    "CASHFREE_VERIFICATION_API_BASE_URL", default="https://sandbox.cashfree.com/verification"
+)
+CASHFREE_VERIFICATION_CLIENT_ID = env("CASHFREE_VERIFICATION_CLIENT_ID", default="")
+CASHFREE_VERIFICATION_CLIENT_SECRET = env("CASHFREE_VERIFICATION_CLIENT_SECRET", default="")
+CASHFREE_VERIFICATION_PUBLIC_KEY = env("CASHFREE_VERIFICATION_PUBLIC_KEY", default="").replace(
+    "\\n", "\n"
+)
+CASHFREE_VERIFICATION_READ_TIMEOUT_SECONDS = env.float(
+    "CASHFREE_VERIFICATION_READ_TIMEOUT_SECONDS", default=30.0
+)
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
 # paying people, and a wrong payout — unlike a wrong capture — cannot be refunded. The name is
 # older than test mode: RazorpayX test keys need it on too, and move only dummy money.

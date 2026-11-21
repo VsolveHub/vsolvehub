@@ -116,6 +116,20 @@ def guard_cashfree_sandbox(base_url: str) -> None:
         )
 
 
+def guard_cashfree_verification_sandbox(base_url: str) -> None:
+    """Outside production, the bank check must point at Cashfree's sandbox too.
+
+    A live penny-drop is billed and sends a real rupee to a real account, so a test run that
+    reached it would verify strangers' accounts on the company's balance.
+    """
+
+    if CASHFREE_PAYOUT_LIVE_HOST in base_url:
+        raise ImproperlyConfigured(
+            "CASHFREE_VERIFICATION_API_BASE_URL is Cashfree's live host. Only production may use "
+            "it; use https://sandbox.cashfree.com/verification here."
+        )
+
+
 def guard_per_host_sessions(session_domain: str | None, csrf_domain: str | None) -> None:
     """Sessions stay scoped to the host that issued them.
 

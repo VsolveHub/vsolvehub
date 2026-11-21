@@ -21,6 +21,7 @@ off the Partner booking projection: the safest filter is the one that cannot be 
 
 import hashlib
 import json
+from dataclasses import asdict
 from typing import Any, cast
 from uuid import UUID
 
@@ -48,6 +49,7 @@ from apps.partners.permissions import (
     IsPartnerUser,
 )
 from apps.payouts.exceptions import PayoutAccountNotFoundApiError
+from apps.payouts.ledger_sources import describe_ledger_sources
 from apps.payouts.models import (
     PartnerLedgerEntry,
     PartnerPayoutAccount,
@@ -75,6 +77,7 @@ from apps.payouts.serializers import (
     PartnerWithdrawalSerializer,
     PayoutBatchListSerializer,
     PayoutBatchPageSerializer,
+    PayoutBatchPreviewSerializer,
     PayoutBatchSerializer,
     PayoutWebhookAcceptedSerializer,
     ProposePayoutBatchRequestSerializer,
@@ -90,6 +93,7 @@ from apps.payouts.services import (
     cancel_payout_batch,
     decline_withdrawal,
     partner_balance_paise,
+    preview_payout_batch,
     propose_payout_batch,
     quote_withdrawal,
     record_adjustment,
@@ -177,7 +181,10 @@ def _partner_withdrawals() -> QuerySet[PayoutBatchItem]:
 
 def _operations_withdrawals() -> QuerySet[PayoutBatch]:
     return PayoutBatch.objects.filter(kind=PayoutBatch.Kind.WITHDRAWAL).prefetch_related(
-        "items__payout_account", "items__partner__user", "items__entries__ledger_entry"
+        "items__payout_account",
+        "items__partner__user",
+        "items__entries__ledger_entry",
+        "audit_events",
     )
 
 
@@ -254,11 +261,16 @@ class PartnerLedgerView(APIView):
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(cast(User, request.user))
-        queryset = with_hold_flags(PartnerLedgerEntry.objects.filter(partner=profile))
+        queryset = with_hold_flags(
+            PartnerLedgerEntry.objects.filter(partner=profile).select_related("corrects")
+        )
         paginator = LedgerCursorPagination()
         page = paginator.paginate_queryset(queryset, request, self)
+        lines = list(page or [])
         return paginator.get_paginated_response(
-            PartnerLedgerEntrySerializer(page or [], many=True).data
+            PartnerLedgerEntrySerializer(
+                lines, many=True, context={"sources": describe_ledger_sources(lines)}
+            ).data
         )
 
 
@@ -283,10 +295,33 @@ class PartnerPayoutAccountView(APIView):
         request=PartnerPayoutAccountCreateSerializer,
         responses={
             201: PartnerPayoutAccountSerializer,
-            400: ApiErrorSerializer,
+            400: OpenApiResponse(
+                ApiErrorSerializer,
+                description=(
+                    "`validation_error`, `payout_account_rejected`, or "
+                    "`payout_account_not_valid_at_bank`: the bank checked the account and it "
+                    "cannot receive money; `details.bank_status` says why "
+                    "(`INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`, `INVALID_IFSC_FAIL`, "
+                    "`NRE_ACCOUNT_FAIL`, `FRAUD_ACCOUNT`). Nothing was saved."
+                ),
+            ),
             403: ApiErrorSerializer,
+            409: OpenApiResponse(
+                ApiErrorSerializer,
+                description=(
+                    "`payout_account_in_use`: another partner's live account is this bank "
+                    "account. Nothing was saved."
+                ),
+            ),
             429: ApiErrorSerializer,
-            503: ApiErrorSerializer,
+            503: OpenApiResponse(
+                ApiErrorSerializer,
+                description=(
+                    "`payout_accounts_unavailable`, `payout_account_provider_unavailable`, or "
+                    "`payout_account_bank_check_unavailable`: the bank check did not finish. "
+                    "Nothing was saved; submitting again later is safe."
+                ),
+            ),
         },
     )
     def post(self, request: Request) -> Response:
@@ -834,12 +869,38 @@ class PayoutBatchDetailView(APIView):
         return Response(_batch_projection(batch_id))
 
 
-class PayoutBatchApproveView(APIView):
-    """Maker-checker plus a fresh OTP.
+class PayoutBatchPreviewView(APIView):
+    """What Approve or Pay would do now: who is sent what, who is skipped and why.
 
-    Two different people is a control against one person acting alone. The step-up is a control
-    against neither of them actually being present — an unlocked laptop with an Operations
-    session open should not be able to release a week of payouts.
+    Read-only and needs no step-up: looking changes nothing. The confirm that follows carries the
+    `version` shown here, so a batch that changed in between is refused rather than acted on.
+    """
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_payout_batch_preview",
+        responses={
+            200: PayoutBatchPreviewSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, batch_id: UUID) -> Response:
+        get_object_or_404(PayoutBatch, id=batch_id)
+        preview = preview_payout_batch(batch_id=batch_id, actor=cast(User, request.user))
+        return Response(PayoutBatchPreviewSerializer(asdict(preview)).data)
+
+
+class PayoutBatchApproveView(APIView):
+    """Approval with a fresh OTP, by a second person or by the proposer after the preview.
+
+    A proposer's own approval is recorded as `SELF` and logged (`PayoutAuditEvent`), so a
+    one-person team can pay without it passing for a second person's. The step-up is a control
+    against nobody actually being present — an unlocked laptop with an Operations session open
+    should not be able to release a week of payouts.
     """
 
     permission_classes = (IsAuthenticated, IsOperationsUser, HasRecentOperationsStepUp)
@@ -900,6 +961,7 @@ class PayoutBatchPayView(APIView):
             start_paying_batch(
                 batch_id=batch.id,
                 expected_version=serializer.validated_data["expected_version"],
+                actor=actor,
             )
             return status.HTTP_200_OK, _batch_projection(batch.id)
 

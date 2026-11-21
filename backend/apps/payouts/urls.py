@@ -28,6 +28,7 @@ from apps.payouts.views import (
     PayoutBatchDetailView,
     PayoutBatchListView,
     PayoutBatchPayView,
+    PayoutBatchPreviewView,
     RazorpayXPayoutWebhookView,
     UnpayablePartnersView,
 )
@@ -79,6 +80,11 @@ urlpatterns = [
         "operations/payout-batches/<uuid:batch_id>/",
         PayoutBatchDetailView.as_view(),
         name="operations-payout-batch",
+    ),
+    path(
+        "operations/payout-batches/<uuid:batch_id>/preview/",
+        PayoutBatchPreviewView.as_view(),
+        name="operations-payout-batch-preview",
     ),
     path(
         "operations/payout-batches/<uuid:batch_id>/approve/",

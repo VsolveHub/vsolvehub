@@ -1,5 +1,70 @@
 # API Contract Changelog
 
+## 1.114.0 - Step-up confirms the signed-in person's own number
+
+- **Added** `POST /auth/finance/step-up/code/` (`StepUpCodeIssued`): sends a step-up code to the
+  signed-in person's own number, taking no number from the request; returns the `OtpIssued` fields
+  plus `phone_number_masked`.
+- **Changed** `POST /auth/finance/step-up/` takes `StepUpVerify`: `challenge_id` and `code`.
+  `phone_number` is optional and deprecated; a number other than the signed-in person's answers
+  `403 step_up_identity_mismatch`. The code is checked against the signed-in person's own number,
+  and verifying a step-up no longer creates an account for the number it was sent to.
+- **Behaviour** `POST /auth/firebase/step-up/` answers a token for another number with
+  `403 step_up_identity_mismatch` instead of a generic `403`.
+
+## 1.113.0 - Bank accounts checked with the bank (Cashfree)
+
+Additive.
+
+- **Behaviour** `POST /partner/payout-account/` checks the account with the bank (Cashfree Bank
+  Account Verification, a penny-drop) before registering it, when `PAYOUT_PROVIDER` is `cashfree`
+  (and with a deterministic fake in development). RazorpayX deployments are not checked.
+- **Added** `400 payout_account_not_valid_at_bank` on that endpoint: the bank says the account
+  cannot receive money; `details.bank_status` is `INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`,
+  `INVALID_IFSC_FAIL`, `NRE_ACCOUNT_FAIL` or `FRAUD_ACCOUNT`. Nothing is saved.
+- **Added** `503 payout_account_bank_check_unavailable` (retryable): the check did not finish.
+  Nothing is saved.
+- **Added** `409 payout_account_in_use` on that endpoint: another partner's live account is the
+  same bank account. Nothing is saved. On Cashfree, a bank account already registered as a
+  beneficiary that no partner here holds is reused instead of refused.
+- **Added** on `OperationsPayoutAccount`: `bank_check_provider`, `bank_checked_at`,
+  `name_at_bank` (the holder name as the bank holds it), `name_match_result` (`DIRECT_MATCH`,
+  `GOOD_PARTIAL_MATCH`, `MODERATE_PARTIAL_MATCH`, `POOR_PARTIAL_MATCH`, `NO_MATCH`, or empty),
+  `name_match_score`, and `is_missing_required_bank_check`.
+- **Behaviour** `POST /operations/payout-accounts/{account_id}/verify/` answers
+  `409 payout_account_review_invalid` for an account that was never checked with the bank on a
+  Cashfree deployment.
+
+## 1.112.0 - What each Partner ledger line was for
+
+Additive.
+
+- **Added** `origin` (`PartnerLedgerSource`) on `PartnerLedgerEntry` (`GET /partner/ledger/` and
+  the ledger adjustment response): the source of the line, so a statement reads as bookings.
+  `type` (`PartnerLedgerSourceTypeEnum`: `HOME_VISIT`, `RENTAL`, `PROJECT_STAGE`,
+  `PROJECT_RETENTION`, `BOOKING_FEE`, `SITE_VISIT`, `ADJUSTMENT`, `WITHDRAWAL_FEE`,
+  `WITHDRAWAL_FEE_REFUND`, `OTHER`), `title` (the service or item name, untranslated),
+  `stage_position` and `stage_label` for a project stage, `starts_on`/`ends_on`, and the id the
+  Partner app opens: `booking_id`, `rental_booking_id` or `engagement_id`. A refund reversal
+  carries its booking's origin; `kind: REVERSAL` says it was taken back.
+
+## 1.111.0 - Payouts: one-person approval, review before acting, audit history
+
+- **Added** `GET /operations/payout-batches/{batch_id}/preview/` (`PayoutBatchPreview`): what
+  Approve or Pay would do now. Each reserved transfer with partner, amount, bank last four and
+  IFSC, and `skip_reason` when the last-moment checks would skip it (`payouts_paused`,
+  `partner_suspended`, `account_not_payable`, `earning_on_hold`, …); totals to send and to skip;
+  `includes_actor` when it would pay the caller's own Partner account. Read-only, no step-up.
+- **Added** `history` (`PayoutAuditEvent[]`) on `PayoutBatch` and `OperationsWithdrawal`: an
+  append-only log of who proposed, approved, started payment, cancelled, requested, declined, and
+  every Partner skipped with the reason. Names are resolved when read and are empty for a deleted
+  account.
+- **Added** `SELF` to `PayoutBatchApprovalBasisEnum`: the proposer approved their own run.
+- **Behaviour** `POST /operations/payout-batches/{batch_id}/approve/` no longer answers
+  `403 self_approval_denied` to the proposer; it approves with `approval_basis: SELF`.
+- **Behaviour** approve, pay and withdrawal approve answer `403 self_payment_denied` when the
+  payout includes the caller's own Partner account.
+
 ## 1.110.0 - Cashfree Payouts webhook
 
 Additive.

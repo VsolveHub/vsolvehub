@@ -1,6 +1,17 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Skeleton, Spinner, formatMoney, useT } from "@vsolve/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorState,
+  Skeleton,
+  Spinner,
+  formatDate,
+  formatMoney,
+  useT,
+} from "@vsolve/ui";
+import Link from "next/link";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
@@ -62,6 +73,69 @@ function feeLabelKey(entry: LedgerEntry): string | null {
     return "money.earnings.entry.withdrawalFeeRefund";
   }
   return null;
+}
+
+type LedgerOrigin = LedgerEntry["origin"];
+
+/** Where a line's booking opens in this app; null when there is nothing to open. */
+export function originHref(origin: LedgerOrigin): string | null {
+  if (origin.type === "HOME_VISIT" && origin.booking_id) return `/work/jobs/${origin.booking_id}`;
+  if (origin.type === "RENTAL" && origin.rental_booking_id) {
+    return `/rentals/bookings?booking=${origin.rental_booking_id}`;
+  }
+  if (origin.engagement_id) return `/work/jobs/${origin.engagement_id}`;
+  return null;
+}
+
+/** The day, or the first and last day, the money was for. */
+function originDates(origin: LedgerOrigin): string {
+  if (!origin.starts_on) return "";
+  const start = formatDate(origin.starts_on);
+  return origin.ends_on && origin.ends_on !== origin.starts_on
+    ? `${start} – ${formatDate(origin.ends_on)}`
+    : start;
+}
+
+/**
+ * What a line was for: the service or item name (tappable to its booking), then its kind and
+ * dates. Withdrawal fees keep their own wording.
+ */
+export function EntryOrigin({ entry }: { entry: LedgerEntry }) {
+  const t = useT();
+  const origin = entry.origin;
+  const typeLabel = t(`money.earnings.origin.${origin.type}`);
+  const title = origin.title || typeLabel;
+  const href = originHref(origin);
+  const meta = [
+    origin.title ? typeLabel : "",
+    origin.stage_position !== null && origin.stage_position !== undefined
+      ? t("money.earnings.origin.stage", {
+          position: origin.stage_position,
+          label: origin.stage_label,
+        })
+      : "",
+    originDates(origin),
+    entry.kind === "REVERSAL" ? t("money.earnings.origin.refund") : "",
+  ].filter(Boolean);
+
+  return (
+    <>
+      {href ? (
+        <Link
+          href={href}
+          aria-label={t("money.earnings.origin.open", { title })}
+          className="block truncate font-semibold text-text underline-offset-2 hover:underline"
+        >
+          {title}
+        </Link>
+      ) : (
+        <p className="truncate font-semibold text-text">{title}</p>
+      )}
+      {meta.length > 0 ? (
+        <p className="text-xs text-text-muted">{meta.join(" · ")}</p>
+      ) : null}
+    </>
+  );
 }
 
 const BALANCE_TONE = {
@@ -284,7 +358,11 @@ export function EarningsPanel() {
                   className="flex items-center justify-between gap-3 bg-surface px-4 py-3"
                 >
                   <div className="min-w-0">
-                    <Badge tone={STATUS_TONE[entry.status] ?? "neutral"}>
+                    {feeLabelKey(entry) ? null : <EntryOrigin entry={entry} />}
+                    <Badge
+                      className={feeLabelKey(entry) ? undefined : "mt-1"}
+                      tone={STATUS_TONE[entry.status] ?? "neutral"}
+                    >
                       {STATUS_LABEL_KEY[entry.status] ? t(STATUS_LABEL_KEY[entry.status]!) : entry.status}
                     </Badge>
                     {feeLabelKey(entry) ? (

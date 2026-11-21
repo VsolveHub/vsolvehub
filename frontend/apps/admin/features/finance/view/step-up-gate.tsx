@@ -7,8 +7,8 @@ import {
   isFirebasePhoneAuth,
   mapFirebaseError,
   sanitizeCodeInput,
-  sanitizePhoneInput,
   startFirebasePhoneVerification,
+  useCurrentSession,
   type OtpFailure,
 } from "@vsolve/query";
 import { Button, Card, ErrorState, Field, Input } from "@vsolve/ui";
@@ -17,6 +17,7 @@ import { useRef, useState } from "react";
 import { getApiClient } from "@/lib/api/browser";
 
 import {
+  isStepUpIdentityMismatch,
   useConfirmFirebaseStepUp,
   useConfirmStepUp,
   useRequestStepUpCode,
@@ -44,6 +45,13 @@ import {
  * Django's own OTP (MSG91) or Firebase, whichever `NEXT_PUBLIC_PHONE_AUTH_PROVIDER`
  * names — the same switch the sign-in screen follows (contract 1.77.0). Both end in
  * the same `stepped_up_at`; only the proof sent to Django differs.
+ *
+ * ## Always the signed-in person's own number
+ *
+ * Nobody types a number here. The Django path asks for a code without one and Django sends it
+ * to the account's own number; the Firebase path, which has to send the SMS from the browser,
+ * uses the number from the signed-in session. A code for anyone else proves nothing about the
+ * person signed in, and used to be refused as if the code itself were wrong (contract 1.114.0).
  *
  * ## The code is never stored
  *
@@ -119,34 +127,48 @@ function FailureBanner({ failure }: { failure: OtpFailure | null }) {
   );
 }
 
-function PhoneStep({
-  phone,
-  onPhoneChange,
+/** `+91 •••••• 0002`: enough to recognise your own number, not enough to read it out. */
+export function maskPhone(phone: string): string {
+  return phone.length > 7 ? `${phone.slice(0, 3)} •••••• ${phone.slice(-4)}` : "••••";
+}
+
+/** The signed-in operator's own number, from the session Django already holds. */
+function useOwnPhone(): { phone: string | null; loading: boolean } {
+  const session = useCurrentSession(getApiClient());
+  return { phone: session.data?.user?.phone_number || null, loading: session.isPending };
+}
+
+function SendStep({
+  maskedPhone,
   phoneError,
   sending,
   onSend,
 }: {
-  phone: string;
-  onPhoneChange: (value: string) => void;
+  maskedPhone: string | null;
   phoneError?: string;
   sending: boolean;
   onSend: () => void;
 }) {
   return (
     <div className="mt-4 max-w-sm">
-      <Field
-        label="Your mobile number"
-        description="The number your Operations access was granted to."
-        required
-        error={phoneError}
-      >
-        <Input
-          value={phone}
-          inputMode="tel"
-          autoComplete="tel"
-          onChange={(event) => onPhoneChange(sanitizePhoneInput(event.target.value))}
-        />
-      </Field>
+      <p className="text-sm text-text-secondary">
+        {maskedPhone ? (
+          <>
+            We will send a code to your number,{" "}
+            <span data-numeric className="font-medium text-text">
+              {maskedPhone}
+            </span>
+            .
+          </>
+        ) : (
+          "We will send a code to the number you signed in with."
+        )}
+      </p>
+      {phoneError ? (
+        <p role="alert" className="mt-2 text-sm text-danger-text">
+          {phoneError}
+        </p>
+      ) : null}
       <Button className="mt-4" loading={sending} loadingLabel="Sending a code" onClick={onSend}>
         Send me a code
       </Button>
@@ -161,7 +183,7 @@ function CodeStep({
   codeError,
   confirming,
   onConfirm,
-  onUseDifferentNumber,
+  onSendAgain,
   developmentCode,
 }: {
   code: string;
@@ -170,7 +192,7 @@ function CodeStep({
   codeError?: string;
   confirming: boolean;
   onConfirm: () => void;
-  onUseDifferentNumber: () => void;
+  onSendAgain: () => void;
   developmentCode?: string | null;
 }) {
   return (
@@ -199,8 +221,8 @@ function CodeStep({
         >
           Confirm
         </Button>
-        <Button variant="ghost" onClick={onUseDifferentNumber}>
-          Use a different number
+        <Button variant="ghost" onClick={onSendAgain}>
+          Send a new code
         </Button>
       </div>
     </div>
@@ -211,41 +233,41 @@ function CodeStep({
 function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) => void }) {
   const requestCode = useRequestStepUpCode();
   const confirm = useConfirmStepUp();
+  const own = useOwnPhone();
 
-  const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [developmentCode, setDevelopmentCode] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [codeLength, setCodeLength] = useState(6);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const failure = requestCode.error ? describeOtpFailure(requestCode.error) : null;
+
+  const startOver = () => {
+    setChallengeId(null);
+    setCode("");
+    setDevelopmentCode(null);
+    confirm.reset();
+  };
 
   return (
     <>
       <FailureBanner failure={failure} />
 
       {challengeId === null ? (
-        <PhoneStep
-          phone={phone}
-          onPhoneChange={setPhone}
+        <SendStep
+          maskedPhone={sentTo ?? (own.phone ? maskPhone(own.phone) : null)}
           sending={requestCode.isPending}
           onSend={() =>
-            requestCode.mutate(
-              // `""` is the non-partner path, the same value `useOtpFlow`
-              // sends when no role was asked for. An operator stepping up is
-              // already signed in as staff; this challenge re-proves the
-              // person, and sending `"partner"` here would ask Django to
-              // issue a code against a role they do not hold.
-              { phone_number: phone, intended_role: "" },
-              {
-                onSuccess: (issued) => {
-                  setChallengeId(issued.challenge_id);
-                  setCodeLength(issued.code_length);
-                  setDevelopmentCode(issued.development_code ?? null);
-                  setCode(issued.development_code ?? "");
-                },
+            requestCode.mutate(undefined, {
+              onSuccess: (issued) => {
+                setChallengeId(issued.challenge_id);
+                setCodeLength(issued.code_length);
+                setSentTo(issued.phone_number_masked);
+                setDevelopmentCode(issued.development_code ?? null);
+                setCode(issued.development_code ?? "");
               },
-            )
+            })
           }
         />
       ) : (
@@ -256,30 +278,25 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
           onCodeChange={setCode}
           codeError={
             confirm.isError
-              ? "That code is not right, or it has expired. Ask for a new one."
+              ? isStepUpIdentityMismatch(confirm.error)
+                ? "That confirmation was for a different number. Send a new code."
+                : "That code is not right, or it has expired. Ask for a new one."
               : undefined
           }
           confirming={confirm.isPending}
           onConfirm={() =>
             confirm.mutate(
-              { challengeId, phoneNumber: phone, code },
+              { challengeId, code },
               {
                 onSuccess: (stepped) => {
                   // Single-use and now spent.
-                  setCode("");
-                  setDevelopmentCode(null);
-                  setChallengeId(null);
+                  startOver();
                   onSteppedUp(stepped);
                 },
               },
             )
           }
-          onUseDifferentNumber={() => {
-            setChallengeId(null);
-            setCode("");
-            setDevelopmentCode(null);
-            confirm.reset();
-          }}
+          onSendAgain={startOver}
         />
       )}
     </>
@@ -294,8 +311,10 @@ const FIREBASE_CODE_LENGTH = 6;
  */
 function FirebaseStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) => void }) {
   const confirmStepUp = useConfirmFirebaseStepUp();
+  // Firebase sends the SMS from the browser, so it needs the number here: always the
+  // signed-in session's own, never one typed in.
+  const { phone } = useOwnPhone();
 
-  const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [awaitingCode, setAwaitingCode] = useState(false);
   const [sending, setSending] = useState(false);
@@ -332,6 +351,10 @@ function FirebaseStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSess
 
   const send = async () => {
     if (sending) return;
+    if (!phone) {
+      setPhoneError("We could not read the number you signed in with. Reload the page and try again.");
+      return;
+    }
     setSending(true);
     setFailure(null);
     setPhoneError(undefined);
@@ -348,7 +371,7 @@ function FirebaseStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSess
       return;
     }
     try {
-      confirmCodeRef.current = await startFirebasePhoneVerification(phone);
+      confirmCodeRef.current = await startFirebasePhoneVerification(formatToE164(phone));
       setCode("");
       setAwaitingCode(true);
     } catch (error) {
@@ -383,14 +406,14 @@ function FirebaseStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSess
         // The token is spent whatever Django said, so the next try needs a new code.
         backToPhone();
         setFailure(
-          error instanceof ApiRequestError && error.status === 403
+          isStepUpIdentityMismatch(error)
             ? {
                 kind: "unexpected",
                 title: "That is not your number",
                 message:
                   "Confirm with the mobile number you signed in with. Nothing was confirmed.",
                 severity: "error",
-                reference: error.requestId,
+                reference: error instanceof ApiRequestError ? error.requestId : null,
               }
             : {
                 kind: "unexpected",
@@ -420,15 +443,11 @@ function FirebaseStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSess
           codeError={codeError}
           confirming={confirming}
           onConfirm={() => void confirm()}
-          onUseDifferentNumber={backToPhone}
+          onSendAgain={backToPhone}
         />
       ) : (
-        <PhoneStep
-          phone={phone}
-          onPhoneChange={(value) => {
-            setPhone(value);
-            setPhoneError(undefined);
-          }}
+        <SendStep
+          maskedPhone={phone ? maskPhone(phone) : null}
           phoneError={phoneError}
           sending={sending}
           onSend={() => void send()}
