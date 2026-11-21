@@ -77,7 +77,7 @@ export function InterviewDialog({
           {/* Header */}
           <View className="flex-row items-center justify-between border-b border-line pb-3.5">
             <View className="flex-1 pr-2">
-              <Text className="text-base font-extrabold text-navy-900">
+              <Text className="text-base font-bold text-navy-900">
                 Interview {candidateName}
               </Text>
               <Text className="text-xs text-text-muted">
@@ -109,7 +109,7 @@ export function InterviewDialog({
                   className="flex-row items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5"
                 >
                   <Text className="text-sm font-semibold text-navy-900">{day}</Text>
-                  <Calendar size={16} color="#64748b" />
+                  <Calendar size={16} color="#756c5e" />
                 </Pressable>
               </View>
 
@@ -120,7 +120,7 @@ export function InterviewDialog({
                   className="flex-row items-center justify-between rounded-xl border border-line bg-surface px-3 py-2.5"
                 >
                   <Text className="text-sm font-semibold text-navy-900">{time}</Text>
-                  <Clock size={16} color="#64748b" />
+                  <Clock size={16} color="#756c5e" />
                 </Pressable>
               </View>
             </View>
@@ -140,11 +140,11 @@ export function InterviewDialog({
                       }`}
                     >
                       {m.value === "IN_PERSON" ? (
-                        <MapPin size={13} color={on ? "#ffffff" : "#64748b"} />
+                        <MapPin size={13} color={on ? "#ffffff" : "#756c5e"} />
                       ) : m.value === "PHONE" ? (
-                        <Phone size={13} color={on ? "#ffffff" : "#64748b"} />
+                        <Phone size={13} color={on ? "#ffffff" : "#756c5e"} />
                       ) : (
-                        <Video size={13} color={on ? "#ffffff" : "#64748b"} />
+                        <Video size={13} color={on ? "#ffffff" : "#756c5e"} />
                       )}
                       <Text
                         className={`text-xs font-semibold ${
@@ -165,7 +165,7 @@ export function InterviewDialog({
                 <Text className="text-xs font-semibold text-text-muted">Where / Location</Text>
                 <TextInput
                   placeholder="Office address or branch location"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor="#a89f90"
                   maxLength={240}
                   value={place}
                   onChangeText={setPlace}
@@ -183,7 +183,7 @@ export function InterviewDialog({
                 multiline
                 numberOfLines={3}
                 placeholder="e.g. Please bring your original certificates and resume."
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#a89f90"
                 maxLength={480}
                 value={note}
                 onChangeText={setNote}

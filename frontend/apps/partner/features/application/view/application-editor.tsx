@@ -147,10 +147,10 @@ export function StepFrame({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-5 rounded-card border border-line bg-surface p-3.5 shadow-xs sm:p-6">
-      <header className="flex flex-col gap-1 border-b border-line pb-4">
-        <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-text">{title}</h1>
-        {description ? <p className="text-xs sm:text-sm text-text-secondary">{description}</p> : null}
+    <section className="flex flex-col gap-6 rounded-card border border-line bg-surface p-4 shadow-xs sm:p-8">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="text-xl font-bold tracking-tight text-text sm:text-2xl">{title}</h1>
+        {description ? <p className="text-sm leading-relaxed text-text-secondary">{description}</p> : null}
       </header>
       {children}
     </section>

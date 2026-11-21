@@ -24,6 +24,8 @@ interface BaseProps {
   footer?: ReactNode;
   dismissable?: boolean;
   className?: string;
+  /** Sheet only: set false to show no dimmed backdrop (tapping outside still closes it). */
+  backdrop?: boolean;
 }
 
 export interface BlurBackdropProps {
@@ -157,7 +159,7 @@ export function Dialog({
 export function Sheet(props: BaseProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { open, onOpenChange, title, description, children, footer, dismissable = true, className } = props;
+  const { open, onOpenChange, title, description, children, footer, dismissable = true, className, backdrop = true } = props;
   const maxSheetHeight = Math.min(windowHeight - Math.max(insets.top, 24) - 24, Math.floor(windowHeight * 0.85));
 
   return (
@@ -170,17 +172,25 @@ export function Sheet(props: BaseProps) {
       }}
     >
       <View className="flex-1 justify-end">
-        <BlurBackdrop
-          onPress={dismissable ? () => onOpenChange(false) : undefined}
-          accessibilityLabel="Close sheet backdrop"
-        />
+        {backdrop ? (
+          <BlurBackdrop
+            onPress={dismissable ? () => onOpenChange(false) : undefined}
+            accessibilityLabel="Close sheet backdrop"
+          />
+        ) : dismissable ? (
+          <Pressable
+            accessibilityLabel="Close sheet"
+            onPress={() => onOpenChange(false)}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           className="justify-end"
           pointerEvents="box-none"
         >
           <View
-            className={cn("rounded-t-card bg-surface px-5 pt-3 flex-col", className)}
+            className={cn("rounded-t-card bg-surface px-5 pt-3 flex-col", !backdrop && "border-t border-line shadow-2xl", className)}
             style={{
               maxHeight: maxSheetHeight,
               paddingBottom: Math.max(16, insets.bottom),

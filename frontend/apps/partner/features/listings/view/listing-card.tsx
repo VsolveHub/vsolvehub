@@ -56,7 +56,7 @@ export function ListingCard({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold text-navy-900">{listing.title}</h2>
+            <h2 className="text-xl font-bold text-text">{listing.title}</h2>
           </div>
           
           {listing.service_name && (
@@ -87,7 +87,7 @@ export function ListingCard({
           </div>
 
           {quickJob ? (
-            <p className="text-sm font-semibold text-navy-900">
+            <p className="text-sm font-semibold text-text">
               👥 {t("listings.card.vacanciesNeeded", { count: listing.vacancies ?? 1 })}
             </p>
           ) : null}

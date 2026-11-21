@@ -1,8 +1,7 @@
 // Ported from frontend/apps/partner/features/session/partner-shell.tsx BottomTabBar
-import { useMobileLogout } from "@vsolve/mobile-core";
 import { Logo, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter, usePathname, Slot } from "expo-router";
-import { ArrowLeft, Home, type LucideIcon } from "lucide-react-native";
+import { ArrowLeft, Bell, UserCircle2, type LucideIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,7 +26,6 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const signOut = useMobileLogout();
   const chrome = getPartnerChromeMode(pathname);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const count = useUnreadNotificationCount(chrome === "full");
@@ -39,6 +37,16 @@ export default function TabsLayout() {
   const isDarkHero = (pathname === "/home" && (specialty as string) === "work") || pathname.startsWith("/work");
 
   useEffect(() => subscribeOpenAlerts(() => setAlertsOpen(true)), []);
+
+  // The job pages (post a job, a job's applicants) carry their own back control and title, so they
+  // get no bar of their own, only room for the status bar.
+  if (chrome === "focused" && pathname.startsWith("/listings/")) {
+    return (
+      <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
+        <Slot />
+      </View>
+    );
+  }
 
   if (chrome === "focused") {
     return (
@@ -74,37 +82,20 @@ export default function TabsLayout() {
 
   const rawNav = primaryShellNavFor(grants.grants ?? []);
   const activeNav = dockNavFor(rawNav);
-  const homeItem = activeNav.find((item) => item.href === "/home" || item.label === "Home");
-  const sideItems = activeNav.filter((item) => item.href !== "/home" && item.label !== "Home");
-  const isUtilityTab = (item: WorkspaceNavItem) =>
-    item.kind === "notifications" ||
-    item.href === "#notifications" ||
-    item.href === "/me" ||
-    item.label === "Alerts" ||
-    item.label === "Me";
-  const leftItems = sideItems.filter((item) => !isUtilityTab(item));
-  const rightItems = sideItems.filter(isUtilityTab);
-
-  const isHomeActive = pathname === "/home";
+  // Home leads the bar as an ordinary tab, then the rest in their registry order.
+  const homeItems = activeNav.filter((item) => item.href === "/home" || item.label === "Home");
+  const otherItems = activeNav.filter((item) => item.href !== "/home" && item.label !== "Home");
+  const tabItems = [...homeItems, ...otherItems];
 
   return (
-    <View className={cn("flex-1", pathname === "/home" ? "bg-[#00112e]" : "bg-canvas")}>
-      {/* Top Header for Full Chrome */}
+    <View className={cn("flex-1", isDarkHero ? "bg-[#00112e]" : "bg-canvas")}>
+      {/* Top header: logo on the left, alerts and account on the right */}
       {chrome === "full" ? (
         <View
-          style={{
-            paddingTop: Math.max(insets.top, 16) + 14,
-            elevation: isDarkHero ? 0 : 5,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDarkHero ? 0 : 0.07,
-            shadowRadius: 14,
-          }}
+          style={{ paddingTop: insets.top + 8 }}
           className={cn(
-            "flex-row items-center justify-between px-6 pb-5 z-30",
-            isDarkHero
-              ? "bg-[#00112e] border-b border-[#001a4e]"
-              : "rounded-b-[2.25rem] bg-surface"
+            "z-30 flex-row items-center justify-between border-b px-4 pb-3",
+            isDarkHero ? "border-white/10 bg-[#00112e]" : "border-line bg-surface",
           )}
         >
           <Pressable
@@ -116,21 +107,35 @@ export default function TabsLayout() {
             <Logo dark={isDarkHero} />
           </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign Out"
-            onPress={() => void signOut()}
-            className="py-1.5 px-2 active:opacity-70"
-          >
-            <Text
+          <View className="flex-row items-center gap-1">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={unreadBadgeLabel(unread)}
+              onPress={() => setAlertsOpen(true)}
               className={cn(
-                "text-[15px] font-semibold tracking-tight",
-                isDarkHero ? "text-white/80" : "text-navy-900"
+                "relative size-10 items-center justify-center rounded-full",
+                isDarkHero ? "active:bg-white/10" : "active:bg-surface-hover",
               )}
             >
-              Sign Out
-            </Text>
-          </Pressable>
+              <Bell size={21} color={isDarkHero ? "#ffffff" : "#071328"} strokeWidth={1.9} />
+              {badge ? (
+                <View className="absolute right-0.5 top-0.5 min-h-4 min-w-4 items-center justify-center rounded-full bg-[#f87000] px-1">
+                  <Text className="text-[9px] font-extrabold text-white">{badge}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Account"
+              onPress={() => router.push("/me" as never)}
+              className={cn(
+                "size-10 items-center justify-center rounded-full",
+                isDarkHero ? "active:bg-white/10" : "active:bg-surface-hover",
+              )}
+            >
+              <UserCircle2 size={24} color={isDarkHero ? "#ffffff" : "#071328"} strokeWidth={1.7} />
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
@@ -138,59 +143,18 @@ export default function TabsLayout() {
       <JobAlertsBanner />
 
       {/* Main Content Area */}
-      <View className="flex-1 pb-24">
+      <View className="flex-1">
         <Slot />
       </View>
 
-      {/* Curved Bottom Dock with Floating Raised Center Home Button */}
+      {/* Bottom tab bar: flat, equal tabs */}
       {chrome === "full" ? (
-        <View className="absolute inset-x-0 bottom-0 z-40 bg-transparent">
-          <View className="relative mx-auto w-full max-w-md">
-            {/* Raised Circular Floating Center Home Button */}
-            {homeItem ? (
-              <View className="absolute inset-x-0 -top-7 z-50 items-center justify-center pointer-events-box-none">
-                <Pressable
-                  accessibilityRole="tab"
-                  accessibilityLabel="Home"
-                  accessibilityState={{ selected: isHomeActive }}
-                  onPress={() => router.push("/home")}
-                  className={cn(
-                    "size-[4.25rem] items-center justify-center rounded-full bg-[#f87000] shadow-2xl active:scale-95",
-                    isHomeActive ? "ring-4 ring-[#f87000]/40" : ""
-                  )}
-                  style={{
-                    elevation: 10,
-                    shadowColor: "#f87000",
-                    shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.45,
-                    shadowRadius: 12,
-                  }}
-                >
-                  <Home size={26} color="#00112e" strokeWidth={2.6} />
-                </Pressable>
-              </View>
-            ) : null}
-
-            {/* Main Curved Dock Bar */}
-            <View
-              style={{ paddingBottom: Math.max(insets.bottom, 22) }}
-              className="rounded-t-[1.75rem] bg-[#00112e] px-2 pt-3 shadow-2xl"
-            >
-              <View className="flex-row items-end">
-                {/* Left Side Tabs (Work, Money) */}
-                <View className="flex-1 flex-row items-end justify-around">
-                  {leftItems.map((item) => renderSideTab(item, pathname, router, setAlertsOpen, unread, badge))}
-                </View>
-
-                {/* Center Gap Spacer for Raised Home Button */}
-                <View className="w-[72px] shrink-0" pointerEvents="none" />
-
-                {/* Right Side Tabs (Alerts, Me) */}
-                <View className="flex-1 flex-row items-end justify-around">
-                  {rightItems.map((item) => renderSideTab(item, pathname, router, setAlertsOpen, unread, badge))}
-                </View>
-              </View>
-            </View>
+        <View
+          style={{ paddingBottom: Math.max(insets.bottom, 8) }}
+          className="border-t border-line bg-surface px-2 pt-1.5"
+        >
+          <View className="mx-auto w-full max-w-md flex-row items-end">
+            {tabItems.map((item) => renderTab(item, pathname, router, setAlertsOpen, unread, badge))}
           </View>
         </View>
       ) : null}
@@ -201,19 +165,21 @@ export default function TabsLayout() {
         unreadCount={unread}
         workspaceKeys={(grants.grants ?? []).map((grant) => grant.workspaceKey)}
       />
-
     </View>
   );
 }
 
-function renderSideTab(
+function renderTab(
   item: WorkspaceNavItem,
   pathname: string,
   router: ReturnType<typeof useRouter>,
   setAlertsOpen: (open: boolean) => void,
   unread: number | null,
-  badge: string | null
+  badge: string | null,
 ) {
+  const Icon = item.icon as LucideIcon;
+  const tabClass = "relative min-h-[3.25rem] flex-1 items-center justify-center gap-1 px-1 active:opacity-70";
+
   if (item.kind === "notifications") {
     return (
       <Pressable
@@ -221,12 +187,12 @@ function renderSideTab(
         accessibilityRole="button"
         accessibilityLabel={unreadBadgeLabel(unread)}
         onPress={() => setAlertsOpen(true)}
-        className="relative min-h-[3.25rem] flex-1 items-center justify-center gap-1 px-1 active:opacity-80"
+        className={tabClass}
       >
-        <item.icon size={22} color="rgba(255,255,255,0.7)" strokeWidth={1.9} />
-        <Text className="text-[0.625rem] font-semibold text-white/70">{item.label}</Text>
+        <Icon size={22} color="#756c5e" strokeWidth={1.8} />
+        <Text className="text-[0.6875rem] font-medium text-text-muted">{item.label}</Text>
         {badge ? (
-          <View className="absolute right-2 top-0 min-h-4 min-w-4 items-center justify-center rounded-full bg-[#f87000] px-1">
+          <View className="absolute right-4 top-0.5 min-h-4 min-w-4 items-center justify-center rounded-full bg-[#f87000] px-1">
             <Text className="text-[9px] font-extrabold text-white">{badge}</Text>
           </View>
         ) : null}
@@ -235,8 +201,7 @@ function renderSideTab(
   }
 
   const owned = item.activePrefix ?? item.href;
-  const isCurrent = pathname === owned || pathname.startsWith(`${owned}/`);
-  const Icon = item.icon as LucideIcon;
+  const isCurrent = item.href === "/home" ? pathname === "/home" : pathname === owned || pathname.startsWith(`${owned}/`);
 
   return (
     <Pressable
@@ -244,14 +209,11 @@ function renderSideTab(
       accessibilityRole="tab"
       accessibilityState={{ selected: isCurrent }}
       onPress={() => router.push(item.href as never)}
-      className="relative min-h-[3.25rem] flex-1 items-center justify-center gap-1 px-1 active:opacity-80"
+      className={tabClass}
     >
-      {/* Glowing top line when active */}
-      {isCurrent ? (
-        <View className="absolute -top-3 h-0.5 w-6 rounded-full bg-[#f87000] shadow-[0_0_8px_rgba(248,112,0,0.85)]" />
-      ) : null}
-      <Icon size={22} color={isCurrent ? "#ffffff" : "rgba(255,255,255,0.45)"} strokeWidth={isCurrent ? 2.5 : 1.8} />
-      <Text className={cn("text-[0.625rem] tracking-wide", isCurrent ? "font-bold text-white" : "font-semibold text-white/45")}>
+      {isCurrent ? <View className="absolute -top-1.5 h-0.5 w-8 rounded-full bg-[#f87000]" /> : null}
+      <Icon size={22} color={isCurrent ? "#071328" : "#756c5e"} strokeWidth={isCurrent ? 2.3 : 1.8} />
+      <Text className={cn("text-[0.6875rem]", isCurrent ? "font-bold text-text" : "font-medium text-text-muted")}>
         {item.label}
       </Text>
     </Pressable>

@@ -1,6 +1,7 @@
 // Ported from frontend/apps/partner/features/application/view/employer-about-step.tsx
 import type { Schemas } from "@vsolve/api-client";
-import { Field, Input, Select, useT } from "@vsolve/mobile-ui";
+import { Field, Input, Select, Text, useT } from "@vsolve/mobile-ui";
+import { ShieldCheck } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
@@ -14,7 +15,7 @@ import {
   type IndividualDraft,
 } from "../model/employer-form";
 import { useUpdateEmployerDetails } from "../queries";
-import { EmployerFrame, useEmployerNav, useSignUpName } from "./employer-frame";
+import { EmployerFrame, FormSection, useEmployerNav, useSignUpName } from "./employer-frame";
 import { EmployerGuard } from "./employer-guard";
 
 type Application = Schemas["PartnerApplication"];
@@ -71,81 +72,101 @@ function AboutForm({ application }: { application: Application }) {
       error={save.error}
       onContinue={onContinue}
     >
-      <Field
-        required
-        label={t("apply.employer.field.name.label")}
-        error={problems.invalid.has("displayName") ? t("apply.employer.field.name.error") : undefined}
-      >
-        <Input
-          autoComplete="name"
-          maxLength={120}
-          value={draft.displayName}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ displayName: value })}
-        />
-      </Field>
+      <FormSection title="Personal information">
+        <Field
+          required
+          label={t("apply.employer.field.name.label")}
+          error={problems.invalid.has("displayName") ? t("apply.employer.field.name.error") : undefined}
+        >
+          <Input
+            autoComplete="name"
+            maxLength={120}
+            placeholder="e.g. Ramesh Kumar"
+            value={draft.displayName}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ displayName: value })}
+          />
+        </Field>
 
-      <Field
-        label={t("apply.employer.field.email.label")}
-        error={problems.invalid.has("email") ? t("apply.employer.field.email.error") : undefined}
-      >
-        <Input
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          maxLength={254}
-          value={draft.email}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ email: value })}
-        />
-      </Field>
+        <Field
+          label={t("apply.employer.field.email.label")}
+          error={problems.invalid.has("email") ? t("apply.employer.field.email.error") : undefined}
+        >
+          <Input
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            maxLength={254}
+            placeholder="e.g. ramesh@example.com"
+            value={draft.email}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ email: value })}
+          />
+        </Field>
+      </FormSection>
 
-      <View style={{ rowGap: 20 }}>
+      <FormSection title="Location">
         <Field required label={t("apply.employer.field.area.label")}>
           <Input
             maxLength={120}
+            placeholder="e.g. Kondapur"
             value={draft.area}
             onFocus={scrollFieldIntoView}
             onChangeText={(value) => change({ area: value })}
           />
         </Field>
+
         <Field required label={t("apply.employer.field.city.label")}>
           <Input
             autoComplete="postal-address-locality"
             maxLength={80}
+            placeholder="e.g. Hyderabad"
             value={draft.city}
             onFocus={scrollFieldIntoView}
             onChangeText={(value) => change({ city: value })}
           />
         </Field>
-      </View>
 
-      <Field
-        required
-        label={t("apply.employer.field.pinCode.label")}
-        error={problems.invalid.has("pinCode") ? t("apply.employer.field.pinCode.error") : undefined}
-      >
-        <Input
-          keyboardType="number-pad"
-          autoComplete="postal-code"
-          maxLength={6}
-          value={draft.pinCode}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ pinCode: value.replace(/\D/g, "") })}
-        />
-      </Field>
+        <Field
+          required
+          label={t("apply.employer.field.pinCode.label")}
+          error={problems.invalid.has("pinCode") ? t("apply.employer.field.pinCode.error") : undefined}
+        >
+          <Input
+            keyboardType="number-pad"
+            autoComplete="postal-code"
+            maxLength={6}
+            placeholder="500084"
+            value={draft.pinCode}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ pinCode: value.replace(/\D/g, "") })}
+          />
+        </Field>
+      </FormSection>
 
-      <Field required label={t("apply.employer.field.idType.label")}>
-        <Select
-          placeholder={t("apply.employer.field.idType.placeholder")}
-          value={draft.idType}
-          options={ID_TYPES.map((code) => ({
-            value: code,
-            label: t(`apply.employer.field.idType.${code}`),
-          }))}
-          onChange={(event) => change({ idType: event.target.value })}
-        />
-      </Field>
+      <FormSection title="Identity verification">
+        <Field required label={t("apply.employer.field.idType.label")}>
+          <Select
+            placeholder={t("apply.employer.field.idType.placeholder")}
+            value={draft.idType}
+            options={ID_TYPES.map((code) => ({
+              value: code,
+              label: t(`apply.employer.field.idType.${code}`),
+            }))}
+            onChange={(event) => change({ idType: event.target.value })}
+          />
+        </Field>
+
+        <View className="flex-row items-start gap-3 rounded-control bg-surface-sunken p-4">
+          <ShieldCheck size={16} color="#16a34a" className="mt-0.5 shrink-0" />
+          <View className="flex-1 gap-0.5">
+            <Text className="font-semibold text-xs text-text">Your details stay private</Text>
+            <Text className="text-xs text-text-secondary leading-5">
+              Your street address, pin code, and ID documents are strictly verified by Operations and never shown on public job listings.
+            </Text>
+          </View>
+        </View>
+      </FormSection>
     </EmployerFrame>
   );
 }

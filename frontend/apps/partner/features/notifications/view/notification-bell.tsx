@@ -107,7 +107,7 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
  * was being clipped. Adding the variant here was preferred to wrapping this in a
  * scaling hack at the call site, which would have distorted the unread badge.
  */
-export type NotificationNavTabAppearance = "dock" | "bar";
+export type NotificationNavTabAppearance = "dock" | "bar" | "tab";
 
 export function NotificationNavTab({
   workspaceKeys,
@@ -128,6 +128,7 @@ export function NotificationNavTab({
   const badge = unreadBadgeDisplay(unread);
   const active = isActive || open;
   const isBar = appearance === "bar";
+  const isTab = appearance === "tab";
 
   return (
     <>
@@ -147,16 +148,24 @@ export function NotificationNavTab({
                   ? "bg-surface-sunken text-navy-900"
                   : "text-text-secondary hover:bg-surface-sunken/70 hover:text-navy-900",
               )
-            : cn(
-                "min-h-[3.5rem] w-full flex-col justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide",
-                active ? "text-white font-bold" : "text-white/45 hover:text-white/70",
-              ),
+            : isTab
+              ? cn(
+                  "min-h-[3.25rem] w-full flex-col justify-center gap-1 px-1 text-[0.6875rem] leading-none",
+                  active ? "font-bold text-text" : "font-medium text-text-muted hover:text-text",
+                )
+              : cn(
+                  "min-h-[3.5rem] w-full flex-col justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide",
+                  active ? "text-white font-bold" : "text-white/45 hover:text-white/70",
+                ),
         )}
       >
         {active && !isBar ? (
           <span
             aria-hidden
-            className="absolute -top-1 h-0.5 w-6 rounded-full bg-signal-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"
+            className={cn(
+              "absolute h-0.5 rounded-full bg-signal-500",
+              isTab ? "-top-1.5 w-8" : "-top-1 w-6 shadow-[0_0_8px_rgba(249,115,22,0.8)]",
+            )}
           />
         ) : null}
         <span className="relative flex items-center justify-center">

@@ -144,7 +144,7 @@ export function PostListingSheet({
                   onPress={() => setEmploymentType(type)}
                   className={`rounded-lg px-3 py-1.5 border ${
                     employmentType === type
-                      ? "bg-[#f87000] border-[#f87000]"
+                      ? "bg-signal-500 border-[#f87000]"
                       : "bg-surface border-line"
                   }`}
                 >
@@ -169,7 +169,7 @@ export function PostListingSheet({
                   onPress={() => setWorkMode(mode)}
                   className={`rounded-lg px-3 py-1.5 border ${
                     workMode === mode
-                      ? "bg-[#f87000] border-[#f87000]"
+                      ? "bg-signal-500 border-[#f87000]"
                       : "bg-surface border-line"
                   }`}
                 >

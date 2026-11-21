@@ -200,7 +200,7 @@ function Chips({
   const selected = new Set(Array.isArray(value) ? value : value ? [value] : []);
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-sm font-semibold text-navy-900">{label}</legend>
+      <legend className="mb-1 text-sm font-semibold text-text">{label}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((option) => {
           const on = selected.has(option.value);
@@ -217,9 +217,9 @@ function Chips({
                   onChange([...next]);
                 } else onChange(on ? "" : option.value);
               }}
-              className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition ${
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition ${
                 on
-                  ? "border-action bg-action text-action-text"
+                  ? "border-action bg-action-surface text-text"
                   : "border-line bg-surface text-text hover:border-line-strong"
               }`}
             >
@@ -262,7 +262,7 @@ function TagPicker({
   }
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-semibold text-navy-900">{label}</p>
+      <p className="text-sm font-semibold text-text">{label}</p>
       {hint ? <p className="-mt-1 text-xs text-text-secondary">{hint}</p> : null}
       <div className="flex flex-wrap gap-2">
         {shown.map((idea) => {
@@ -273,9 +273,9 @@ function TagPicker({
               type="button"
               aria-pressed={on}
               onClick={() => onChange(on ? value.filter((v) => v !== idea) : [...value, idea])}
-              className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition ${
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium transition ${
                 on
-                  ? "border-action bg-action-surface text-action"
+                  ? "border-action bg-action-surface text-text"
                   : "border-line bg-surface text-text-secondary hover:border-line-strong"
               }`}
             >
@@ -310,7 +310,7 @@ function TagPicker({
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="flex flex-col gap-5 p-4 sm:p-6">
-      <h2 className="text-lg font-bold text-navy-900">{title}</h2>
+      <h2 className="text-lg font-semibold text-text">{title}</h2>
       {children}
     </Card>
   );
@@ -398,9 +398,9 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
         setDraft((d) => fromTemplate(d, category, role));
         setStep(1);
       }}
-      className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+      className={`min-h-9 rounded-full border px-3.5 text-[13px] font-medium ${
         draft.templateId === role.id
-          ? "border-action bg-action text-action-text"
+          ? "border-action bg-action-surface text-text"
           : "border-line bg-surface text-text hover:border-action"
       }`}
     >
@@ -487,20 +487,32 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           <ArrowLeft className="size-4" />
         </button>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">
+          <p className="text-xs font-medium text-text-muted">
             {t("listings.wizard.stepOf", { step: step + 1, total: STEPS.length, name: STEP_LABELS[STEPS[step]!] })}
           </p>
-          <h1 className="text-xl font-extrabold text-navy-900">
+          <h1 className="text-xl font-bold tracking-tight text-text">
             {editId ? t("listings.wizard.editJob") : t("listings.wizard.postJob")}
             {draft.title && step > 0 ? ` · ${draft.title}` : ""}
           </h1>
         </div>
       </div>
-      <ol className="grid grid-cols-4 gap-1.5" aria-hidden>
+      <ol className="grid grid-cols-4 items-start gap-3 pb-1">
         {STEPS.map((name, i) => (
-          <li key={name} className={`h-1.5 rounded-full ${i <= step ? "bg-action" : "bg-line"}`} />
+          <li key={name} className="flex flex-col gap-2" aria-current={i === step ? "step" : undefined}>
+            <span aria-hidden className={`h-1.5 rounded-full ${i <= step ? "bg-action" : "bg-line"}`} />
+            <span className={`text-xs leading-4 ${i === step ? "font-semibold text-text" : "text-text-muted"}`}>
+              {STEP_LABELS[name]}
+            </span>
+          </li>
         ))}
       </ol>
+
+      {/* Error banner: right under the header so it is seen without scrolling */}
+      {error ? (
+        <p role="alert" className="rounded-control border border-danger-line bg-danger-surface px-4 py-3 text-sm font-medium text-danger-text">
+          {error}
+        </p>
+      ) : null}
 
       {step === 0 ? (
         <Section title={t("listings.wizard.jobCategoryTitle")}>
@@ -515,7 +527,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           </div>
           {!search && layout.home ? (
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-navy-900">{t("listings.wizard.homeRoles")}</p>
+              <p className="text-sm font-semibold text-text">{t("listings.wizard.homeRoles")}</p>
               <div className="flex flex-wrap gap-2">
                 {layout.home.roles.map((role) => roleChip(layout.home!.name, role))}
               </div>
@@ -526,7 +538,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
               type="button"
               aria-expanded={false}
               onClick={() => setShowAllCategories(true)}
-              className="flex min-h-11 items-center justify-between gap-2 rounded-card border border-dashed border-line px-4 text-left text-sm font-semibold text-action hover:border-action"
+              className="flex min-h-11 items-center justify-between gap-2 rounded-card border border-dashed border-line px-4 text-left text-sm font-medium text-text-link hover:border-action"
             >
               {t("listings.wizard.showAllCategories")}
               <ChevronDown className="size-4 shrink-0" aria-hidden />
@@ -540,10 +552,10 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                   type="button"
                   aria-pressed={draft.category === cat.name}
                   onClick={() => set({ category: cat.name })}
-                  className={`min-h-14 rounded-card border p-3 text-left text-sm font-bold transition ${
+                  className={`min-h-14 rounded-card border p-3 text-left text-sm font-semibold transition ${
                     draft.category === cat.name
-                      ? "border-action bg-action-surface text-action"
-                      : "border-line bg-surface text-navy-900 hover:border-line-strong"
+                      ? "border-action bg-action-surface text-text"
+                      : "border-line bg-surface text-text hover:border-line-strong"
                   }`}
                 >
                   {cat.name}
@@ -553,7 +565,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
           ) : null}
           {roles.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold text-navy-900">
+              <p className="text-sm font-semibold text-text">
                 {search ? t("listings.wizard.matchingJobs") : t("listings.wizard.commonJobs")}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -595,7 +607,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             onChange={(v) => set({ experience: v as string })}
           />
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-semibold text-navy-900">{t("listings.wizard.monthlySalary")}</legend>
+            <legend className="mb-1 text-sm font-semibold text-text">{t("listings.wizard.monthlySalary")}</legend>
             <div className="flex flex-wrap gap-2">
               {opts.salary_bands.map((band) => (
                 <button
@@ -609,9 +621,9 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
                       salaryMax: band.max_rupees ? String(band.max_rupees) : "",
                     })
                   }
-                  className={`min-h-10 rounded-full border px-4 text-sm font-semibold ${
+                  className={`min-h-9 rounded-full border px-3.5 text-[13px] font-medium ${
                     bandOn(band.min_rupees, band.max_rupees)
-                      ? "border-action bg-action text-action-text"
+                      ? "border-action bg-action-surface text-text"
                       : "border-line bg-surface text-text hover:border-line-strong"
                   }`}
                 >
@@ -738,7 +750,7 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             <Card className="flex flex-col gap-4 border-action p-4 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="text-xl font-extrabold text-navy-900">{preview.title}</h2>
+                  <h2 className="text-xl font-bold tracking-tight text-text">{preview.title}</h2>
                   <p className="text-sm text-text-secondary">{preview.poster_name}</p>
                 </div>
                 {draft.urgency !== "NORMAL" ? <Badge tone="warning">{optionLabel(opts.urgencies, draft.urgency)}</Badge> : null}
@@ -800,12 +812,6 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
             </Card>
           ) : null}
         </>
-      ) : null}
-
-      {error ? (
-        <p role="alert" className="rounded-control border border-danger-line bg-danger-surface p-3 text-sm text-danger-text">
-          {error}
-        </p>
       ) : null}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 p-3 backdrop-blur">

@@ -65,36 +65,47 @@ export function ApplicantCard({
   const snapshot = snapshotFields(app.applicant_snapshot);
 
   return (
-    <Card className="p-5 transition duration-fast hover:border-line-strong hover:shadow-raised">
+    <Card className="p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-3 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={closed ? "neutral" : step === "Connected" || hired ? "success" : "info"}>{stepLabel}</Badge>
-
-            <span className="flex items-center gap-1 text-xs text-text-muted">
-              <Calendar className="size-3.5" />
-              {t("listings.applicant.appliedOn", { date: formatDate(app.created_at) })}
+        <div className="space-y-4 flex-1">
+          {/* Header: avatar, name, applied date, current stage */}
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-sunken text-base font-bold text-text"
+            >
+              {(app.applicant_name || snapshot.name || "?").trim().charAt(0).toUpperCase()}
             </span>
-
-            {app.contact_revealed_at && (
-              <Badge tone="success">
-                <CheckCircle2 className="size-3.5" />
-                {t("listings.applicant.contactUnlocked")}
-              </Badge>
-            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-lg font-semibold text-text">
+                {app.applicant_name || snapshot.name || t("listings.applicant.candidateFallback")}
+              </h2>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="size-3.5" />
+                  {t("listings.applicant.appliedOn", { date: formatDate(app.created_at) })}
+                </span>
+                {app.contact_revealed_at ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-success-text">
+                    <CheckCircle2 className="size-3.5" />
+                    {t("listings.applicant.contactUnlocked")}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <Badge tone={closed ? "neutral" : step === "Connected" || hired ? "success" : "info"}>{stepLabel}</Badge>
           </div>
 
-          <h2 className="text-lg font-bold text-text">
-            {app.applicant_name || snapshot.name || t("listings.applicant.candidateFallback")}
-          </h2>
-
           {!closed ? (
-            <ol className="flex flex-wrap items-center gap-1 text-[11px] font-semibold" aria-label={t("listings.applicant.hiringStepsAriaLabel")}>
+            <ol className="grid grid-cols-5 items-start gap-2" aria-label={t("listings.applicant.hiringStepsAriaLabel")}>
               {STEPS.map((name, i) => {
-                const reached = STEPS.indexOf(step as (typeof STEPS)[number]) >= i;
+                const idx = STEPS.indexOf(step as (typeof STEPS)[number]);
                 return (
-                  <li key={name} className={`rounded-full px-2 py-0.5 ${reached ? "bg-action text-action-text" : "bg-surface-sunken text-text-muted"}`}>
-                    {t(STEP_KEYS[name]!)}
+                  <li key={name} className="flex flex-col gap-1.5" aria-current={i === idx ? "step" : undefined}>
+                    <span aria-hidden className={`h-1 rounded-full ${idx >= i ? "bg-action" : "bg-line"}`} />
+                    <span className={`text-[11px] leading-4 ${i === idx ? "font-semibold text-text" : "text-text-muted"}`}>
+                      {t(STEP_KEYS[name]!)}
+                    </span>
                   </li>
                 );
               })}
@@ -196,7 +207,7 @@ export function ApplicantCard({
                   type="button"
                   onClick={() => onReveal(app.id)}
                   disabled={isRevealPending}
-                  className="inline-flex items-center gap-1.5 rounded-control bg-navy-900 px-3 py-1.5 text-xs font-semibold text-warm-0 shadow-card hover:bg-navy-800 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-control bg-navy-900 px-3 py-1.5 text-xs font-semibold text-warm-0 hover:bg-navy-800 disabled:opacity-50"
                 >
                   <Unlock className="size-3.5" />
                   {isRevealPending ? t("listings.applicant.unlocking") : t("listings.applicant.revealContact")}
@@ -213,7 +224,7 @@ export function ApplicantCard({
                 return (
                   <span
                     key={ev.id}
-                    className="inline-flex items-center gap-1 rounded-control bg-surface-sunken px-2 py-0.5 text-[11px] text-text-muted border border-line"
+                    className="inline-flex items-center gap-1 text-[11px] text-text-muted"
                   >
                     <Clock className="size-3 text-text-muted" />
                     {STEP_KEYS[evLabel] ? t(STEP_KEYS[evLabel]!) : evLabel} ({formatDate(ev.created_at)})
