@@ -2,7 +2,7 @@
 
 import { hasRole, useAuthGuard, useCurrentSession, useLogout, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn, useT } from "@vsolve/ui";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, UserCircle2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -151,6 +151,7 @@ function NoPartnerAccess({ onSignOut }: { onSignOut: () => void }) {
 export function hasOwnFocusedHeader(pathname: string): boolean {
   return (
     pathname === "/listings/post" ||
+    pathname.startsWith("/listings/") ||
     pathname === "/work/how-day-hire-works" ||
     pathname.startsWith("/work/jobs")
   );
@@ -447,7 +448,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             >
               {chromeMode === "full" ? (
                 <div className={isDarkHero ? "sticky top-0 z-30 bg-[var(--color-ink-900)]" : "sticky top-0 z-30 bg-surface"}>
-                  <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)] lg:rounded-b-none lg:border-b lg:border-line lg:px-8 lg:py-3 lg:shadow-none">
+                  <header className="border-b border-line bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] lg:px-8 lg:py-3">
                     <div className="flex items-center justify-between lg:mx-auto lg:w-full lg:max-w-7xl lg:gap-8">
                       <Link
                         href={isApprovedPartner && !deskWorkspace ? "/me/documents" : "/home"}
@@ -466,9 +467,20 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                         </div>
                       ) : null}
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {/* On a phone, Sign out lives under Me; the header has the account shortcut. */}
+                        {isApprovedPartner ? (
+                          <Link
+                            href="/me"
+                            aria-label="Account"
+                            className="inline-flex size-10 items-center justify-center rounded-full text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action lg:hidden"
+                          >
+                            <UserCircle2 size={24} strokeWidth={1.7} aria-hidden />
+                          </Link>
+                        ) : null}
                         <Button
                           variant="ghost"
+                          className={isApprovedPartner ? "hidden lg:inline-flex" : undefined}
                           onClick={() => logout.mutate()}
                           loading={logout.isPending}
                           loadingLabel={t("common.signingOut")}
@@ -627,20 +639,11 @@ export function BottomTabBar({
 
   const homeItem = dockItems.find((item) => item.href === "/home" || item.label === "Home");
   const sideItems = dockItems.filter((item) => item.href !== "/home" && item.label !== "Home");
-  const isUtilityTab = (item: WorkspaceNavItem) =>
-    item.kind === "notifications" ||
-    item.href === "#notifications" ||
-    item.href === "/me" ||
-    item.label === "Alerts" ||
-    item.label === "Me";
-  const leftItems = sideItems.filter((item) => !isUtilityTab(item));
-  const rightItems = sideItems.filter(isUtilityTab);
-
   function renderTab(item: WorkspaceNavItem) {
     if (item.kind === "notifications") {
       return (
         <li key={item.href} className="flex-1">
-          <NotificationNavTab workspaceKeys={workspaceKeys} label={translateNavLabel(t, item.label)} />
+          <NotificationNavTab workspaceKeys={workspaceKeys} label={translateNavLabel(t, item.label)} appearance="tab" />
         </li>
       );
     }
@@ -655,15 +658,15 @@ export function BottomTabBar({
           aria-current={isCurrent ? "page" : undefined}
           onPointerDown={() => prepareBookingAlertsFromGesture()}
           className={cn(
-            "relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide transition-all",
+            "relative flex min-h-[3.25rem] flex-col items-center justify-center gap-1 px-1 text-[0.6875rem] leading-none transition-colors",
             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
-            isCurrent ? "text-white font-bold" : "text-white/45 hover:text-white/70",
+            isCurrent ? "font-bold text-text" : "font-medium text-text-muted hover:text-text",
           )}
         >
           {isCurrent ? (
             <span
               aria-hidden
-              className="absolute -top-1 h-0.5 w-6 rounded-full bg-signal-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"
+              className="absolute -top-1.5 h-0.5 w-8 rounded-full bg-signal-500"
             />
           ) : null}
           <span className="flex items-center justify-center">
@@ -675,46 +678,18 @@ export function BottomTabBar({
     );
   }
 
+  // Home leads the bar as an ordinary tab, then the rest in their usual order.
+  const tabItems = [...(homeItem ? [homeItem] : []), ...sideItems];
+
   return (
     <nav
       aria-label={t("shell.nav.partnerNavigation")}
       // DESKTOP ONLY: `lg:hidden`. The same destinations are rendered inline in
-      // the header by `DesktopPrimaryNav` from `lg:` up — a thumb dock pinned to
-      // the bottom of a 1440px display is reaching for a thumb that is not there.
-      // Everything else about this bar is the phone design, unchanged.
-      className="fixed inset-x-0 bottom-0 z-40 bg-transparent lg:hidden"
+      // the header by `DesktopPrimaryNav` from `lg:` up.
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface lg:hidden"
     >
-      <div className="mx-auto max-w-md relative">
-        {homeItem ? (
-          <div className="absolute inset-x-0 -top-6 z-50 mx-auto flex w-full justify-center pointer-events-none">
-            <Link
-              href={homeItem.href}
-              aria-label={t("shell.nav.home")}
-              aria-current={currentHref === homeItem.href ? "page" : undefined}
-              onPointerDown={() => prepareBookingAlertsFromGesture()}
-              className={cn(
-                "pointer-events-auto flex size-[4.25rem] items-center justify-center rounded-full",
-                "bg-[linear-gradient(135deg,var(--color-action-active)_0%,var(--color-action-active)_100%)] shadow-[0_8px_32px_color-mix(in_oklab,var(--color-action-active)_40%,transparent)]",
-                "text-action-text focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-4 focus-visible:outline-action transition-transform hover:scale-105 active:scale-95",
-              )}
-            >
-              <homeItem.icon size={26} strokeWidth={2.5} aria-hidden />
-            </Link>
-          </div>
-        ) : null}
-
-        {/* Main bar */}
-        <div className="rounded-t-[1.75rem] bg-[var(--color-ink-900)] px-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_40px_color-mix(in_oklab,var(--color-ink-900)_50%,transparent)]">
-          <div className="flex w-full items-end">
-            <ul className="flex flex-1 list-none items-end justify-around">
-              {leftItems.map(renderTab)}
-            </ul>
-            <div aria-hidden className="w-[72px] shrink-0" />
-            <ul className="flex flex-1 list-none items-end justify-around">
-              {rightItems.map(renderTab)}
-            </ul>
-          </div>
-        </div>
+      <div className="mx-auto max-w-md px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5">
+        <ul className="flex w-full list-none items-end">{tabItems.map(renderTab)}</ul>
       </div>
     </nav>
   );

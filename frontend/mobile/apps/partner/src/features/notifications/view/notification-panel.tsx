@@ -71,6 +71,7 @@ function NotificationPanelBody({
       open={open}
       onOpenChange={onOpenChange}
       title="Notifications"
+      backdrop={false}
       description="Updates about your bookings, jobs and activity"
       footer={
         <View className="flex-row items-center justify-between w-full">
