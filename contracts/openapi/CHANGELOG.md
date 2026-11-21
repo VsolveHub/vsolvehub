@@ -1,5 +1,15 @@
 # API Contract Changelog
 
+## 1.115.0 - Who started a refund, and what it was for
+
+Additive.
+
+- **Added** `started_by` (`StartedByEnum`: `AUTOMATIC`, `CUSTOMER`, `OPERATIONS`) on
+  `Refund`: whether the system asked for it (a cancellation, money that arrived after one), the
+  customer's own action, or staff from the console.
+- **Added** `paid_for` (`PaidForEnum`, nullable) on `Refund`: the purpose of the payment being
+  refunded, so a refund reads as a rental, a home visit, a stay or a project stage.
+
 ## 1.114.0 - Step-up confirms the signed-in person's own number
 
 - **Added** `POST /auth/finance/step-up/code/` (`StepUpCodeIssued`): sends a step-up code to the

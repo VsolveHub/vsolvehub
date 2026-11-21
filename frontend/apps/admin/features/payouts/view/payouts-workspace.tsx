@@ -3,94 +3,69 @@
 import { useState } from "react";
 
 import type { StepUpSession } from "@/features/finance/queries";
-import { StepUpGate } from "@/features/finance/view/step-up-gate";
+import { CompactStepUpGate } from "@/features/finance/view/step-up-gate";
 import { SectionTabs } from "@/features/shared/section-tabs";
 
 import { LedgerAdjustment } from "./ledger-adjustment";
 import { PayoutAccountReview } from "./payout-account-review";
 import { PayoutConsole } from "./payout-console";
+import { PayoutsAttentionSummary, usePayoutsAttention } from "./payouts-attention";
 import { WithdrawalQueue } from "./withdrawal-queue";
 
 /**
- * Paying partners. Approving, paying and correcting balances move money, so the identity check
- * sits on this page rather than on a different screen the operator has to find.
+ * Paying partners.
+ *
+ * The page leads with what needs a person (withdrawals, bank accounts, runs) and how much is on
+ * its way, so an operator sees the state of payouts without opening every tab. The identity
+ * check is one line shared by all tabs: approving, paying and correcting move money, but reading
+ * does not, so it stays small until it is needed and opens itself when a command asks for it.
  */
 export function PayoutsWorkspace() {
   const [session, setSession] = useState<StepUpSession | null>(null);
   const [reason, setReason] = useState<string | null>(null);
+  const attention = usePayoutsAttention();
+  const runsWaiting = attention.runsToApprove.count + attention.runsToPay.count;
 
   return (
     <SectionTabs
       title="Payouts"
-      description="Propose a run, have a colleague approve it, then pay. Correct balances when an earning was missed or overpaid."
+      description="Pay partners what they have earned, check their bank accounts, and correct balances."
+      lead={
+        <div className="flex flex-col gap-3">
+          <PayoutsAttentionSummary attention={attention} />
+          <CompactStepUpGate
+            session={session}
+            reason={reason ?? undefined}
+            onSteppedUp={(stepped) => {
+              setSession(stepped);
+              setReason(null);
+            }}
+          />
+        </div>
+      }
       tabs={[
-        {
-          id: "runs",
-          label: "Payout runs",
-          render: () => (
-            <div className="flex flex-col gap-6">
-              <StepUpGate
-                session={session}
-                reason={reason ?? undefined}
-                onSteppedUp={(stepped) => {
-                  setSession(stepped);
-                  setReason(null);
-                }}
-              />
-              <PayoutConsole />
-            </div>
-          ),
-        },
         {
           id: "withdrawals",
           label: "Withdrawals",
-          render: () => (
-            <div className="flex flex-col gap-6">
-              <StepUpGate
-                session={session}
-                reason={reason ?? undefined}
-                onSteppedUp={(stepped) => {
-                  setSession(stepped);
-                  setReason(null);
-                }}
-              />
-              <WithdrawalQueue onStepUpRequired={setReason} />
-            </div>
-          ),
+          count: attention.withdrawals.count,
+          render: () => <WithdrawalQueue onStepUpRequired={setReason} />,
         },
         {
           id: "accounts",
           label: "Bank accounts",
-          render: () => (
-            <div className="flex flex-col gap-6">
-              <StepUpGate
-                session={session}
-                reason={reason ?? undefined}
-                onSteppedUp={(stepped) => {
-                  setSession(stepped);
-                  setReason(null);
-                }}
-              />
-              <PayoutAccountReview onStepUpRequired={setReason} />
-            </div>
-          ),
+          count: attention.accounts.count,
+          render: () => <PayoutAccountReview onStepUpRequired={setReason} />,
+        },
+        {
+          id: "runs",
+          label: "Payout runs",
+          count: runsWaiting,
+          render: () => <PayoutConsole />,
         },
         {
           id: "corrections",
           label: "Balance corrections",
-          render: () => (
-            <div className="flex flex-col gap-6">
-              <StepUpGate
-                session={session}
-                reason={reason ?? undefined}
-                onSteppedUp={(stepped) => {
-                  setSession(stepped);
-                  setReason(null);
-                }}
-              />
-              <LedgerAdjustment onStepUpRequired={setReason} />
-            </div>
-          ),
+          render: () => <LedgerAdjustment onStepUpRequired={setReason} />,
         },
       ]}
     />

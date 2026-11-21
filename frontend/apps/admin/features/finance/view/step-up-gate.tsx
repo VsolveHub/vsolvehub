@@ -59,6 +59,89 @@ import {
  * moment it is spent. Same rule as `useOtpFlow`, for the same reason.
  */
 
+function formatStamp(iso: string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(iso));
+}
+
+/**
+ * The same check as one line, for screens where it sits above every tab. It opens itself when
+ * a command was refused for want of it, and otherwise stays out of the way until asked.
+ */
+export function CompactStepUpGate({
+  session,
+  onSteppedUp,
+  reason,
+}: {
+  session: StepUpSession | null;
+  onSteppedUp: (session: StepUpSession) => void;
+  reason?: string;
+}) {
+  const [opened, setOpened] = useState(false);
+  const open = opened || Boolean(reason);
+
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-text-secondary">
+          {session ? (
+            <>
+              <span className="font-semibold text-success-text">✓ Confirmed it is you</span> at{" "}
+              <time dateTime={session.stepped_up_at} data-numeric>
+                {formatStamp(session.stepped_up_at)}
+              </time>
+              . Approving and paying will work until it lapses.
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-text">Approving, paying and correcting</span>{" "}
+              need a quick code to confirm it is you.
+            </>
+          )}
+        </p>
+        {!open ? (
+          <Button size="sm" variant={session ? "ghost" : "primary"} onClick={() => setOpened(true)}>
+            {session ? "Confirm again" : "Confirm it is you"}
+          </Button>
+        ) : reason ? null : (
+          <Button size="sm" variant="ghost" onClick={() => setOpened(false)}>
+            Not now
+          </Button>
+        )}
+      </div>
+      {reason ? (
+        <ErrorState
+          inline
+          className="mt-3"
+          severity="warning"
+          title="Confirm again to continue"
+          message={reason}
+        />
+      ) : null}
+      {open ? (
+        isFirebasePhoneAuth() ? (
+          <FirebaseStepUpForm
+            onSteppedUp={(stepped) => {
+              setOpened(false);
+              onSteppedUp(stepped);
+            }}
+          />
+        ) : (
+          <OtpStepUpForm
+            onSteppedUp={(stepped) => {
+              setOpened(false);
+              onSteppedUp(stepped);
+            }}
+          />
+        )
+      ) : null}
+    </Card>
+  );
+}
+
 export function StepUpGate({
   session,
   onSteppedUp,

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.114.0)
- * Checksum: a866012075faf80e
+ * Source:   contracts/openapi/v1.yaml (version 1.115.0)
+ * Checksum: 7950d21085a67d4f
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -15430,6 +15430,26 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        /**
+         * @description * `BOOKING_GROUP` - Booking group
+         *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+         *     * `M2_QUOTE_UNLOCK` - M2 quote unlock
+         *     * `M2_VISIT_PLAN` - M2 visit plan
+         *     * `M2_SITE_VISIT_FEE` - M2 site visit fee
+         *     * `M2_STAGE_FUNDING` - M2 stage funding
+         *     * `M2_MATERIAL_ADVANCE` - M2 material advance
+         *     * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+         *     * `M2_BOOKING_FEE` - M2 booking fee
+         *     * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+         *     * `A10_PREMIUM_LISTING` - A10 premium listing
+         *     * `WALLET_TOP_UP` - Wallet top-up
+         *     * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+         *     * `A9_STAY_RESERVATION` - A9 stay reservation
+         *     * `A7_RENTAL_BOOKING` - A7 rental booking
+         *     * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+         * @enum {string}
+         */
+        PaidForEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING" | "A9_STAY_SUBSCRIPTION";
         PartnerApplication: {
             /** Format: uuid */
             readonly id: string;
@@ -19216,6 +19236,35 @@ export interface components {
             readonly provider_refund_id: string;
             readonly amount: components["schemas"]["Money"];
             readonly allocations: components["schemas"]["RefundAllocation"][];
+            /**
+             * @description Who set the refund going: AUTOMATIC (the system, e.g. a cancellation), CUSTOMER (their own action) or OPERATIONS (staff, from the console).
+             *
+             *     * `AUTOMATIC` - Automatic
+             *     * `CUSTOMER` - Customer
+             *     * `OPERATIONS` - Operations
+             */
+            readonly started_by: components["schemas"]["StartedByEnum"];
+            /**
+             * @description What the refunded payment was for: its payment attempt's purpose.
+             *
+             *     * `BOOKING_GROUP` - Booking group
+             *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+             *     * `M2_QUOTE_UNLOCK` - M2 quote unlock
+             *     * `M2_VISIT_PLAN` - M2 visit plan
+             *     * `M2_SITE_VISIT_FEE` - M2 site visit fee
+             *     * `M2_STAGE_FUNDING` - M2 stage funding
+             *     * `M2_MATERIAL_ADVANCE` - M2 material advance
+             *     * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+             *     * `M2_BOOKING_FEE` - M2 booking fee
+             *     * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+             *     * `A10_PREMIUM_LISTING` - A10 premium listing
+             *     * `WALLET_TOP_UP` - Wallet top-up
+             *     * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+             *     * `A9_STAY_RESERVATION` - A9 stay reservation
+             *     * `A7_RENTAL_BOOKING` - A7 rental booking
+             *     * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+             */
+            readonly paid_for: (components["schemas"]["PaidForEnum"] | components["schemas"]["NullEnum"]) | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -20785,6 +20834,13 @@ export interface components {
             /** Format: uuid */
             plan_id: string;
         };
+        /**
+         * @description * `AUTOMATIC` - Automatic
+         *     * `CUSTOMER` - Customer
+         *     * `OPERATIONS` - Operations
+         * @enum {string}
+         */
+        StartedByEnum: "AUTOMATIC" | "CUSTOMER" | "OPERATIONS";
         /**
          * @description * `REQUESTED` - Requested
          *     * `ACCEPTED` - Accepted

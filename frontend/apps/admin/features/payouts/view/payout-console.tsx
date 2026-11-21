@@ -80,6 +80,32 @@ const ITEM_TONE: Record<
   RELEASED: "neutral",
 };
 
+/** A run's status in the words an operator would use. Exported for tests. */
+export const BATCH_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  PENDING_APPROVAL: "Waiting for approval",
+  APPROVED: "Approved, ready to pay",
+  PAYING: "Sending to banks",
+  PAID: "Paid",
+  FAILED: "Some payouts failed",
+  CANCELLED: "Cancelled",
+};
+
+/** Runs a person still has to do something about, or watch. */
+const NEEDS_ACTION = new Set(["DRAFT", "PENDING_APPROVAL", "APPROVED", "PAYING", "FAILED"]);
+
+type RunFilter = "action" | "done" | "all";
+
+/** Exported for tests. */
+export function filterRuns<T extends { status: string }>(rows: T[], filter: RunFilter): T[] {
+  if (filter === "all") return rows;
+  return rows.filter((row) => NEEDS_ACTION.has(row.status) === (filter === "action"));
+}
+
+function batchLabel(status: string): string {
+  return BATCH_LABEL[status] ?? status.replaceAll("_", " ").toLowerCase();
+}
+
 function StepUpNotice() {
   return (
     <div className="mt-3 rounded-control border border-warning-line bg-warning-surface p-3 text-sm">
@@ -149,7 +175,7 @@ function BatchDetail({ batchId }: { batchId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Badge tone={BATCH_TONE[batch.status] ?? "neutral"}>
-            {batch.status.replaceAll("_", " ").toLowerCase()}
+            {batchLabel(batch.status)}
           </Badge>
           <h2 className="mt-2 text-lg font-bold text-text">
             {batch.reference}
@@ -333,13 +359,56 @@ function BatchDetail({ batchId }: { batchId: string }) {
 
 export function PayoutConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [filter, setFilter] = useState<RunFilter>("action");
   const batches = usePayoutBatches({ kind: "RUN" });
   const rows = batches.data?.pages.flatMap((page) => page.results) ?? [];
+  const shown = filterRuns(rows, filter);
+  const counts = {
+    action: filterRuns(rows, "action").length,
+    done: filterRuns(rows, "done").length,
+    all: rows.length,
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <NewPayoutRun onProposed={setSelectedId} />
-      <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Show runs" className="flex flex-wrap gap-2">
+          {(
+            [
+              ["action", "Needs action"],
+              ["done", "Paid or cancelled"],
+              ["all", "All"],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={filter === value ? "primary" : "outline"}
+              aria-pressed={filter === value}
+              onClick={() => setFilter(value)}
+            >
+              {label} ({counts[value]}
+              {batches.hasNextPage ? "+" : ""})
+            </Button>
+          ))}
+        </div>
+        <Button size="sm" variant={creating ? "ghost" : "outline"} onClick={() => setCreating((on) => !on)}>
+          {creating ? "Close" : "New payout run…"}
+        </Button>
+      </div>
+
+      {creating ? (
+        <NewPayoutRun
+          onProposed={(id) => {
+            setSelectedId(id);
+            setCreating(false);
+            setFilter("action");
+          }}
+        />
+      ) : null}
+
+      <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
         <div>
           {batches.isPending ? (
             <p className="flex items-center gap-2 text-sm text-text-secondary">
@@ -348,32 +417,41 @@ export function PayoutConsole() {
             </p>
           ) : null}
 
-          {!batches.isPending && rows.length === 0 ? (
-            <p className="text-sm text-text-secondary">No payout runs yet.</p>
+          {!batches.isPending && shown.length === 0 ? (
+            <p className="rounded-card border border-line bg-surface p-4 text-sm text-text-secondary">
+              {filter === "action"
+                ? "No runs need anything from you. Start one with New payout run."
+                : rows.length === 0
+                  ? "No payout runs yet."
+                  : "None here."}
+            </p>
           ) : null}
 
-          <ul className="list-none space-y-2">
-            {rows.map((row) => (
+          <ul className="list-none divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+            {shown.map((row) => (
               <li key={row.id}>
                 <button
                   type="button"
                   onClick={() => setSelectedId(row.id)}
                   aria-current={selectedId === row.id ? "true" : undefined}
                   className={[
-                    "w-full rounded-card border p-3 text-left text-sm",
-                    selectedId === row.id
-                      ? "border-signal-300 bg-selected-surface"
-                      : "border-line bg-surface hover:bg-surface-hover",
+                    "flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left text-sm",
+                    selectedId === row.id ? "bg-selected-surface" : "hover:bg-surface-hover",
                   ].join(" ")}
                 >
-                  <Badge tone={BATCH_TONE[row.status] ?? "neutral"}>
-                    {row.status.replaceAll("_", " ").toLowerCase()}
-                  </Badge>
-                  <span className="mt-1 block font-semibold text-text">
-                    {row.reference}
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-text">{row.reference}</span>
+                    <span className="mt-1 block">
+                      <Badge tone={BATCH_TONE[row.status] ?? "neutral"}>{batchLabel(row.status)}</Badge>
+                    </span>
                   </span>
-                  <span data-numeric className="text-text-secondary">
-                    {formatMoney(row.total_paise)} · {row.item_count}
+                  <span className="shrink-0 text-right">
+                    <span data-numeric className="block font-semibold text-text">
+                      {formatMoney(row.total_paise)}
+                    </span>
+                    <span className="block text-xs text-text-secondary">
+                      {row.item_count} {row.item_count === 1 ? "partner" : "partners"}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -388,14 +466,14 @@ export function PayoutConsole() {
               loadingLabel="Loading"
               onClick={() => void batches.fetchNextPage()}
             >
-              Load more
+              Load older runs
             </Button>
           ) : null}
         </div>
 
         {selectedId === null ? (
           <Card className="p-6 text-sm text-text-secondary">
-            Choose a payout run to review and approve it.
+            Pick a run on the left to see who it pays and to approve or pay it.
           </Card>
         ) : (
           <BatchDetail batchId={selectedId} />
