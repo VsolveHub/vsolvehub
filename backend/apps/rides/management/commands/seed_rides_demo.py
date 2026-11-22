@@ -30,6 +30,7 @@ from apps.rides.models import (
     CaptainPass,
     CaptainPassPlan,
     CaptainVehicle,
+    RideKind,
     RideRateCard,
     VehicleType,
 )
@@ -87,11 +88,21 @@ PLACEHOLDER_RATES: dict[str, dict[str, int]] = {
     },
 }
 
+#: PLACEHOLDER Pick up & Drop cards (bike and auto only): the same price fields as a ride, plus the
+#: D5 limits (docs/parcel/README.md): bike 10 kg, 40 x 30 x 20 cm; auto 50 kg, 1.3 x 3.5 x 3.3 ft.
+PLACEHOLDER_PARCEL_LIMITS: dict[str, dict[str, Any]] = {
+    VehicleType.BIKE: {"max_parcel_weight_grams": 10_000, "parcel_size_label": "40 x 30 x 20 cm"},
+    VehicleType.AUTO: {
+        "max_parcel_weight_grams": 50_000,
+        "parcel_size_label": "1.3 x 3.5 x 3.3 ft",
+    },
+}
+
 
 class Command(BaseCommand):
     help = (
-        "Load PLACEHOLDER Rides rate cards (bike, auto, cab) for hyderabad-500032 and two "
-        "pass plans. Development only."
+        "Load PLACEHOLDER Rides rate cards (bike, auto, cab), Pick up & Drop cards (bike, auto) "
+        "for hyderabad-500032 and two pass plans. Development only."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -121,24 +132,23 @@ class Command(BaseCommand):
             )
 
         with transaction.atomic():
-            for vehicle_type, rates in PLACEHOLDER_RATES.items():
-                if RideRateCard.objects.filter(
-                    service_area=area, vehicle_type=vehicle_type, is_active=True
-                ).exists():
-                    self.stdout.write(f"{vehicle_type}: active card already exists, left alone.")
-                    continue
-                last = (
-                    RideRateCard.objects.filter(service_area=area, vehicle_type=vehicle_type)
-                    .order_by("-version")
-                    .first()
+            for kind, vehicle_type, rates in self._cards():
+                label = f"{kind} {vehicle_type}"
+                cards = RideRateCard.objects.filter(
+                    service_area=area, vehicle_type=vehicle_type, kind=kind
                 )
+                if cards.filter(is_active=True).exists():
+                    self.stdout.write(f"{label}: active card already exists, left alone.")
+                    continue
+                last = cards.order_by("-version").first()
                 RideRateCard.objects.create(
                     service_area=area,
                     vehicle_type=vehicle_type,
+                    kind=kind,
                     version=(last.version + 1) if last else 1,
                     **rates,
                 )
-                self.stdout.write(f"{vehicle_type}: PLACEHOLDER rate card created.")
+                self.stdout.write(f"{label}: PLACEHOLDER rate card created.")
 
             for plan in PLACEHOLDER_PASS_PLANS:
                 code = str(plan["code"])
@@ -153,6 +163,18 @@ class Command(BaseCommand):
                 self._seed_captain(phone, name, vehicle_type, plate, launch)
 
         self.stdout.write(self.style.SUCCESS("Rides placeholder data is ready."))
+
+    @staticmethod
+    def _cards() -> list[tuple[str, str, dict[str, Any]]]:
+        """Every card to seed: a ride card per vehicle, and a parcel card for bike and auto."""
+        cards: list[tuple[str, str, dict[str, Any]]] = [
+            (RideKind.RIDE, vt, rates) for vt, rates in PLACEHOLDER_RATES.items()
+        ]
+        cards += [
+            (RideKind.PARCEL, vt, {**PLACEHOLDER_RATES[vt], **limits})
+            for vt, limits in PLACEHOLDER_PARCEL_LIMITS.items()
+        ]
+        return cards
 
     def _seed_captain(
         self, phone: str, name: str, vehicle_type: str, plate: str, plan: CaptainPassPlan

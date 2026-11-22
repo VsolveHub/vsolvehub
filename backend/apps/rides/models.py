@@ -14,6 +14,7 @@ from django.utils import timezone
 
 __all__ = [
     "OPEN_RIDE_STATES",
+    "PARCEL_LIMIT_FIELDS",
     "RATE_FIELDS",
     "ActorKind",
     "CaptainDutySession",
@@ -99,6 +100,10 @@ RATE_FIELDS = (
     "free_waiting_minutes",
     "waiting_per_minute_paise",
 )
+
+
+#: What a Pick up & Drop card adds to the prices: the limits shown to customers (D5).
+PARCEL_LIMIT_FIELDS = ("max_parcel_weight_grams", "parcel_size_label")
 
 
 class RideRateCard(models.Model):

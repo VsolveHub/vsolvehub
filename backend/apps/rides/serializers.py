@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -15,11 +16,13 @@ from apps.rides.engine import (
     OTP_VISIBLE_STATES,
     RIDER_CANCEL_REASONS,
     parcel_delivery_pin,
+    receiver_unavailable_allowed_at,
     ride_otp,
     searching_again,
 )
 from apps.rides.models import (
     OPEN_RIDE_STATES,
+    PARCEL_LIMIT_FIELDS,
     RATE_FIELDS,
     ActorKind,
     CaptainDutySession,
@@ -573,6 +576,16 @@ class CaptainParcelSerializer(_ParcelBaseSerializer):
     """The parcel block as the captain sees it: both ends' details only while it is open (D20),
     and never the delivery PIN."""
 
+    receiver_unavailable_allowed_at = serializers.SerializerMethodField(
+        help_text="When Receiver not available opens (server time); null before arriving at the "
+        "drop and once the parcel is no longer at the drop."
+    )
+
+    def get_receiver_unavailable_allowed_at(self, obj: ParcelDetails) -> datetime | None:
+        if obj.ride.state != RideState.IN_TRIP:
+            return None
+        return receiver_unavailable_allowed_at(obj.ride, obj)
+
     @extend_schema_field(ParcelEndSerializer(allow_null=True))
     def get_pickup(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "pickup") if obj.ride.state in OPEN_RIDE_STATES else None
@@ -801,6 +814,7 @@ class OpsRideRowSerializer(serializers.ModelSerializer[Ride]):
         model = Ride
         fields = (
             "id",
+            "kind",
             "state",
             "vehicle_type",
             "service_area_id",
@@ -840,6 +854,12 @@ class OpsPersonSerializer(serializers.Serializer[Any]):
     phone_number = serializers.CharField()
 
 
+class OpsParcelSerializer(_ParcelBaseSerializer):
+    """The parcel block for Operations: both ends' details, always (D20), and the PIN tries."""
+
+    pin_attempts = serializers.IntegerField(help_text="Wrong delivery PINs so far, out of 5.")
+
+
 class OpsRideDetailSerializer(_RideBaseSerializer):
     """Everything Operations needs to understand one ride: both people, the history and offers."""
 
@@ -847,6 +867,7 @@ class OpsRideDetailSerializer(_RideBaseSerializer):
     rider = serializers.SerializerMethodField()
     captain = serializers.SerializerMethodField()
     vehicle = serializers.SerializerMethodField()
+    parcel = serializers.SerializerMethodField(help_text="Pick up & Drop only; null for a ride.")
     transitions = OpsTransitionSerializer(many=True, read_only=True)
     offers = OpsOfferSerializer(many=True, read_only=True)
     ratings = serializers.SerializerMethodField()
@@ -861,11 +882,18 @@ class OpsRideDetailSerializer(_RideBaseSerializer):
             "otp_attempts",
             "dispatch_round",
             "no_captain_found_at",
+            "parcel",
             "ratings",
             "transitions",
             "offers",
         )
         read_only_fields = fields
+
+    @extend_schema_field(OpsParcelSerializer(allow_null=True))
+    def get_parcel(self, obj: Ride) -> dict[str, Any] | None:
+        if obj.kind != RideKind.PARCEL:
+            return None
+        return dict(OpsParcelSerializer(obj.parcel).data)
 
     @extend_schema_field(OpsPersonSerializer)
     def get_rider(self, obj: Ride) -> dict[str, str]:
@@ -1078,7 +1106,9 @@ class RideRateCardSerializer(serializers.ModelSerializer[RideRateCard]):
             "service_area_id",
             "service_area_name",
             "vehicle_type",
+            "kind",
             *RATE_FIELDS,
+            *PARCEL_LIMIT_FIELDS,
             "is_active",
             "version",
             "created_at",
@@ -1091,9 +1121,28 @@ def _amount(*, required: bool) -> serializers.IntegerField:
     return serializers.IntegerField(min_value=0, required=required)
 
 
+def _weight() -> serializers.IntegerField:
+    return serializers.IntegerField(
+        min_value=1,
+        required=False,
+        help_text="Pick up & Drop cards only: the heaviest item, in grams.",
+    )
+
+
+def _size_label() -> serializers.CharField:
+    return serializers.CharField(
+        max_length=40,
+        required=False,
+        help_text="Pick up & Drop cards only, such as '40 x 30 x 20 cm'.",
+    )
+
+
 class RateCardCreateSerializer(serializers.Serializer[Any]):
     service_area_id = serializers.UUIDField()
     vehicle_type = serializers.ChoiceField(choices=VehicleType.choices)
+    kind = serializers.ChoiceField(choices=RideKind.choices, default=RideKind.RIDE)
+    max_parcel_weight_grams = _weight()
+    parcel_size_label = _size_label()
     base_fare_paise = _amount(required=True)
     included_distance_m = _amount(required=True)
     per_km_paise = _amount(required=True)
@@ -1101,6 +1150,23 @@ class RateCardCreateSerializer(serializers.Serializer[Any]):
     minimum_fare_paise = _amount(required=True)
     free_waiting_minutes = _amount(required=True)
     waiting_per_minute_paise = _amount(required=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        has_limits = [name for name in PARCEL_LIMIT_FIELDS if name in attrs]
+        if attrs["kind"] == RideKind.RIDE:
+            if has_limits:
+                raise serializers.ValidationError(
+                    dict.fromkeys(has_limits, "Only a Pick up & Drop card has limits.")
+                )
+            return attrs
+        if attrs["vehicle_type"] not in (VehicleType.BIKE, VehicleType.AUTO):
+            raise serializers.ValidationError({"vehicle_type": "Pick up & Drop is bike and auto."})
+        missing = [name for name in PARCEL_LIMIT_FIELDS if name not in attrs]
+        if missing:
+            raise serializers.ValidationError(
+                dict.fromkeys(missing, "A Pick up & Drop card needs this.")
+            )
+        return attrs
 
 
 class RateCardUpdateSerializer(serializers.Serializer[Any]):
@@ -1114,15 +1180,17 @@ class RateCardUpdateSerializer(serializers.Serializer[Any]):
     minimum_fare_paise = _amount(required=False)
     free_waiting_minutes = _amount(required=False)
     waiting_per_minute_paise = _amount(required=False)
+    max_parcel_weight_grams = _weight()
+    parcel_size_label = _size_label()
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        rates = {k: v for k, v in attrs.items() if k in RATE_FIELDS}
+        rates = {k: v for k, v in attrs.items() if k in (*RATE_FIELDS, *PARCEL_LIMIT_FIELDS)}
         if attrs.get("is_active") is False and rates:
             raise serializers.ValidationError(
                 "Switch the card off on its own, without price changes."
             )
         if attrs.get("is_active") is not False and not rates:
-            raise serializers.ValidationError("Send at least one price to change.")
+            raise serializers.ValidationError("Send at least one price or limit to change.")
         return attrs
 
 

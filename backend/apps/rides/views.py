@@ -24,6 +24,7 @@ from apps.rides.models import (
     CaptainPass,
     CaptainPassPlan,
     Ride,
+    RideKind,
     RideRateCard,
     RideSosEvent,
     RideState,
@@ -113,7 +114,10 @@ __all__ = [
     "OpsSosResolveView",
     "OpsSosView",
     "ParcelPreferenceView",
+    "PaymentNotReceivedView",
     "PaymentReceivedView",
+    "ReceiverUnavailableView",
+    "ReturnedView",
     "RideDetailView",
     "RiderCancelView",
     "RiderRatingView",
@@ -308,14 +312,18 @@ class OpsRateCardsView(APIView):
         parameters=[
             OpenApiParameter("service_area_id", OpenApiTypes.UUID, required=False),
             OpenApiParameter("vehicle_type", OpenApiTypes.STR, required=False),
+            OpenApiParameter(
+                "kind", OpenApiTypes.STR, required=False, description="RIDE or PARCEL."
+            ),
             OpenApiParameter("active", OpenApiTypes.BOOL, required=False),
         ],
         responses=RideRateCardSerializer(many=True),
     )
     def get(self, request: Any) -> Response:
         cards = RideRateCard.objects.select_related("service_area").order_by(
-            "service_area_id", "vehicle_type", "-version"
+            "service_area_id", "kind", "vehicle_type", "-version"
         )
+        cards = _choice_filter(cards, request, "kind", RideKind.values)
         params = request.query_params
         if params.get("service_area_id"):
             try:
@@ -343,6 +351,7 @@ class OpsRateCardsView(APIView):
             created_by=request.user,
             service_area=area,
             vehicle_type=data.pop("vehicle_type"),
+            kind=data.pop("kind"),
             rates=data,
         )
         return Response(RideRateCardSerializer(card).data, status=http_status.HTTP_201_CREATED)
@@ -731,6 +740,75 @@ class ArrivedAtDropView(_TripStepView):
         return super().post(request, ride_id)
 
 
+class ReceiverUnavailableView(_TripStepView):
+    """The receiver is not there after the free wait (or the PIN is locked): take it back."""
+
+    step = staticmethod(engine.mark_receiver_unavailable)
+
+    @extend_schema(
+        operation_id="partner_rides_receiver_unavailable",
+        request=None,
+        responses=CaptainRideSerializer,
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return super().post(request, ride_id)
+
+
+class PaymentNotReceivedView(_TripStepView):
+    """The sender would not pay on the return: what is due becomes unpaid."""
+
+    step = staticmethod(engine.mark_payment_not_received)
+
+    @extend_schema(
+        operation_id="partner_rides_payment_not_received",
+        request=None,
+        responses=CaptainRideSerializer,
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return super().post(request, ride_id)
+
+
+class ReturnedView(APIView):
+    """The parcel is back at the pickup: the sender gives the pickup code again."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_returned",
+        request=StartTripSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses=CaptainRideSerializer,
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        serializer = StartTripSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        otp = serializer.validated_data["otp"]
+        key = _required_idempotency_key(request)
+        partner = _partner(request.user)
+
+        def command() -> tuple[int, dict[str, Any]]:
+            ride, refusal = engine.mark_returned(partner=partner, ride_id=ride_id, otp=otp)
+            if refusal is not None:
+                return _code_refusal(refusal, attempts=ride.otp_attempts)
+            return http_status.HTTP_200_OK, dict(CaptainRideSerializer(ride).data)
+
+        result = execute_idempotent(
+            actor=request.user,
+            operation="rides.parcel.returned",
+            key=key,
+            # Never the code itself: an HMAC, so the stored fingerprint cannot be searched.
+            request_payload={
+                "ride_id": str(ride_id),
+                "otp_mac": engine.otp_fingerprint(ride_id, otp),
+            },
+            command=command,
+        )
+        response = Response(result.body, status=result.status_code)
+        if result.replayed:
+            response["Idempotent-Replay"] = "true"
+        return response
+
+
 class DeliverParcelView(APIView):
     """Hand the parcel over, with the receiver's PIN when PIN confirmation is on. A network
     retry never costs an attempt."""
@@ -950,16 +1028,17 @@ class OldestFirstPagination(OperationsNewestFirstPagination):
     ordering = ("created_at", "id")
 
 
-def _state_filter(queryset: Any, request: Any) -> Any:
-    """`?state=SEARCHING,IN_TRIP`. An unknown state is refused, never silently ignored."""
-    raw = (request.query_params.get("state") or "").strip()
+def _choice_filter(queryset: Any, request: Any, param: str, allowed: list[str]) -> Any:
+    """`?state=SEARCHING,IN_TRIP` (or kind, payment_status). The query parameter is also the model
+    field. An unknown value is refused, never silently ignored."""
+    raw = (request.query_params.get(param) or "").strip()
     if not raw:
         return queryset
     wanted = [part.strip().upper() for part in raw.split(",") if part.strip()]
-    unknown = sorted(set(wanted) - set(RideState.values))
+    unknown = sorted(set(wanted) - set(allowed))
     if unknown:
-        raise ValidationError({"state": [f"Unknown state: {', '.join(unknown)}."]})
-    return queryset.filter(state__in=wanted)
+        raise ValidationError({param: [f"Unknown {param}: {', '.join(unknown)}."]})
+    return queryset.filter(**{f"{param}__in": wanted})
 
 
 class OpsRidesView(APIView):
@@ -977,11 +1056,26 @@ class OpsRidesView(APIView):
                 required=False,
                 description="One or more, comma-separated.",
             ),
+            OpenApiParameter(
+                "kind", OpenApiTypes.STR, required=False, description="RIDE or PARCEL."
+            ),
+            OpenApiParameter(
+                "payment_status",
+                OpenApiTypes.STR,
+                required=False,
+                description="DUE, COLLECTED or UNPAID (a parcel the sender did not pay for).",
+            ),
         ],
         responses=page_serializer(OpsRideRowSerializer, "PaginatedOperationsRides"),
     )
     def get(self, request: Any) -> Response:
-        rides = _state_filter(Ride.objects.select_related("rider", "captain"), request)
+        rides = Ride.objects.select_related("rider", "captain")
+        for param, allowed in (
+            ("state", RideState.values),
+            ("kind", RideKind.values),
+            ("payment_status", Ride.PaymentStatus.values),
+        ):
+            rides = _choice_filter(rides, request, param, allowed)
         return paginated(
             request, self, rides, OpsRideRowSerializer, pagination=OperationsNewestFirstPagination
         )
@@ -997,7 +1091,7 @@ class OpsRideDetailView(APIView):
         del request
         ride = get_object_or_404(
             Ride.objects.select_related(
-                "quote", "rider", "captain__user", "captain__ride_vehicle"
+                "quote", "rider", "captain__user", "captain__ride_vehicle", "parcel"
             ).prefetch_related("transitions__actor", "offers__captain", "ratings"),
             id=ride_id,
         )

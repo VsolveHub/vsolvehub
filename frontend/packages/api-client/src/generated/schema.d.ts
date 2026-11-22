@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.111.0)
- * Checksum: 247b93d7e38a8fdf
+ * Source:   contracts/openapi/v1.yaml (version 1.112.0)
+ * Checksum: a0c4a3ecb5f38793
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7904,6 +7904,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/{ride_id}/arrived-at-drop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description At the drop: the last ping is under 30 s old and within 200 m. Pick up & Drop only. */
+        post: operations["partner_rides_arrived_at_drop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/{ride_id}/cancel/": {
         parameters: {
             query?: never;
@@ -7938,6 +7955,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rides/{ride_id}/deliver/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Hand the parcel over, with the receiver's PIN when PIN confirmation is on. A network
+         *     retry never costs an attempt.
+         */
+        post: operations["partner_rides_deliver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/payment-not-received/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The sender would not pay on the return: what is due becomes unpaid. */
+        post: operations["partner_rides_payment_not_received"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rides/{ride_id}/payment-received/": {
         parameters: {
             query?: never;
@@ -7966,6 +8020,40 @@ export interface paths {
         put?: never;
         /** @description The captain rates the rider, 1-5 stars, once, after a completed ride. */
         post: operations["partner_rides_rating_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/receiver-unavailable/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The receiver is not there after the free wait (or the PIN is locked): take it back. */
+        post: operations["partner_rides_receiver_unavailable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/{ride_id}/returned/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The parcel is back at the pickup: the sender gives the pickup code again. */
+        post: operations["partner_rides_returned"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8169,6 +8257,23 @@ export interface paths {
         /** @description The ride request to show the captain now, or none. The app polls this every 2 s. */
         get: operations["partner_rides_offers_current_retrieve"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rides/parcel-preference/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The "Take parcel orders" switch. Bike and Auto captains only. */
+        put: operations["partner_rides_parcel_preference_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -10876,6 +10981,9 @@ export interface components {
         Availability: {
             /** @description Bookable here, cheapest first. Empty: hide the Rides entry. */
             vehicle_types: components["schemas"]["VehicleTypesEnum"][];
+            /** @description Pick up & Drop vehicles bookable here, with limits. Empty: hide the entry. */
+            parcel: components["schemas"]["ParcelLimits"][];
+            parcel_rules: components["schemas"]["ParcelRules"];
         };
         /**
          * @description * `IMMEDIATE` - Immediately
@@ -11223,12 +11331,40 @@ export interface components {
             readonly occurred_at: string;
         };
         CaptainCancelRequest: {
-            /** @description One of: RIDER_NOT_REACHABLE, VEHICLE_ISSUE, PICKUP_TOO_FAR, OTHER. */
+            /** @description One of: RIDER_NOT_REACHABLE, VEHICLE_ISSUE, PICKUP_TOO_FAR, OTHER, ITEM_NOT_ALLOWED. */
             reason: string;
         };
         CaptainCurrentRide: {
             /** @description The open ride, else a finished one not yet marked paid; null when neither. */
             ride: components["schemas"]["CaptainRide"] | null;
+        };
+        /**
+         * @description The parcel block as the captain sees it: both ends' details only while it is open (D20),
+         *     and never the delivery PIN.
+         */
+        CaptainParcel: {
+            mode: string;
+            payer: string;
+            pin_required: boolean;
+            readonly pickup: components["schemas"]["ParcelEnd"] | null;
+            readonly drop: components["schemas"]["ParcelEnd"] | null;
+            /** @description PICKUP when the sender pays, DROP when the receiver pays. */
+            readonly payment_point: string;
+            /** Format: date-time */
+            arrived_at_drop_at: string;
+            /** Format: date-time */
+            delivered_at: string;
+            /** Format: date-time */
+            receiver_unavailable_at: string;
+            /** Format: date-time */
+            returned_at: string;
+            return_fare_paise: number;
+            return_payment_status: string;
+            /**
+             * Format: date-time
+             * @description When Receiver not available opens (server time); null before arriving at the drop and once the parcel is no longer at the drop.
+             */
+            readonly receiver_unavailable_allowed_at: string | null;
         };
         CaptainPass: {
             /** Format: uuid */
@@ -11292,6 +11428,7 @@ export interface components {
         CaptainRide: {
             /** Format: uuid */
             readonly id: string;
+            readonly kind: components["schemas"]["Kind899Enum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly pickup: components["schemas"]["RidePlace"];
@@ -11317,6 +11454,8 @@ export interface components {
             /** @description The number the SOS Call button dials. From the server; never hard-coded. */
             readonly emergency_number: string;
             readonly rider: components["schemas"]["RideRider"];
+            /** @description Pick up & Drop only; null for a ride. */
+            readonly parcel: components["schemas"]["CaptainParcel"] | null;
             /** @description The stars the captain gave the rider, or null. */
             readonly my_rating: number | null;
         };
@@ -11331,6 +11470,8 @@ export interface components {
             duty_started_at: string | null;
             /** @description Why duty cannot start, in display order: suspended or not_approved, vehicle_missing, pass_required. Empty when the captain can go on duty. */
             blocked_reasons: string[];
+            /** @description The Take parcel orders switch. Always false for a cab or with no vehicle. */
+            readonly takes_parcels: boolean;
             readonly queued_pass: components["schemas"]["CaptainPass"] | null;
             /**
              * Format: date-time
@@ -12881,6 +13022,10 @@ export interface components {
             /** @default  */
             note: string;
         };
+        DeliverParcelRequest: {
+            /** @description The receiver's 4-digit delivery PIN. Required only when PIN confirmation is on. */
+            pin?: string;
+        };
         /**
          * @description One item in a handover. Exactly one of `evidence_id` and `external_url`.
          *
@@ -13035,6 +13180,12 @@ export interface components {
             /** @default  */
             note: string;
         };
+        /**
+         * @description * `CURB` - Meet at curb
+         *     * `DOOR` - Meet at door
+         * @enum {string}
+         */
+        DropMeetAtEnum: "CURB" | "DOOR";
         DutyStatus: {
             on_duty: boolean;
             /** Format: date-time */
@@ -13603,6 +13754,11 @@ export interface components {
         FareQuote: {
             /** Format: uuid */
             readonly id: string;
+            readonly kind: components["schemas"]["Kind899Enum"];
+            /** @description Parcel quotes only; null for a ride. */
+            readonly max_weight_grams: number;
+            /** @description Parcel quotes only; empty for a ride. */
+            readonly size_label: string;
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly fare_paise: number;
             readonly distance_m: number;
@@ -13618,6 +13774,14 @@ export interface components {
         FareQuoteRequestRequest: {
             pickup: components["schemas"]["TripPointRequest"];
             drop: components["schemas"]["TripPointRequest"];
+            /**
+             * @description PARCEL for Pick up & Drop.
+             *
+             *     * `RIDE` - Ride
+             *     * `PARCEL` - Pick up & Drop
+             * @default RIDE
+             */
+            kind: components["schemas"]["Kind899Enum"];
         };
         FirebasePrecheckRequest: {
             phone_number: string;
@@ -14189,6 +14353,12 @@ export interface components {
          * @enum {string}
          */
         Kind1c9Enum: "EARN_PROMISE" | "UNLOCK" | "RESERVE" | "BURN" | "RELEASE" | "EXPIRE" | "CANCEL" | "REVERSE" | "ADJUSTMENT";
+        /**
+         * @description * `RIDE` - Ride
+         *     * `PARCEL` - Pick up & Drop
+         * @enum {string}
+         */
+        Kind899Enum: "RIDE" | "PARCEL";
         LastDutyEnd: {
             /** @description CAPTAIN_OFF, LOCATION_STALE, PASS_EXPIRED, SUSPENDED or OPERATIONS. */
             reason: string;
@@ -15945,6 +16115,28 @@ export interface components {
             /** Format: date-time */
             responded_at: string | null;
         };
+        /** @description The parcel block for Operations: both ends' details, always (D20), and the PIN tries. */
+        OpsParcel: {
+            mode: string;
+            payer: string;
+            pin_required: boolean;
+            readonly pickup: components["schemas"]["ParcelEnd"];
+            readonly drop: components["schemas"]["ParcelEnd"];
+            /** @description PICKUP when the sender pays, DROP when the receiver pays. */
+            readonly payment_point: string;
+            /** Format: date-time */
+            arrived_at_drop_at: string;
+            /** Format: date-time */
+            delivered_at: string;
+            /** Format: date-time */
+            receiver_unavailable_at: string;
+            /** Format: date-time */
+            returned_at: string;
+            return_fare_paise: number;
+            return_payment_status: string;
+            /** @description Wrong delivery PINs so far, out of 5. */
+            pin_attempts: number;
+        };
         OpsPerson: {
             name: string;
             phone_number: string;
@@ -16136,6 +16328,7 @@ export interface components {
         OpsRideDetail: {
             /** Format: uuid */
             readonly id: string;
+            readonly kind: components["schemas"]["Kind899Enum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly pickup: components["schemas"]["RidePlace"];
@@ -16169,6 +16362,8 @@ export interface components {
             readonly dispatch_round: number;
             /** Format: date-time */
             readonly no_captain_found_at: string | null;
+            /** @description Pick up & Drop only; null for a ride. */
+            readonly parcel: components["schemas"]["OpsParcel"] | null;
             readonly ratings: {
                 [key: string]: number;
             };
@@ -16179,6 +16374,7 @@ export interface components {
         OpsRideRow: {
             /** Format: uuid */
             readonly id: string;
+            readonly kind: components["schemas"]["Kind899Enum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             /** Format: uuid */
@@ -16411,6 +16607,93 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["RideHistory"][];
+        };
+        /** @description The parcel block on a ride, as the booker sees it. */
+        Parcel: {
+            mode: string;
+            payer: string;
+            pin_required: boolean;
+            readonly pickup: components["schemas"]["ParcelEnd"];
+            readonly drop: components["schemas"]["ParcelEnd"];
+            /** @description PICKUP when the sender pays, DROP when the receiver pays. */
+            readonly payment_point: string;
+            /** Format: date-time */
+            arrived_at_drop_at: string;
+            /** Format: date-time */
+            delivered_at: string;
+            /** Format: date-time */
+            receiver_unavailable_at: string;
+            /** Format: date-time */
+            returned_at: string;
+            return_fare_paise: number;
+            return_payment_status: string;
+            /** @description The 4-digit PIN for the receiver. Only to the booker, only when PIN confirmation is on, and only until the parcel is delivered or goes back. */
+            readonly delivery_pin: string | null;
+        };
+        /**
+         * @description One end of a parcel: who is there and how to meet them.
+         *
+         *     A missing name or phone is a 422 from the booking (`parcel_details_required`), not a 400, so
+         *     the app can send the customer back to the details screen. A malformed phone is a 400.
+         */
+        ParcelEnd: {
+            name?: string;
+            /** @description A 10-digit Indian mobile number, without +91. */
+            phone?: string;
+            building?: string;
+            unit?: string;
+            meet_at: components["schemas"]["DropMeetAtEnum"];
+            instructions?: string;
+        };
+        /**
+         * @description One end of a parcel: who is there and how to meet them.
+         *
+         *     A missing name or phone is a 422 from the booking (`parcel_details_required`), not a 400, so
+         *     the app can send the customer back to the details screen. A malformed phone is a 400.
+         */
+        ParcelEndRequest: {
+            name?: string;
+            /** @description A 10-digit Indian mobile number, without +91. */
+            phone?: string;
+            building?: string;
+            unit?: string;
+            meet_at: components["schemas"]["DropMeetAtEnum"];
+            instructions?: string;
+        };
+        ParcelLimits: {
+            vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            max_weight_grams: number;
+            size_label: string;
+        };
+        /** @description What a captain sees of a parcel before accepting it. No names or phones yet (D20). */
+        ParcelOffer: {
+            pickup_meet_at: components["schemas"]["DropMeetAtEnum"];
+            drop_meet_at: components["schemas"]["DropMeetAtEnum"];
+            /** @description PICKUP or DROP: where to collect the money. */
+            payment_point: string;
+        };
+        ParcelPreference: {
+            takes_parcels: boolean;
+        };
+        ParcelPreferenceRequest: {
+            takes_parcels: boolean;
+        };
+        /**
+         * @description * `SEND` - I'm sending
+         *     * `RECEIVE` - I'm receiving
+         * @enum {string}
+         */
+        ParcelRequestModeEnum: "SEND" | "RECEIVE";
+        ParcelRequestRequest: {
+            mode: components["schemas"]["ParcelRequestModeEnum"];
+            payer: components["schemas"]["PayerEnum"];
+            pin_required: boolean;
+            pickup: components["schemas"]["ParcelEndRequest"];
+            drop: components["schemas"]["ParcelEndRequest"];
+        };
+        ParcelRules: {
+            value_cap_paise: number;
+            prohibited_items: string[];
         };
         PartnerApplication: {
             /** Format: uuid */
@@ -17969,6 +18252,10 @@ export interface components {
             minimum_fare_paise?: number;
             free_waiting_minutes?: number;
             waiting_per_minute_paise?: number;
+            /** @description Pick up & Drop cards only: the heaviest item, in grams. */
+            max_parcel_weight_grams?: number;
+            /** @description Pick up & Drop cards only, such as '40 x 30 x 20 cm'. */
+            parcel_size_label?: string;
         };
         /**
          * @description Partial update, one screen at a time, for save-and-resume.
@@ -18056,6 +18343,12 @@ export interface components {
             band_below_bps?: number | null;
             band_above_bps?: number | null;
         };
+        /**
+         * @description * `SENDER` - Sender
+         *     * `RECEIVER` - Receiver
+         * @enum {string}
+         */
+        PayerEnum: "SENDER" | "RECEIVER";
         PaymentAllocation: {
             /** Format: uuid */
             readonly id: string;
@@ -18126,9 +18419,10 @@ export interface components {
         /**
          * @description * `DUE` - Due
          *     * `COLLECTED` - Collected
+         *     * `UNPAID` - Not paid
          * @enum {string}
          */
-        PaymentStatusEnum: "DUE" | "COLLECTED";
+        PaymentStatusEnum: "DUE" | "COLLECTED" | "UNPAID";
         /**
          * @description * `PENDING` - Pending verification
          *     * `VERIFIED` - Verified
@@ -19808,6 +20102,12 @@ export interface components {
             /** Format: uuid */
             service_area_id: string;
             vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            /** @default RIDE */
+            kind: components["schemas"]["Kind899Enum"];
+            /** @description Pick up & Drop cards only: the heaviest item, in grams. */
+            max_parcel_weight_grams?: number;
+            /** @description Pick up & Drop cards only, such as '40 x 30 x 20 cm'. */
+            parcel_size_label?: string;
             base_fare_paise: number;
             included_distance_m: number;
             per_km_paise: number;
@@ -20893,6 +21193,7 @@ export interface components {
         Ride: {
             /** Format: uuid */
             readonly id: string;
+            readonly kind: components["schemas"]["Kind899Enum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly pickup: components["schemas"]["RidePlace"];
@@ -20917,6 +21218,8 @@ export interface components {
             readonly cancel_reason: string;
             /** @description The number the SOS Call button dials. From the server; never hard-coded. */
             readonly emergency_number: string;
+            /** @description Pick up & Drop only; null for a ride. */
+            readonly parcel: components["schemas"]["Parcel"] | null;
             readonly captain: components["schemas"]["RideCaptain"] | null;
             /** @description The 4-digit start code the rider tells the captain. Only before the trip starts. */
             readonly otp: string | null;
@@ -20948,11 +21251,14 @@ export interface components {
              * @description One of the rider's quotes from POST rides/quotes/.
              */
             quote_id: string;
+            /** @description Required when the quote is a Pick up & Drop quote. */
+            parcel?: components["schemas"]["ParcelRequestRequest"];
         };
         /** @description One past or current ride in a list, for the rider or the captain. */
         RideHistory: {
             /** Format: uuid */
             readonly id: string;
+            readonly kind: components["schemas"]["Kind899Enum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             pickup_address: string;
@@ -20972,9 +21278,12 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly ride_id: string;
+            readonly kind: string;
             readonly vehicle_type: string;
             readonly pickup: components["schemas"]["RidePlace"];
             readonly drop: components["schemas"]["RidePlace"];
+            /** @description Pick up & Drop only: how to meet at each end and where the money is collected. */
+            readonly parcel: components["schemas"]["ParcelOffer"] | null;
             readonly pickup_distance_m: number;
             readonly fare_paise: number;
             readonly trip_distance_m: number;
@@ -20998,6 +21307,7 @@ export interface components {
             readonly service_area_id: string;
             readonly service_area_name: string;
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            readonly kind: components["schemas"]["Kind899Enum"];
             readonly base_fare_paise: number;
             readonly included_distance_m: number;
             readonly per_km_paise: number;
@@ -21005,6 +21315,8 @@ export interface components {
             readonly minimum_fare_paise: number;
             readonly free_waiting_minutes: number;
             readonly waiting_per_minute_paise: number;
+            readonly max_parcel_weight_grams: number | null;
+            readonly parcel_size_label: string;
             readonly is_active: boolean;
             readonly version: number;
             /** Format: date-time */
@@ -21878,9 +22190,11 @@ export interface components {
          *     * `COMPLETED` - Completed
          *     * `NO_CAPTAIN_FOUND` - No captain found
          *     * `CANCELLED` - Cancelled
+         *     * `RETURNING` - Returning
+         *     * `RETURNED` - Returned
          * @enum {string}
          */
-        StateEnum: "SEARCHING" | "CAPTAIN_ASSIGNED" | "CAPTAIN_ARRIVED" | "IN_TRIP" | "COMPLETED" | "NO_CAPTAIN_FOUND" | "CANCELLED";
+        StateEnum: "SEARCHING" | "CAPTAIN_ASSIGNED" | "CAPTAIN_ARRIVED" | "IN_TRIP" | "COMPLETED" | "NO_CAPTAIN_FOUND" | "CANCELLED" | "RETURNING" | "RETURNED";
         /**
          * @description * `REQUESTED` - Requested
          *     * `ACCEPTED` - Accepted
@@ -34187,6 +34501,10 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
+                /** @description RIDE or PARCEL. */
+                kind?: string;
+                /** @description DUE, COLLECTED or UNPAID (a parcel the sender did not pay for). */
+                payment_status?: string;
                 /** @description One or more, comma-separated. */
                 state?: string;
             };
@@ -34350,6 +34668,8 @@ export interface operations {
         parameters: {
             query?: {
                 active?: boolean;
+                /** @description RIDE or PARCEL. */
+                kind?: string;
                 service_area_id?: string;
                 vehicle_type?: string;
             };
@@ -41229,6 +41549,27 @@ export interface operations {
             };
         };
     };
+    partner_rides_arrived_at_drop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
     partner_rides_cancel: {
         parameters: {
             query?: never;
@@ -41256,6 +41597,57 @@ export interface operations {
         };
     };
     partner_rides_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_deliver: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DeliverParcelRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeliverParcelRequest"];
+                "multipart/form-data": components["schemas"]["DeliverParcelRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_payment_not_received: {
         parameters: {
             query?: never;
             header?: never;
@@ -41320,6 +41712,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Rating"];
+                };
+            };
+        };
+    };
+    partner_rides_receiver_unavailable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
+                };
+            };
+        };
+    };
+    partner_rides_returned: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                ride_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartTripRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StartTripRequest"];
+                "multipart/form-data": components["schemas"]["StartTripRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptainRide"];
                 };
             };
         };
@@ -41584,6 +42027,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentOffer"];
+                };
+            };
+        };
+    };
+    partner_rides_parcel_preference_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParcelPreferenceRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ParcelPreferenceRequest"];
+                "multipart/form-data": components["schemas"]["ParcelPreferenceRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParcelPreference"];
                 };
             };
         };

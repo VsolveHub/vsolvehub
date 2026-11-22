@@ -35,9 +35,11 @@ from apps.rides.exceptions import (
     QuoteUsedError,
     RideAlreadyOpenError,
     RideNoLongerAvailableError,
+    RoutingUnavailableApiError,
     VehicleUnavailableError,
+    WaitNotOverError,
 )
-from apps.rides.fares import waiting_charge_paise
+from apps.rides.fares import trip_fare_paise, waiting_charge_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
     ActorKind,
@@ -55,11 +57,13 @@ from apps.rides.models import (
     RideState,
     RideTransition,
 )
+from apps.rides.routing import RoutingUnavailableError, get_route
 from apps.rides.services import require_can_drive
 
 __all__ = [
     "CAPTAIN_CANCEL_REASONS",
     "DELIVERY_PIN_VISIBLE_STATES",
+    "ITEM_NOT_ALLOWED",
     "OTP_INVALID",
     "OTP_LOCKED",
     "OTP_MAX_ATTEMPTS",
@@ -78,13 +82,17 @@ __all__ = [
     "deliver_parcel",
     "mark_arrived",
     "mark_arrived_at_drop",
+    "mark_payment_not_received",
     "mark_payment_received",
+    "mark_receiver_unavailable",
+    "mark_returned",
     "operations_cancel",
     "otp_fingerprint",
     "parcel_delivery_pin",
     "pin_fingerprint",
     "raise_sos",
     "rate_ride",
+    "receiver_unavailable_allowed_at",
     "redrive_dispatch",
     "resolve_sos",
     "ride_otp",
@@ -535,8 +543,13 @@ def decline_offer(*, partner: PartnerProfile, offer_id: UUID) -> None:
 
 #: Wrong start codes allowed before the ride is locked (also a database constraint).
 OTP_MAX_ATTEMPTS = 5
-#: The rider sees the start code only while the captain is on the way or at the pickup.
-OTP_VISIBLE_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED)
+#: The rider sees the start code only while the captain is on the way or at the pickup, and
+#: again while a parcel is coming back (the sender gives it to take the item).
+OTP_VISIBLE_STATES = (
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.RETURNING,
+)
 #: Refusals `start_trip` returns instead of raising, so the counted attempt is kept.
 OTP_INVALID = "otp_invalid"
 OTP_LOCKED = "otp_locked"
@@ -692,6 +705,8 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
     ride.save(
         update_fields=("state", "started_at", "waiting_paise", "final_fare_paise", "updated_at")
     )
+    if ride.kind == RideKind.PARCEL:
+        notify.parcel_picked_up(ride)
     _log_step("ride_started", ride)
     return ride, None
 
@@ -790,14 +805,166 @@ def deliver_parcel(
         ride, RideState.COMPLETED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
     )
     ride.save(update_fields=("state", "completed_at", "updated_at"))
+    notify.parcel_delivered(ride)
     _log_step("parcel_delivered", ride)
     return ride, None
+
+
+def receiver_unavailable_allowed_at(ride: Ride, parcel: ParcelDetails) -> datetime | None:
+    """When "Receiver not available" opens: the card's free waiting minutes after arriving at
+    the drop, or at once when the PIN is locked (D12). None before the captain arrives."""
+    if parcel.arrived_at_drop_at is None:
+        return None
+    if parcel.pin_required and parcel.pin_attempts >= OTP_MAX_ATTEMPTS:
+        return parcel.arrived_at_drop_at
+    free = timedelta(minutes=ride.quote.rate_card.free_waiting_minutes)
+    return parcel.arrived_at_drop_at + free
+
+
+def _require_wait_over(ride: Ride) -> None:
+    allowed_at = receiver_unavailable_allowed_at(ride, ride.parcel)
+    if allowed_at is None or timezone.now() < allowed_at:
+        raise WaitNotOverError
+
+
+def _return_fare_paise(ride: Ride) -> int:
+    """The return leg, drop back to pickup, on the quote's own rate card version (D13)."""
+    try:
+        route = get_route(
+            pickup=(ride.drop_latitude, ride.drop_longitude),
+            drop=(ride.pickup_latitude, ride.pickup_longitude),
+            vehicle_type=ride.vehicle_type,
+        )
+    except RoutingUnavailableError as exc:
+        raise RoutingUnavailableApiError from exc
+    return trip_fare_paise(
+        ride.quote.rate_card, distance_m=route.distance_m, duration_s=route.duration_s
+    )
+
+
+def mark_receiver_unavailable(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The receiver is not there after the wait: the parcel goes back to the pickup.
+
+    The return route is priced *before* the ride is locked, so a slow routing call never holds
+    the row. If it fails (503, retryable) nothing has changed. Repeating the step returns the ride.
+    """
+    ride = (
+        Ride.objects.select_related("quote__rate_card", "parcel")
+        .filter(id=ride_id, captain=partner)
+        .first()
+    )
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    if ride.kind != RideKind.PARCEL or ride.state not in (RideState.IN_TRIP, RideState.RETURNING):
+        raise InvalidTransitionError
+    if ride.state == RideState.RETURNING:
+        return ride
+    _require_wait_over(ride)
+    return_fare = _return_fare_paise(ride)
+    return _start_return(partner=partner, ride_id=ride_id, return_fare=return_fare)
+
+
+@transaction.atomic
+def _start_return(*, partner: PartnerProfile, ride_id: UUID, return_fare: int) -> Ride:
+    ride = _captain_ride(partner, ride_id)
+    if ride.state == RideState.RETURNING:
+        return ride  # another tap got here first
+    if ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    _require_wait_over(ride)
+    now = timezone.now()
+    parcel.receiver_unavailable_at = now
+    parcel.return_fare_paise = return_fare
+    parcel.return_payment_status = Ride.PaymentStatus.DUE
+    parcel.save(
+        update_fields=("receiver_unavailable_at", "return_fare_paise", "return_payment_status")
+    )
+    # The total the captain is owed across the whole job grows by the return leg.
+    ride.final_fare_paise = (ride.final_fare_paise or 0) + return_fare
+    _transition(
+        ride, RideState.RETURNING, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
+    )
+    ride.save(update_fields=("state", "final_fare_paise", "updated_at"))
+    notify.parcel_returning(ride)
+    _log_step("parcel_returning", ride)
+    return ride
+
+
+@transaction.atomic
+def mark_returned(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Ride, str | None]:
+    """The parcel is back at the pickup: the sender gives the pickup code again (D13).
+
+    Like `start_trip`, a wrong code is counted on `otp_attempts` and *returned*, not raised.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL:
+        raise InvalidTransitionError
+    if ride.state == RideState.RETURNED:
+        return ride, None
+    if ride.state != RideState.RETURNING:
+        raise InvalidTransitionError
+    now = timezone.now()
+    if not _is_near(_last_position(partner), ride.pickup_latitude, ride.pickup_longitude, now):
+        raise NotAtPickupError
+    if ride.otp_attempts >= OTP_MAX_ATTEMPTS:
+        return ride, OTP_LOCKED
+    if not hmac.compare_digest(otp, ride_otp(ride.id)):
+        ride.otp_attempts += 1
+        ride.save(update_fields=("otp_attempts", "updated_at"))
+        logger.info(
+            "ride_otp_wrong", extra={"ride_id": str(ride.id), "attempts": ride.otp_attempts}
+        )
+        return ride, OTP_LOCKED if ride.otp_attempts >= OTP_MAX_ATTEMPTS else OTP_INVALID
+
+    parcel = ride.parcel
+    parcel.returned_at = now
+    parcel.save(update_fields=("returned_at",))
+    _transition(ride, RideState.RETURNED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now)
+    ride.save(update_fields=("state", "updated_at"))
+    notify.parcel_returned(ride)
+    _log_step("parcel_returned", ride)
+    return ride, None
+
+
+def _fare_collectable(ride: Ride, parcel: ParcelDetails) -> bool:
+    """Whether the captain is at the moment where the fare may be collected (§3.3).
+
+    The Sender pays from the pickup on. The Receiver pays only at the drop, so not before the
+    captain arrives there. Nothing is collected while the parcel is on its way back; it is
+    collected again at the pickup, once returned.
+    """
+    if ride.state in (RideState.COMPLETED, RideState.RETURNED):
+        return True
+    if ride.state == RideState.IN_TRIP:
+        return parcel.payer == ParcelDetails.Payer.SENDER or parcel.arrived_at_drop_at is not None
+    return False
+
+
+def _collect_parcel_payment(ride: Ride) -> Ride:
+    """Mark every amount that is due and collectable now as collected. Saying so twice is fine."""
+    parcel = ride.parcel
+    if not _fare_collectable(ride, parcel):
+        raise InvalidTransitionError
+    now = timezone.now()
+    if ride.payment_status == Ride.PaymentStatus.DUE:
+        ride.payment_status = Ride.PaymentStatus.COLLECTED
+        ride.payment_collected_at = now
+        ride.save(update_fields=("payment_status", "payment_collected_at", "updated_at"))
+    # The return leg is collected from the sender at the pickup, so only once the parcel is back.
+    if ride.state == RideState.RETURNED and parcel.return_payment_status == Ride.PaymentStatus.DUE:
+        parcel.return_payment_status = Ride.PaymentStatus.COLLECTED
+        parcel.save(update_fields=("return_payment_status",))
+    _log_step("parcel_payment_collected", ride)
+    return ride
 
 
 @transaction.atomic
 def mark_payment_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     """The captain got the cash or UPI. Saying so twice changes nothing."""
     ride = _captain_ride(partner, ride_id)
+    if ride.kind == RideKind.PARCEL:
+        return _collect_parcel_payment(ride)
     if ride.state != RideState.COMPLETED:
         raise InvalidTransitionError
     if ride.payment_status == Ride.PaymentStatus.COLLECTED:
@@ -809,14 +976,40 @@ def mark_payment_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     return ride
 
 
+@transaction.atomic
+def mark_payment_not_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The sender would not pay when the parcel came back: what is still due becomes unpaid, for
+    Operations to follow up (D14). Returned parcels only. Saying so twice changes nothing."""
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL or ride.state != RideState.RETURNED:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    if ride.payment_status == Ride.PaymentStatus.DUE:
+        ride.payment_status = Ride.PaymentStatus.UNPAID
+        ride.save(update_fields=("payment_status", "updated_at"))
+    if parcel.return_payment_status == Ride.PaymentStatus.DUE:
+        parcel.return_payment_status = Ride.PaymentStatus.UNPAID
+        parcel.save(update_fields=("return_payment_status",))
+    _log_step("parcel_payment_not_received", ride)
+    return ride
+
+
 def captain_current_ride(partner: PartnerProfile) -> Ride | None:
     """The ride the captain's app should show: the open one, else a finished one still unpaid
     (so the Collect screen survives an app restart)."""
-    rides = Ride.objects.select_related("quote", "rider").filter(captain=partner)
+    rides = Ride.objects.select_related("quote__rate_card", "rider", "parcel").filter(
+        captain=partner
+    )
+    due = Ride.PaymentStatus.DUE
     return (
         rides.filter(state__in=OPEN_RIDE_STATES).first()
-        or rides.filter(state=RideState.COMPLETED, payment_status=Ride.PaymentStatus.DUE)
+        or rides.filter(state=RideState.COMPLETED, payment_status=due)
         .order_by("-completed_at")
+        .first()
+        # A parcel handed back stays on the screen until the sender has paid or not paid.
+        or rides.filter(state=RideState.RETURNED)
+        .filter(models.Q(payment_status=due) | models.Q(parcel__return_payment_status=due))
+        .order_by("-parcel__returned_at")
         .first()
     )
 
@@ -824,7 +1017,15 @@ def captain_current_ride(partner: PartnerProfile) -> Ride | None:
 # --- Cancellations (brief §5.4) ---------------------------------------------------------------
 
 RIDER_CANCEL_REASONS = ("CHANGED_MIND", "CAPTAIN_DELAYED", "WRONG_PICKUP", "OTHER")
-CAPTAIN_CANCEL_REASONS = ("RIDER_NOT_REACHABLE", "VEHICLE_ISSUE", "PICKUP_TOO_FAR", "OTHER")
+CAPTAIN_CANCEL_REASONS = (
+    "RIDER_NOT_REACHABLE",
+    "VEHICLE_ISSUE",
+    "PICKUP_TOO_FAR",
+    "OTHER",
+    "ITEM_NOT_ALLOWED",
+)
+#: A parcel the captain refuses at the pickup (D16): it ends cancelled and is never re-dispatched.
+ITEM_NOT_ALLOWED = "ITEM_NOT_ALLOWED"
 #: The rider may cancel until the trip starts; after that only Operations can.
 _RIDER_CANCELLABLE = (
     RideState.SEARCHING,
@@ -848,9 +1049,10 @@ def _cancel(ride: Ride, *, actor: Any, actor_kind: str, reason: str, now: dateti
     ride.save(
         update_fields=("state", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at")
     )
+    # A captain who cancels (a refused parcel) needs no notice about their own action.
     captain_user_id = (
         PartnerProfile.objects.filter(pk=ride.captain_id).values_list("user_id", flat=True).first()
-        if ride.captain_id is not None
+        if ride.captain_id is not None and actor_kind != ActorKind.CAPTAIN
         else None
     )
     notify.ride_cancelled(ride, captain_user_id=captain_user_id)
@@ -879,6 +1081,19 @@ def captain_cancel(*, partner: PartnerProfile, ride_id: UUID, reason: str) -> No
     """The captain gives the ride up before the trip. The ride searches again from round 1,
     never offering it back to this captain, and the cancel counts against them in Operations."""
     ride = _captain_ride(partner, ride_id)
+    if reason == ITEM_NOT_ALLOWED:
+        # Only a parcel, only at the pickup before the code: no charge, and no other captain.
+        if ride.kind != RideKind.PARCEL or ride.state != RideState.CAPTAIN_ARRIVED:
+            raise InvalidTransitionError
+        _cancel(
+            ride,
+            actor=partner.user,
+            actor_kind=ActorKind.CAPTAIN,
+            reason=reason,
+            now=timezone.now(),
+        )
+        notify.parcel_item_not_allowed(ride)
+        return
     if ride.state not in _CAPTAIN_CANCELLABLE:
         raise InvalidTransitionError
     now = timezone.now()

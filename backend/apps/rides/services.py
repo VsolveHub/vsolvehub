@@ -9,6 +9,7 @@ from typing import Any
 from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from apps.commerce.models import PaymentAttempt
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
@@ -35,6 +36,7 @@ from apps.rides.exceptions import (
 from apps.rides.fares import trip_fare_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
+    PARCEL_LIMIT_FIELDS,
     RATE_FIELDS,
     CaptainDutySession,
     CaptainPass,
@@ -672,23 +674,29 @@ def sweep_stale_captains() -> int:
 
 @transaction.atomic
 def create_rate_card(
-    *, created_by: Any, service_area: ServiceArea, vehicle_type: str, rates: dict[str, int]
+    *,
+    created_by: Any,
+    service_area: ServiceArea,
+    vehicle_type: str,
+    rates: dict[str, Any],
+    kind: str = RideKind.RIDE,
 ) -> RideRateCard:
-    """A first (or renewed) price for a vehicle in an area. Refused while one is active."""
-    if RideRateCard.objects.filter(
-        service_area=service_area, vehicle_type=vehicle_type, is_active=True
-    ).exists():
-        raise RateCardExistsError
-    last = (
-        RideRateCard.objects.filter(service_area=service_area, vehicle_type=vehicle_type)
-        .order_by("-version")
-        .first()
+    """A first (or renewed) price for a vehicle and kind in an area. Refused while one is active.
+
+    `rates` holds the prices and, for a Pick up & Drop card, its limits.
+    """
+    same = RideRateCard.objects.filter(
+        service_area=service_area, vehicle_type=vehicle_type, kind=kind
     )
+    if same.filter(is_active=True).exists():
+        raise RateCardExistsError
+    last = same.order_by("-version").first()
     try:
         with transaction.atomic():
             card = RideRateCard.objects.create(
                 service_area=service_area,
                 vehicle_type=vehicle_type,
+                kind=kind,
                 version=(last.version + 1) if last else 1,
                 created_by=created_by,
                 **rates,
@@ -702,26 +710,30 @@ def create_rate_card(
 
 @transaction.atomic
 def update_rate_card(
-    *, card: RideRateCard, updated_by: Any, rates: dict[str, int], deactivate: bool
+    *, card: RideRateCard, updated_by: Any, rates: dict[str, Any], deactivate: bool
 ) -> RideRateCard:
     """Edit the active card. A price edit is a new version; old quotes keep the old one.
 
-    `deactivate` switches that vehicle off in that area (the only on/off switch).
+    `deactivate` switches that vehicle off in that area (the only on/off switch). A Pick up & Drop
+    card keeps its kind and, unless changed, its limits.
     """
     card = RideRateCard.objects.select_for_update().get(pk=card.pk)
     if not card.is_active:
         raise RateCardInactiveError
+    if card.kind != RideKind.PARCEL and any(name in rates for name in PARCEL_LIMIT_FIELDS):
+        raise ValidationError({"parcel_size_label": "Only a Pick up & Drop card has limits."})
     card.is_active = False
     card.save(update_fields=("is_active", "updated_at"))
     if deactivate:
         logger.info("ride_rate_card_deactivated", extra=_card_log(card, updated_by))
         return card
 
-    fields = {name: getattr(card, name) for name in RATE_FIELDS}
+    fields = {name: getattr(card, name) for name in (*RATE_FIELDS, *PARCEL_LIMIT_FIELDS)}
     fields.update(rates)
     new_card = RideRateCard.objects.create(
         service_area_id=card.service_area_id,
         vehicle_type=card.vehicle_type,
+        kind=card.kind,
         version=card.version + 1,
         created_by=updated_by,
         **fields,
