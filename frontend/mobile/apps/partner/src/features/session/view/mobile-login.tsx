@@ -15,8 +15,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const HERO = require("../../../../assets/images/login-hero.png");
-// Height / width of login-hero.png (1206 × 1305). Keep in step with the file when it changes.
+const HERO = require("../../../../assets/images/login-hero.jpg");
+// Height / width of login-hero.jpg (1206 × 1305). Keep in step with the file when it changes.
 const HERO_ASPECT = 1305 / 1206;
 const LOGO_MARK = require("../../../../assets/logo-mark.png");
 // The photo's own white background, so the area around it blends in.

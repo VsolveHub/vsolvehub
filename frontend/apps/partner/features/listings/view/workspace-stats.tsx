@@ -12,7 +12,7 @@ export function WorkspaceStats({ home }: WorkspaceStatsProps) {
       <Card padding="md" className="flex flex-col justify-between">
         <div className="text-xs font-semibold text-text-muted">{t("listings.stats.activeListings")}</div>
         <div className="mt-1.5 flex items-baseline gap-2">
-          <span className="text-2xl font-extrabold text-text">{home?.active_listings ?? 0}</span>
+          <span className="text-2xl font-bold text-text">{home?.active_listings ?? 0}</span>
           <span className="text-xs text-text-muted">
             {home?.plan_limit
               ? t("listings.stats.planLimit", { limit: home.plan_limit })
@@ -26,7 +26,7 @@ export function WorkspaceStats({ home }: WorkspaceStatsProps) {
 
       <Card padding="md" className="flex flex-col justify-between">
         <div className="text-xs font-semibold text-text-muted">{t("listings.stats.applicantLeads")}</div>
-        <div className="mt-1.5 text-2xl font-extrabold text-text">
+        <div className="mt-1.5 text-2xl font-bold text-text">
           {home?.new_applications ?? 0}
         </div>
         <div className="mt-2 text-[11px] text-text-link font-semibold">

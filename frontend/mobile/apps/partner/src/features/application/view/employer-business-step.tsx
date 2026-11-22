@@ -4,9 +4,16 @@ import { getCurrentPosition, PlaceSearch, useReverseGeocode, type ResolvedLocati
 import { Badge, Button, ChoiceChips, Field, Input, Select, Text, useT } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import * as ImagePicker from "expo-image-picker";
-import { ImagePlus, MapPin, Trash2 } from "lucide-react-native";
+import {
+  Building2,
+  CheckCircle2,
+  ImagePlus,
+  MapPin,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react-native";
 import { useState } from "react";
-import { Alert, Image, View } from "react-native";
+import { Alert, Image, Linking, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
 import {
@@ -26,7 +33,7 @@ import {
   type GstAnswer,
 } from "../model/employer-form";
 import { useRemoveEmployerLogo, useUpdateEmployerDetails, useUploadEmployerLogo } from "../queries";
-import { EmployerFrame, useEmployerNav } from "./employer-frame";
+import { EmployerFrame, FormSection, useEmployerNav } from "./employer-frame";
 import { EmployerGuard } from "./employer-guard";
 
 type Application = Schemas["PartnerApplication"];
@@ -104,193 +111,216 @@ function BusinessForm({ application }: { application: Application }) {
       error={save.error}
       onContinue={onContinue}
     >
-      <Field
-        label={t("apply.employer.business.tradeName.label")}
-        description={t("apply.employer.business.tradeName.description")}
-      >
-        <Input
-          maxLength={120}
-          value={draft.tradeName}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ tradeName: value })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.business.legalName.label")}>
-        <Input
-          autoComplete="organization"
-          maxLength={200}
-          placeholder={t("apply.employer.business.legalName.placeholder")}
-          value={draft.legalName}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ legalName: value })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.business.structure.label")}>
-        <ChoiceChips
-          label={t("apply.employer.business.structure.label")}
-          name="legal_structure"
-          options={STRUCTURES.map((code) => ({
-            value: code,
-            label: t(`apply.employer.business.structure.${code}`),
-          }))}
-          value={draft.structure || null}
-          onChange={(value) => change({ structure: value })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.business.industry.label")}>
-        <ChoiceChips
-          label={t("apply.employer.business.industry.label")}
-          name="business_category"
-          options={CATEGORIES.map((code) => ({
-            value: code,
-            label: t(`apply.employer.category.${code}`),
-          }))}
-          value={draft.category || null}
-          onChange={(value) => change({ category: value })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.business.size.label")}>
-        <ChoiceChips
-          label={t("apply.employer.business.size.label")}
-          name="company_size"
-          options={SIZES}
-          value={draft.size || null}
-          onChange={(value) => change({ size: value })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.business.gst.label")}>
-        <ChoiceChips
-          label={t("apply.employer.business.gst.label")}
-          name="gst"
-          layout="bar"
-          options={[
-            { value: "yes", label: t("apply.employer.business.gst.yes") },
-            { value: "no", label: t("apply.employer.business.gst.no") },
-          ]}
-          value={draft.gst || null}
-          onChange={(value) => pickGst(value as GstAnswer)}
-        />
-      </Field>
-
-      {draft.gst === "yes" ? (
+      <FormSection title="Business profile">
         <Field
-          required
-          label={t("apply.employer.business.gstin.label")}
-          description={t("apply.employer.business.gstin.note")}
-          error={gstProblem ? t(`apply.employer.business.gstin.problem.${gstProblem}`) : undefined}
+          label={t("apply.employer.business.tradeName.label")}
+          description={t("apply.employer.business.tradeName.description")}
         >
           <Input
-            maxLength={15}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            value={draft.gstin}
+            maxLength={120}
+            placeholder="e.g. Sai Electronics"
+            value={draft.tradeName}
             onFocus={scrollFieldIntoView}
-            onChangeText={(value) => change({ gstin: value.toUpperCase() })}
+            onChangeText={(value) => change({ tradeName: value })}
           />
         </Field>
-      ) : null}
 
-      {draft.gst === "yes" ? (
-        <Field label={t("apply.employer.business.proof.label")} showOptional={false}>
-          <View className="min-h-11 justify-center rounded-control border border-line bg-surface-sunken px-3 py-2.5">
-            <Text className="text-sm text-text">{t("apply.employer.business.proof.GST_CERTIFICATE")}</Text>
-          </View>
+        <Field required label={t("apply.employer.business.legalName.label")}>
+          <Input
+            autoComplete="organization"
+            maxLength={200}
+            placeholder={t("apply.employer.business.legalName.placeholder")}
+            value={draft.legalName}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ legalName: value })}
+          />
         </Field>
-      ) : null}
 
-      {draft.gst === "no" ? (
-        <Field required label={t("apply.employer.business.proof.label")}>
-          <Select
-            placeholder={t("apply.employer.business.proof.placeholder")}
-            value={draft.proof}
-            options={NON_GST_PROOFS.map((code) => ({
+        <Field required label={t("apply.employer.business.structure.label")}>
+          <ChoiceChips
+            label={t("apply.employer.business.structure.label")}
+            name="legal_structure"
+            options={STRUCTURES.map((code) => ({
               value: code,
-              label: t(`apply.employer.business.proof.${code}`),
+              label: t(`apply.employer.business.structure.${code}`),
             }))}
-            onChange={(event) => change({ proof: event.target.value })}
+            value={draft.structure || null}
+            onChange={(value) => change({ structure: value })}
           />
         </Field>
-      ) : null}
 
-      <Field required label={t("apply.employer.business.address.label")}>
-        <Input
-          autoComplete="street-address"
-          maxLength={240}
-          value={draft.address}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ address: value })}
-        />
-      </Field>
+        <Field required label={t("apply.employer.business.industry.label")}>
+          <ChoiceChips
+            label={t("apply.employer.business.industry.label")}
+            name="business_category"
+            options={CATEGORIES.map((code) => ({
+              value: code,
+              label: t(`apply.employer.category.${code}`),
+            }))}
+            value={draft.category || null}
+            onChange={(value) => change({ category: value })}
+          />
+        </Field>
 
-      <Field required label={t("apply.employer.field.area.label")}>
-        <Input
-          maxLength={120}
-          value={draft.area}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ area: value })}
-        />
-      </Field>
-      <Field required label={t("apply.employer.field.city.label")}>
-        <Input
-          autoComplete="postal-address-locality"
-          maxLength={80}
-          value={draft.city}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ city: value })}
-        />
-      </Field>
-      <Field required label={t("apply.employer.field.state.label")}>
-        <Input
-          autoComplete="postal-address-region"
-          maxLength={40}
-          value={draft.state}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ state: value })}
-        />
-      </Field>
-      <Field
-        required
-        label={t("apply.employer.field.pinCode.label")}
-        error={problems.invalid.has("pinCode") ? t("apply.employer.field.pinCode.error") : undefined}
-      >
-        <Input
-          keyboardType="number-pad"
-          autoComplete="postal-code"
-          maxLength={6}
-          value={draft.pinCode}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ pinCode: value.replace(/\D/g, "") })}
-        />
-      </Field>
+        <Field required label={t("apply.employer.business.size.label")}>
+          <ChoiceChips
+            label={t("apply.employer.business.size.label")}
+            name="company_size"
+            options={SIZES}
+            value={draft.size || null}
+            onChange={(value) => change({ size: value })}
+          />
+        </Field>
+      </FormSection>
 
-      <Field required label={t("apply.employer.business.mapPin.label")}>
-        <FindOnMap pinned={pinned} onPicked={onPinned} />
-        {pinned ? null : (
-          <Text className="text-sm text-text-secondary">{t("apply.employer.business.mapPin.required")}</Text>
-        )}
-      </Field>
+      <FormSection title="Registration and tax">
+        <Field required label={t("apply.employer.business.gst.label")}>
+          <ChoiceChips
+            label={t("apply.employer.business.gst.label")}
+            name="gst"
+            layout="bar"
+            options={[
+              { value: "yes", label: t("apply.employer.business.gst.yes") },
+              { value: "no", label: t("apply.employer.business.gst.no") },
+            ]}
+            value={draft.gst || null}
+            onChange={(value) => pickGst(value as GstAnswer)}
+          />
+        </Field>
 
-      <LogoField application={application} />
+        {draft.gst === "yes" ? (
+          <View style={{ rowGap: 16 }}>
+            <Field
+              required
+              label={t("apply.employer.business.gstin.label")}
+              description={t("apply.employer.business.gstin.note")}
+              error={gstProblem ? t(`apply.employer.business.gstin.problem.${gstProblem}`) : undefined}
+            >
+              <Input
+                maxLength={15}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                placeholder="36AAAAA0000A1Z5"
+                value={draft.gstin}
+                onFocus={scrollFieldIntoView}
+                onChangeText={(value) => change({ gstin: value.toUpperCase() })}
+              />
+            </Field>
 
-      <Field
-        label={t("apply.employer.business.website.label")}
-        error={problems.invalid.has("websiteUrl") ? t("apply.employer.business.website.error") : undefined}
-      >
-        <Input
-          keyboardType="url"
-          autoCapitalize="none"
-          autoCorrect={false}
-          maxLength={300}
-          value={draft.websiteUrl}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ websiteUrl: value })}
-        />
-      </Field>
+            <Field label={t("apply.employer.business.proof.label")} showOptional={false}>
+              <View className="min-h-11 justify-center rounded-control border border-line bg-surface-sunken px-3.5 py-2.5">
+                <Text className="text-sm font-medium text-text">{t("apply.employer.business.proof.GST_CERTIFICATE")}</Text>
+              </View>
+            </Field>
+          </View>
+        ) : null}
+
+        {draft.gst === "no" ? (
+          <Field required label={t("apply.employer.business.proof.label")}>
+            <Select
+              placeholder={t("apply.employer.business.proof.placeholder")}
+              value={draft.proof}
+              options={NON_GST_PROOFS.map((code) => ({
+                value: code,
+                label: t(`apply.employer.business.proof.${code}`),
+              }))}
+              onChange={(event) => change({ proof: event.target.value })}
+            />
+          </Field>
+        ) : null}
+
+        <View className="flex-row items-start gap-3 rounded-control border border-line p-4">
+          <ShieldCheck size={16} color="#16a34a" className="mt-0.5 shrink-0" />
+          <Text className="flex-1 text-xs text-text-secondary leading-5">
+            All businesses undergo manual verification by Operations to confirm authenticity and grant the <Text className="font-semibold text-text">✓ Verified Business</Text> badge.
+          </Text>
+        </View>
+      </FormSection>
+
+      <FormSection title="Workplace location">
+        <Field required label={t("apply.employer.business.address.label")}>
+          <Input
+            autoComplete="street-address"
+            maxLength={240}
+            placeholder="e.g. Plot 42, Hitec City Main Road"
+            value={draft.address}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ address: value })}
+          />
+        </Field>
+
+        <Field required label={t("apply.employer.field.area.label")}>
+          <Input
+            maxLength={120}
+            placeholder="e.g. Madhapur"
+            value={draft.area}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ area: value })}
+          />
+        </Field>
+        <Field required label={t("apply.employer.field.city.label")}>
+          <Input
+            autoComplete="postal-address-locality"
+            maxLength={80}
+            placeholder="e.g. Hyderabad"
+            value={draft.city}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ city: value })}
+          />
+        </Field>
+        <Field required label={t("apply.employer.field.state.label")}>
+          <Input
+            autoComplete="postal-address-region"
+            maxLength={40}
+            placeholder="Telangana"
+            value={draft.state}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ state: value })}
+          />
+        </Field>
+        <Field
+          required
+          label={t("apply.employer.field.pinCode.label")}
+          error={problems.invalid.has("pinCode") ? t("apply.employer.field.pinCode.error") : undefined}
+        >
+          <Input
+            keyboardType="number-pad"
+            autoComplete="postal-code"
+            maxLength={6}
+            placeholder="500081"
+            value={draft.pinCode}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ pinCode: value.replace(/\D/g, "") })}
+          />
+        </Field>
+
+        <Field required label={t("apply.employer.business.mapPin.label")}>
+          <FindOnMap pinned={pinned} onPicked={onPinned} />
+          {pinned ? null : (
+            <Text className="text-sm text-text-secondary">{t("apply.employer.business.mapPin.required")}</Text>
+          )}
+        </Field>
+      </FormSection>
+
+      <FormSection title="Branding (optional)">
+        <LogoField application={application} />
+
+        <Field
+          label={t("apply.employer.business.website.label")}
+          error={problems.invalid.has("websiteUrl") ? t("apply.employer.business.website.error") : undefined}
+        >
+          <Input
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={300}
+            placeholder="https://example.com"
+            value={draft.websiteUrl}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ websiteUrl: value })}
+          />
+        </Field>
+      </FormSection>
     </EmployerFrame>
   );
 }
@@ -308,27 +338,47 @@ function FindOnMap({
 }) {
   const t = useT();
   const reverseGeocode = useReverseGeocode();
+  // Finding the phone's position can take several seconds, so the button shows it is working for
+  // that whole time, and the result is spelled out once the pin has moved.
+  const [locating, setLocating] = useState(false);
+  const [moved, setMoved] = useState<string | null>(null);
 
-  function placePin(latitude: string, longitude: string) {
+  function placePin(latitude: string, longitude: string, fromPhone = false) {
+    setMoved(null);
     reverseGeocode.mutate(
       { latitude, longitude },
       {
-        onSuccess: (found) => onPicked(latitude, longitude, found),
+        onSuccess: (found) => {
+          onPicked(latitude, longitude, found);
+          if (fromPhone) setMoved(found?.formatted_address || "Pin moved to your current location");
+        },
         // The pin is still the pin; only the address text could not be filled in.
-        onError: () => onPicked(latitude, longitude, null),
+        onError: () => {
+          onPicked(latitude, longitude, null);
+          if (fromPhone) setMoved("Pin moved to your current location");
+        },
       },
     );
   }
 
   async function useMyLocation() {
+    if (locating) return;
+    setLocating(true);
+    setMoved(null);
     try {
-      const position = await getCurrentPosition();
-      placePin(position.coords.latitude.toFixed(6), position.coords.longitude.toFixed(6));
-    } catch {
-      Alert.alert(
-        t("apply.employer.business.mapPin.unavailable.title"),
-        t("apply.employer.business.mapPin.unavailable.message"),
-      );
+      const position = await getCurrentPosition({ maxAgeMs: 10_000 });
+      placePin(position.coords.latitude.toFixed(6), position.coords.longitude.toFixed(6), true);
+    } catch (error) {
+      const reason =
+        typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
+          ? error.message
+          : t("apply.employer.business.mapPin.unavailable.message");
+      Alert.alert(t("apply.employer.business.mapPin.unavailable.title"), reason, [
+        { text: "OK", style: "cancel" },
+        { text: "Open settings", onPress: () => void Linking.openSettings() },
+      ]);
+    } finally {
+      setLocating(false);
     }
   }
 
@@ -341,13 +391,18 @@ function FindOnMap({
       <Button
         variant="outline"
         icon={<MapPin size={16} color="#00112e" />}
-        loading={reverseGeocode.isPending}
+        loading={locating || reverseGeocode.isPending}
         onClick={() => void useMyLocation()}
       >
         {pinned
           ? t("apply.employer.business.mapPin.moveToMyLocation")
           : t("apply.employer.business.mapPin.useMyLocation")}
       </Button>
+      {moved ? (
+        <Text accessibilityRole="alert" className="text-sm text-success-text">
+          {moved}
+        </Text>
+      ) : null}
       {pinned ? (
         <View className="flex-row">
           <Badge tone="success">{t("workspaces.location.pinned")}</Badge>
@@ -396,7 +451,7 @@ function LogoField({ application }: { application: Application }) {
       label={t("apply.employer.business.logo.label")}
       description={t("apply.employer.business.logo.hint")}
     >
-      <View className="flex-row flex-wrap items-center gap-3">
+      <View className="flex-row flex-wrap items-center gap-3.5 rounded-control border border-line p-4">
         {logoUrl ? (
           <Image
             source={{ uri: logoUrl }}
@@ -404,27 +459,33 @@ function LogoField({ application }: { application: Application }) {
             className="size-16 rounded-control border border-line"
             resizeMode="cover"
           />
-        ) : null}
-        <Button
-          variant="outline"
-          icon={<ImagePlus size={16} color="#00112e" />}
-          loading={upload.isPending}
-          disabled={busy}
-          onClick={() => void choose()}
-        >
-          {logoUrl ? t("apply.employer.business.logo.replace") : t("apply.employer.business.logo.upload")}
-        </Button>
-        {logoUrl ? (
+        ) : (
+          <View className="size-16 items-center justify-center rounded-control border-2 border-dashed border-line-strong bg-surface">
+            <Building2 size={24} color="#6b7280" />
+          </View>
+        )}
+        <View className="flex-row flex-wrap items-center gap-2">
           <Button
-            variant="ghost"
-            icon={<Trash2 size={16} color="#00112e" />}
-            loading={remove.isPending}
+            variant="outline"
+            icon={<ImagePlus size={16} color="#00112e" />}
+            loading={upload.isPending}
             disabled={busy}
-            onClick={() => remove.mutate()}
+            onClick={() => void choose()}
           >
-            {t("apply.employer.business.logo.remove")}
+            {logoUrl ? t("apply.employer.business.logo.replace") : t("apply.employer.business.logo.upload")}
           </Button>
-        ) : null}
+          {logoUrl ? (
+            <Button
+              variant="ghost"
+              icon={<Trash2 size={16} color="#00112e" />}
+              loading={remove.isPending}
+              disabled={busy}
+              onClick={() => remove.mutate()}
+            >
+              {t("apply.employer.business.logo.remove")}
+            </Button>
+          ) : null}
+        </View>
       </View>
       {problem ? (
         <Text accessibilityRole="alert" className="text-sm text-danger-text">

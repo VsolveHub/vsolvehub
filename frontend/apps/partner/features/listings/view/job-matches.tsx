@@ -126,7 +126,7 @@ export function JobMatches({
               <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <p className="flex flex-wrap items-center gap-2">
-                    <span className="text-base font-bold text-navy-900">{row.display_name}</span>
+                    <span className="text-base font-bold text-text">{row.display_name}</span>
                     <Badge tone={look.tone}>{t("listings.matches.scorePercent", { score: row.match.score })}</Badge>
                     {row.applied ? <Badge tone="action">{t("listings.matches.applied")}</Badge> : null}
                   </p>

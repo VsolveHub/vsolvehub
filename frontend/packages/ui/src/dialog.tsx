@@ -307,9 +307,11 @@ export function Sheet({
   className,
   fullScreen = false,
   side = "bottom",
-}: BaseProps & { fullScreen?: boolean; side?: SheetSide }) {
+  backdrop = true,
+}: BaseProps & { fullScreen?: boolean; side?: SheetSide; /** false: no dimmed layer behind the sheet. */ backdrop?: boolean }) {
   const ref = useModalDialog(open, onOpenChange);
   const id = useId();
+  const backdropClass = backdrop ? "backdrop:bg-navy-900/40" : "backdrop:bg-transparent";
 
   return (
     <dialog
@@ -324,15 +326,15 @@ export function Sheet({
       }}
       className={cn(
         fullScreen
-          ? "fixed inset-0 m-0 max-h-none h-dvh w-full max-w-none rounded-none border-0 p-0 bg-surface text-text shadow-none z-50 backdrop:bg-navy-900/40"
+          ? `fixed inset-0 m-0 max-h-none h-dvh w-full max-w-none rounded-none border-0 p-0 bg-surface text-text shadow-none z-50 ${backdropClass}`
           : side === "end"
             ? // A record inspector on a wide screen, the familiar sheet on a
               // phone. Written as one string rather than merging a `lg:` override
               // over the bottom-sheet classes because `cn` is `clsx` and does not
               // resolve conflicting utilities — the behaviour would then depend
               // on stylesheet order rather than on this line.
-              "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40 lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:m-0 lg:h-dvh lg:max-h-none lg:w-full lg:max-w-md lg:rounded-none lg:rounded-l-[20px] lg:border-0 lg:border-l lg:border-line/60"
-            : "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40",
+              `fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay ${backdropClass} lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:m-0 lg:h-dvh lg:max-h-none lg:w-full lg:max-w-md lg:rounded-none lg:rounded-l-[20px] lg:border-0 lg:border-l lg:border-line/60`
+            : `fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay ${backdropClass}`,
         className,
       )}
     >

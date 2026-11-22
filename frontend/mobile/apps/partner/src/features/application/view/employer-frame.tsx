@@ -43,6 +43,27 @@ export function useEmployerNav(application: Application) {
   };
 }
 
+/** A titled group of fields. One look for every employer screen: a quiet heading, then the fields. */
+export function FormSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={{ rowGap: 16 }}>
+      <View style={{ rowGap: 2 }}>
+        <Text className="text-sm font-semibold text-text">{title}</Text>
+        {hint ? <Text className="text-xs leading-5 text-text-muted">{hint}</Text> : null}
+      </View>
+      <View style={{ rowGap: 16 }}>{children}</View>
+    </View>
+  );
+}
+
 /**
  * What every employer screen sits in: the title, the form, and the Continue bar at the bottom of
  * the apply screen (Back, Continue, and the error from the last save).
@@ -120,7 +141,7 @@ export function EmployerFrame({
       )}
       <View
         pointerEvents={editable && !saving ? "auto" : "none"}
-        style={{ rowGap: 20, opacity: editable ? 1 : 0.7 }}
+        style={{ rowGap: 28, opacity: editable ? 1 : 0.7 }}
       >
         {children}
       </View>

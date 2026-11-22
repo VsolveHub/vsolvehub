@@ -114,20 +114,20 @@ export function ListingCard({
     <View
       style={{
         backgroundColor: "#ffffff",
-        borderColor: "#e5e7eb",
+        borderColor: "#e7e2da",
         borderWidth: 1,
-        borderRadius: 20,
+        borderRadius: 14,
       }}
-      className="p-4 mb-3.5"
+      className="mb-3 p-4"
     >
       {/* 1. Job Title */}
-      <Text className="text-[17px] font-bold text-[#071328]" numberOfLines={1}>
+      <Text className="text-base font-semibold text-text" numberOfLines={1}>
         {listing.title}
       </Text>
 
       {/* 2. Company / Poster Line */}
       {companyLine ? (
-        <Text className="mt-1 text-xs text-[#64748b]" numberOfLines={1}>
+        <Text className="mt-1 text-xs text-[#756c5e]" numberOfLines={1}>
           {companyLine}
         </Text>
       ) : null}
@@ -136,15 +136,15 @@ export function ListingCard({
       <View className="mt-1.5 flex-row flex-wrap items-center gap-3">
         {location ? (
           <View className="flex-row items-center gap-1">
-            <MapPin size={12} color="#64748b" />
-            <Text className="text-xs text-[#64748b]">{location}</Text>
+            <MapPin size={12} color="#756c5e" />
+            <Text className="text-xs text-[#756c5e]">{location}</Text>
           </View>
         ) : null}
 
         {exp ? (
           <View className="flex-row items-center gap-1">
-            <Briefcase size={12} color="#64748b" />
-            <Text className="text-xs text-[#64748b]">{exp}</Text>
+            <Briefcase size={12} color="#756c5e" />
+            <Text className="text-xs text-[#756c5e]">{exp}</Text>
           </View>
         ) : null}
       </View>
@@ -153,13 +153,13 @@ export function ListingCard({
       {displayPay ? (
         <View className="mt-1.5 flex-row items-center gap-1">
           <IndianRupee size={12} color="#071328" />
-          <Text className="text-xs font-bold text-[#071328]">{displayPay}</Text>
+          <Text className="text-xs font-semibold text-text">{displayPay}</Text>
         </View>
       ) : null}
 
       {/* 5. Vacancies Needed */}
       {vacancies ? (
-        <Text className="mt-1.5 text-xs font-semibold text-[#071328]">
+        <Text className="mt-1.5 text-xs font-semibold text-text">
           👥 {vacancies} needed
         </Text>
       ) : null}
@@ -170,14 +170,14 @@ export function ListingCard({
           {skills.slice(0, 5).map((skill) => (
             <View
               key={skill}
-              className="rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-0.5"
+              className="rounded-md bg-surface-sunken px-2.5 py-1"
             >
-              <Text className="text-xs font-semibold text-blue-700">{skill}</Text>
+              <Text className="text-xs font-medium text-text-secondary">{skill}</Text>
             </View>
           ))}
         </View>
       ) : listing.description ? (
-        <Text numberOfLines={2} className="mt-2 text-xs text-[#64748b] leading-relaxed">
+        <Text numberOfLines={2} className="mt-2 text-xs text-[#756c5e] leading-relaxed">
           {listing.description}
         </Text>
       ) : null}
@@ -185,28 +185,28 @@ export function ListingCard({
       {/* 7. Status Badge & Date */}
       <View className="mt-2.5 flex-row items-center gap-2">
         {isLive ? (
-          <View className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5">
-            <Text className="text-[10px] font-bold text-emerald-700">Live on app</Text>
+          <View className="rounded-full border border-success-line bg-success-surface px-2.5 py-0.5">
+            <Text className="text-[10px] font-bold text-success-text">Live on app</Text>
           </View>
         ) : isDraft ? (
-          <View className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5">
-            <Text className="text-[10px] font-bold text-slate-700">Draft</Text>
+          <View className="rounded-full border border-line bg-surface-sunken px-2.5 py-0.5">
+            <Text className="text-[10px] font-bold text-text-secondary">Draft</Text>
           </View>
         ) : (
-          <View className="rounded-full border border-rose-300 bg-rose-50 px-2.5 py-0.5">
-            <Text className="text-[10px] font-bold text-rose-700">Closed</Text>
+          <View className="rounded-full border border-danger-line bg-danger-surface px-2.5 py-0.5">
+            <Text className="text-[10px] font-bold text-danger-text">Closed</Text>
           </View>
         )}
 
-        <Text className="text-[11px] text-[#64748b]">{dateText}</Text>
+        <Text className="text-[11px] text-[#756c5e]">{dateText}</Text>
       </View>
 
       {/* 8. Activity Stats Lines */}
-      <View className="mt-2 gap-0.5 border-t border-line/40 pt-2">
-        <Text className="text-[11px] text-[#64748b]">
+      <View className="mt-3 gap-0.5 border-t border-line pt-3">
+        <Text className="text-[11px] text-[#756c5e]">
           {counts.applied} applied · {counts.shortlisted} approved · {counts.interviews} interviews
         </Text>
-        <Text className="text-[11px] text-[#64748b]">
+        <Text className="text-[11px] text-[#756c5e]">
           {counts.views} views · 0 hire clicks · 0 saves · 0 shares
         </Text>
       </View>
@@ -221,14 +221,14 @@ export function ListingCard({
             onPress={() => onViewApplicants(listing)}
             style={{
               backgroundColor: "#ffffff",
-              borderColor: "#e5e7eb",
+              borderColor: "#e7e2da",
               borderWidth: 1,
-              borderRadius: 12,
+              borderRadius: 10,
             }}
-            className="flex-row items-center gap-1.5 px-3 py-2 active:bg-slate-50"
+            className="flex-row items-center gap-1.5 px-3 py-2 active:bg-surface-hover"
           >
             <Download size={13} color="#071328" />
-            <Text className="text-xs font-semibold text-[#071328]">
+            <Text className="text-xs font-semibold text-text">
               {counts.applied > 0 ? `View applicants (${counts.applied})` : "Download applicants"}
             </Text>
           </Pressable>
@@ -239,14 +239,14 @@ export function ListingCard({
             onPress={() => (onRepublish ? onRepublish(listing) : undefined)}
             style={{
               backgroundColor: "#ffffff",
-              borderColor: "#e5e7eb",
+              borderColor: "#e7e2da",
               borderWidth: 1,
-              borderRadius: 12,
+              borderRadius: 10,
             }}
-            className="flex-row items-center gap-1.5 px-3 py-2 active:bg-slate-50"
+            className="flex-row items-center gap-1.5 px-3 py-2 active:bg-surface-hover"
           >
             <Zap size={13} color="#f87000" />
-            <Text className="text-xs font-semibold text-[#071328]">
+            <Text className="text-xs font-semibold text-text">
               Boost repost for free (0/3)
             </Text>
           </Pressable>
@@ -258,14 +258,14 @@ export function ListingCard({
               onPress={() => onViewApplicants(listing)}
               style={{
                 backgroundColor: "#ffffff",
-                borderColor: "#e5e7eb",
+                borderColor: "#e7e2da",
                 borderWidth: 1,
-                borderRadius: 12,
+                borderRadius: 10,
               }}
-              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-slate-50"
+              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-surface-hover"
             >
               <UserPlus size={13} color="#071328" />
-              <Text className="text-xs font-semibold text-[#071328]">
+              <Text className="text-xs font-semibold text-text">
                 {counts.matches} Matches
               </Text>
             </Pressable>
@@ -282,14 +282,14 @@ export function ListingCard({
               onPress={() => onClose(listing)}
               style={{
                 backgroundColor: "#ffffff",
-                borderColor: "#e5e7eb",
+                borderColor: "#e7e2da",
                 borderWidth: 1,
-                borderRadius: 12,
+                borderRadius: 10,
               }}
-              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-slate-50"
+              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-surface-hover"
             >
               <PauseCircle size={13} color="#071328" />
-              <Text className="text-xs font-semibold text-[#071328]">Pause post</Text>
+              <Text className="text-xs font-semibold text-text">Pause post</Text>
             </Pressable>
           ) : isClosed && onRepublish ? (
             <Pressable
@@ -298,14 +298,14 @@ export function ListingCard({
               onPress={() => onRepublish(listing)}
               style={{
                 backgroundColor: "#ffffff",
-                borderColor: "#e5e7eb",
+                borderColor: "#e7e2da",
                 borderWidth: 1,
-                borderRadius: 12,
+                borderRadius: 10,
               }}
-              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-slate-50"
+              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-surface-hover"
             >
               <RotateCcw size={13} color="#071328" />
-              <Text className="text-xs font-semibold text-[#071328]">Republish</Text>
+              <Text className="text-xs font-semibold text-text">Republish</Text>
             </Pressable>
           ) : null}
 
@@ -317,14 +317,14 @@ export function ListingCard({
               onPress={() => onEdit(listing)}
               style={{
                 backgroundColor: "#ffffff",
-                borderColor: "#e5e7eb",
+                borderColor: "#e7e2da",
                 borderWidth: 1,
-                borderRadius: 12,
+                borderRadius: 10,
               }}
-              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-slate-50"
+              className="flex-row items-center gap-1.5 px-3 py-2 active:bg-surface-hover"
             >
               <Pencil size={13} color="#071328" />
-              <Text className="text-xs font-semibold text-[#071328]">Edit job</Text>
+              <Text className="text-xs font-semibold text-text">Edit job</Text>
             </Pressable>
           ) : null}
         </View>
@@ -337,9 +337,9 @@ export function ListingCard({
             onPress={() => onPublishNow(listing)}
             style={{
               backgroundColor: "#f87000",
-              borderRadius: 12,
+              borderRadius: 10,
             }}
-            className="flex-row items-center justify-center gap-2 py-3 px-4 shadow-sm active:opacity-90 mt-1"
+            className="flex-row items-center justify-center gap-2 py-3 px-4 active:opacity-90 mt-1"
           >
             <Play size={14} color="#ffffff" fill="#ffffff" />
             <Text className="text-xs font-bold text-white">Publish now</Text>

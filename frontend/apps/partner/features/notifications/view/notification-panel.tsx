@@ -130,6 +130,7 @@ function NotificationPanelBody({
 
   return (
     <Sheet
+      backdrop={false}
       open={open}
       onOpenChange={onOpenChange}
       title={t("notifications.panel.title")}

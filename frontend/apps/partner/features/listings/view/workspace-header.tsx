@@ -16,7 +16,7 @@ export function WorkspaceHeader({
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-text-link uppercase tracking-wider">
+        <div className="flex items-center gap-2 text-xs font-medium text-text-muted">
           <BriefcaseBusiness className="size-3.5" /> {t("listings.header.badge")}
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-text sm:text-3xl">
