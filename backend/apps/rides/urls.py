@@ -34,7 +34,10 @@ from apps.rides.views import (
     OpsSosResolveView,
     OpsSosView,
     ParcelPreferenceView,
+    PaymentNotReceivedView,
     PaymentReceivedView,
+    ReceiverUnavailableView,
+    ReturnedView,
     RideDetailView,
     RiderCancelView,
     RiderRatingView,
@@ -77,6 +80,17 @@ urlpatterns = [
         name="trip-arrived-at-drop",
     ),
     path("partner/rides/<uuid:ride_id>/deliver/", DeliverParcelView.as_view(), name="trip-deliver"),
+    path(
+        "partner/rides/<uuid:ride_id>/receiver-unavailable/",
+        ReceiverUnavailableView.as_view(),
+        name="trip-receiver-unavailable",
+    ),
+    path("partner/rides/<uuid:ride_id>/returned/", ReturnedView.as_view(), name="trip-returned"),
+    path(
+        "partner/rides/<uuid:ride_id>/payment-not-received/",
+        PaymentNotReceivedView.as_view(),
+        name="trip-payment-not-received",
+    ),
     path("partner/rides/<uuid:ride_id>/start/", StartTripView.as_view(), name="trip-start"),
     path(
         "partner/rides/<uuid:ride_id>/complete/", CompleteTripView.as_view(), name="trip-complete"

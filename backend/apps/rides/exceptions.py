@@ -205,6 +205,16 @@ class NotAtDropError(RidesApiError):
         super().__init__(code="not_at_drop", message="You are not at the drop yet.")
 
 
+class WaitNotOverError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="wait_not_over",
+            message="Wait for the free waiting time at the drop to finish.",
+        )
+
+
 class PaymentNotCollectedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from django.utils import timezone
+from freezegun import freeze_time
 
 from apps.identity.models import User
 from apps.locations.geocoding import GeocodedAddress
@@ -217,3 +218,45 @@ def deliver(partner: PartnerProfile, ride: Ride, pin: str | None = None, key: st
         format="json",
         HTTP_IDEMPOTENCY_KEY=key,
     )
+
+
+def after_wait() -> Any:
+    """Time moved on past the rate card's 3 free waiting minutes at the drop."""
+    return freeze_time(timezone.now() + timedelta(minutes=4))
+
+
+def returning(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel whose receiver was not there: the captain is taking it back."""
+    ride, driver = at_drop(rider, area, parcel=parcel, vehicle=vehicle)
+    with after_wait():
+        assert step(driver, ride, "receiver-unavailable").status_code == 200
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def hand_back(driver: PartnerProfile, ride: Ride, otp: str | None = None, key: str = "r-1") -> Any:
+    """The captain is back at the pickup and gives the code the sender told them."""
+    ping_at(driver, PICKUP)
+    return partner_client(driver.user).post(
+        f"{CAPTAIN}/{ride.id}/returned/",
+        {"otp": otp or engine.ride_otp(ride.id)},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=key,
+    )
+
+
+def returned(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel handed back at the pickup (its money still to settle)."""
+    ride, driver = returning(rider, area, parcel=parcel, vehicle=vehicle)
+    assert hand_back(driver, ride).status_code == 200
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def wrong_code(real: str) -> str:
+    """A 4-digit code that is not `real`."""
+    return "0000" if real != "0000" else "1111"
