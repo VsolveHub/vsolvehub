@@ -60,7 +60,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   scheme: "vsolvepartner",
   // 1.1.0: the job screen map adds a native module (react-native-maps). With the
   // `appVersion` runtime policy this keeps its JS off 1.0.0 binaries, which would crash on it.
-  version: "1.1.0",
+  // 1.2.0: sign-in moves from Firebase to MSG91 (`otp`). A new version, not an OTA update, so
+  // the server's MOBILE_PARTNER_MIN_VERSION can retire the Firebase 1.1.0 builds.
+  version: "1.2.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
