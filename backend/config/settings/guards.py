@@ -5,6 +5,9 @@ module — importing that module runs every other guard in it, so a test for one
 need a full production environment to reach the line it cares about.
 """
 
+import re
+from itertools import pairwise
+
 from django.core.exceptions import ImproperlyConfigured
 
 #: The shortest cooling period production accepts between a payout account being added or changed
@@ -149,4 +152,41 @@ def guard_per_host_sessions(session_domain: str | None, csrf_domain: str | None)
             "SESSION_COOKIE_DOMAIN and CSRF_COOKIE_DOMAIN must stay unset. Sessions are scoped "
             "per host so that a compromised Customer session is not also a credential for the "
             "Operations console. Staff sign in to the console separately."
+        )
+
+
+#: An Indian mobile number in E.164, the only form the sign-in code compares against.
+_REVIEW_PHONE_PATTERN = re.compile(r"\+91[6-9]\d{9}")
+
+
+def guard_review_sign_in(phone_number: str, code: str, *, code_length: int) -> None:
+    """The store-review number and its fixed code are set together, and set sensibly.
+
+    The pair lets a Play or App Store reviewer sign in without receiving an SMS. One without the
+    other is a half-finished setup that would only show up as a rejected review, so it is refused
+    at start-up. The number must already be in the E.164 form sign-in stores (`+91` and ten
+    digits) because the comparison is exact. The code must be the normal code length and not a
+    first guess such as `000000` or `123456`: it is shared with the store, not secret, so the
+    sign-in rate limits are what stop someone guessing it, and an obvious code defeats them.
+    """
+
+    if not phone_number and not code:
+        return
+    if not phone_number or not code:
+        raise ImproperlyConfigured(
+            "Set OTP_REVIEW_PHONE_NUMBER and OTP_REVIEW_CODE together, or leave both empty."
+        )
+    if not _REVIEW_PHONE_PATTERN.fullmatch(phone_number):
+        raise ImproperlyConfigured(
+            "OTP_REVIEW_PHONE_NUMBER must be an Indian mobile number written as +91 and ten "
+            "digits, for example +919000000001."
+        )
+    if len(code) != code_length or not code.isdigit():
+        raise ImproperlyConfigured(f"OTP_REVIEW_CODE must be exactly {code_length} digits.")
+    digits = [int(digit) for digit in code]
+    steps = {later - earlier for earlier, later in pairwise(digits)}
+    if steps in ({0}, {1}, {-1}):
+        raise ImproperlyConfigured(
+            "OTP_REVIEW_CODE is too easy to guess (one repeated digit or a run like 123456). "
+            "Pick another code."
         )

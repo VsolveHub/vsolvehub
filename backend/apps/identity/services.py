@@ -11,6 +11,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest
 from django.utils import timezone
 
@@ -83,13 +84,52 @@ def _increment_rate_counter(key: str, limit: int) -> None:
         raise OtpRateLimitError(window_seconds)
 
 
+#: Audit action written each time the store-review number is given its fixed code.
+REVIEW_SIGN_IN_CODE_ACTION = "identity.review_sign_in_code_issued"
+
+
+def _review_code_for(canonical_phone: str) -> str | None:
+    """The fixed store-review code when `canonical_phone` is the review number, else None.
+
+    A Play or App Store reviewer cannot receive our SMS, so `OTP_REVIEW_PHONE_NUMBER` signs in
+    with `OTP_REVIEW_CODE` instead. The code is written into the store's review notes and is not
+    a secret, so it never applies to a staff or Operations account: such a number is sent a real
+    code like anyone else.
+    """
+
+    review_phone = settings.OTP_REVIEW_PHONE_NUMBER
+    review_code = settings.OTP_REVIEW_CODE
+    if not review_phone or not review_code or canonical_phone != review_phone:
+        return None
+    if (
+        User.objects.filter(phone_number=canonical_phone)
+        .filter(Q(is_staff=True) | Q(is_superuser=True))
+        .exists()
+    ):
+        return None
+    if UserRole.objects.filter(
+        user__phone_number=canonical_phone,
+        role__code="operations",
+        revoked_at__isnull=True,
+    ).exists():
+        return None
+    return str(review_code)
+
+
 def issue_login_otp(
     *,
     phone_number: str,
     request_ip: str,
     device_identifier: str = "",
     intended_role: str = "",
+    allow_review_code: bool = False,
 ) -> IssuedOtp:
+    """Issue a sign-in code for `phone_number` and send it by SMS.
+
+    With `allow_review_code` (the sign-in screen only), the store-review number gets its fixed
+    code and no SMS. Every other rule still applies to it: the rate limits, the resend cooldown,
+    the role gate, the expiry and the wrong-attempt lock.
+    """
     canonical_phone = normalize_phone_number(phone_number)
     phone_hash = keyed_hash(canonical_phone)
     ip_hash = keyed_hash(request_ip)
@@ -128,8 +168,12 @@ def issue_login_otp(
     if not cooldown_acquired:
         raise OtpRateLimitError(settings.OTP_RESEND_COOLDOWN_SECONDS)
 
-    maximum_code = 10**settings.OTP_CODE_LENGTH
-    code = f"{secrets.randbelow(maximum_code):0{settings.OTP_CODE_LENGTH}d}"
+    review_code = _review_code_for(canonical_phone) if allow_review_code else None
+    if review_code is not None:
+        code = review_code
+    else:
+        maximum_code = 10**settings.OTP_CODE_LENGTH
+        code = f"{secrets.randbelow(maximum_code):0{settings.OTP_CODE_LENGTH}d}"
     now = timezone.now()
     challenge = OtpChallenge.objects.create(
         phone_number=canonical_phone,
@@ -140,11 +184,22 @@ def issue_login_otp(
         expires_at=now + timedelta(seconds=settings.OTP_TTL_SECONDS),
     )
 
-    try:
-        get_otp_sender().send(canonical_phone, code, OtpChallenge.Purpose.LOGIN)
-    except OtpDeliveryError as exc:
-        mark_delivery_failed(challenge, exc.__class__.__name__)
-        raise
+    if review_code is not None:
+        # Nothing is sent: the reviewer reads the code from the store's review notes. The row
+        # is the record that this number was let in that way, and when.
+        record_access_event(
+            actor=None,
+            subject_user=User.objects.filter(phone_number=canonical_phone).first(),
+            action=REVIEW_SIGN_IN_CODE_ACTION,
+            object_type="otp_challenge",
+            object_id=challenge.id,
+        )
+    else:
+        try:
+            get_otp_sender().send(canonical_phone, code, OtpChallenge.Purpose.LOGIN)
+        except OtpDeliveryError as exc:
+            mark_delivery_failed(challenge, exc.__class__.__name__)
+            raise
 
     challenge.delivery_status = OtpChallenge.DeliveryStatus.SENT
     challenge.delivered_at = now

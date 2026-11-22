@@ -708,6 +708,13 @@ OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 #: 0 here: a developer machine has none, and a forged header must not dodge the OTP limits.
 TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
+#: The store-review sign-in (`apps.identity.services`): one E.164 number that signs in with a
+#: fixed code and is never sent an SMS, so a Google Play or App Store reviewer can get past the
+#: login screen. Both set or both empty; production checks them (`guard_review_sign_in`). The
+#: code is written into the store's review notes, so it is not a secret and never unlocks a
+#: staff or Operations account.
+OTP_REVIEW_PHONE_NUMBER = env("OTP_REVIEW_PHONE_NUMBER", default="")
+OTP_REVIEW_CODE = env("OTP_REVIEW_CODE", default="")
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
 # Account deletion (apps.identity.account_deletion): how long a closed account waits before it is
 # erased. Signing in again inside it keeps the account. 30 days is the common platform window and

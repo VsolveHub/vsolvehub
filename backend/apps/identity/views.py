@@ -134,6 +134,7 @@ class OtpRequestView(APIView):
                 request_ip=_request_ip(request),
                 device_identifier=data.get("device_identifier", ""),
                 intended_role=data.get("intended_role", ""),
+                allow_review_code=True,
             )
         except OtpRateLimitError as exc:
             raise OtpThrottled(wait=exc.retry_after_seconds) from exc

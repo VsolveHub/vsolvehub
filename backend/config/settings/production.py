@@ -8,6 +8,7 @@ from config.settings.guards import (
     guard_payout_account_cooling,
     guard_payout_clearing,
     guard_per_host_sessions,
+    guard_review_sign_in,
 )
 
 DEBUG = False
@@ -53,6 +54,7 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
 
 if OTP_PROVIDER == "development" or OTP_DEVELOPMENT_CODE_ENABLED:
     raise ImproperlyConfigured("Development OTP delivery/exposure is forbidden in production.")
+guard_review_sign_in(OTP_REVIEW_PHONE_NUMBER, OTP_REVIEW_CODE, code_length=OTP_CODE_LENGTH)
 if GEOCODING_PROVIDER != "google":
     raise ImproperlyConfigured("GEOCODING_PROVIDER must be google in production.")
 if not GOOGLE_MAPS_SERVER_KEY:
