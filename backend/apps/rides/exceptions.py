@@ -198,6 +198,23 @@ class NotAtPickupError(RidesApiError):
         super().__init__(code="not_at_pickup", message="You are not at the pickup yet.")
 
 
+class NotAtDropError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(code="not_at_drop", message="You are not at the drop yet.")
+
+
+class PaymentNotCollectedError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="payment_not_collected",
+            message="Collect the payment from the receiver before handing over the parcel.",
+        )
+
+
 class RegistrationAlreadyUsedError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

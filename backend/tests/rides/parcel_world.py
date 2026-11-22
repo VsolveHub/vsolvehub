@@ -11,11 +11,15 @@ from django.utils import timezone
 from apps.identity.models import User
 from apps.locations.geocoding import GeocodedAddress
 from apps.locations.models import PostalCode, ServiceArea, ServiceAreaPostalCode
-from apps.rides import engine, services
-from apps.rides.models import FareQuote, Ride, RideKind, RideRateCard
-from tests.rides.ride_world import PICKUP
+from apps.partners.models import PartnerProfile
+from apps.rides import engine, location, services
+from apps.rides.models import FareQuote, Ride, RideKind, RideOffer, RideRateCard
+from tests.rides.helpers import partner_client
+from tests.rides.ride_world import PICKUP, captain, dispatch
 
 SERVED_PIN = "500032"
+DROP = (Decimal("17.450000"), Decimal("78.380000"))
+CAPTAIN = "/api/v1/partner/rides"
 RIDES = "/api/v1/rides/"
 QUOTES = "/api/v1/rides/quotes/"
 AVAILABILITY = "/api/v1/rides/availability/?latitude=17.440000&longitude=78.348900"
@@ -153,3 +157,63 @@ def new_parcel(
     ).first() or make_card(area, vehicle, RideKind.PARCEL)
     quote = parcel_quote(rider, card)
     return engine.create_ride(rider=rider, quote_id=quote.id, parcel=parcel or parcel_body())
+
+
+def ping_at(partner: PartnerProfile, point: tuple[Decimal, Decimal], *, age_s: int = 0) -> None:
+    """The captain's latest GPS ping at this point, taken `age_s` seconds ago."""
+    location.record_position(
+        partner_id=partner.id,
+        latitude=float(point[0]),
+        longitude=float(point[1]),
+        accuracy_m=10,
+        heading=None,
+        captured_at=(timezone.now() - timedelta(seconds=age_s)).isoformat(),
+        listed_in=None,
+    )
+
+
+def accepted_parcel(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel a captain 1 km away has accepted."""
+    driver = captain(area, km=1, vehicle=vehicle)
+    ride = dispatch(new_parcel(rider, area, vehicle=vehicle, parcel=parcel))
+    engine.accept_offer(partner=driver, offer_id=RideOffer.objects.get(ride=ride).id)
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def picked_up(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel the captain has collected: arrived at the pickup, given the pickup code."""
+    ride, driver = accepted_parcel(rider, area, parcel=parcel, vehicle=vehicle)
+    ping_at(driver, PICKUP)
+    engine.mark_arrived(partner=driver, ride_id=ride.id)
+    engine.start_trip(partner=driver, ride_id=ride.id, otp=engine.ride_otp(ride.id))
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def at_drop(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A collected parcel whose captain has arrived at the drop."""
+    ride, driver = picked_up(rider, area, parcel=parcel, vehicle=vehicle)
+    ping_at(driver, DROP)
+    engine.mark_arrived_at_drop(partner=driver, ride_id=ride.id)
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def step(partner: PartnerProfile, ride: Ride, name: str) -> Any:
+    return partner_client(partner.user).post(f"{CAPTAIN}/{ride.id}/{name}/")
+
+
+def deliver(partner: PartnerProfile, ride: Ride, pin: str | None = None, key: str = "d-1") -> Any:
+    return partner_client(partner.user).post(
+        f"{CAPTAIN}/{ride.id}/deliver/",
+        {"pin": pin} if pin else {},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=key,
+    )

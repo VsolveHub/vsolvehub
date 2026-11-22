@@ -11,12 +11,15 @@ from apps.partners.models import PartnerProfile
 from apps.partners.photos import partner_photo_url
 from apps.rides.engine import (
     CAPTAIN_CANCEL_REASONS,
+    DELIVERY_PIN_VISIBLE_STATES,
     OTP_VISIBLE_STATES,
     RIDER_CANCEL_REASONS,
+    parcel_delivery_pin,
     ride_otp,
     searching_again,
 )
 from apps.rides.models import (
+    OPEN_RIDE_STATES,
     RATE_FIELDS,
     ActorKind,
     CaptainDutySession,
@@ -522,8 +525,8 @@ def _end(parcel: ParcelDetails, side: str) -> dict[str, Any]:
     }
 
 
-class ParcelSerializer(serializers.Serializer[Any]):
-    """The parcel block on a ride, as the booker sees it."""
+class _ParcelBaseSerializer(serializers.Serializer[Any]):
+    """The parcel fields both sides see. Who sees which contact details differs below."""
 
     mode = serializers.CharField()
     payer = serializers.CharField()
@@ -541,15 +544,42 @@ class ParcelSerializer(serializers.Serializer[Any]):
     return_payment_status = serializers.CharField()
 
     @extend_schema_field(ParcelEndSerializer)
-    def get_pickup(self, obj: ParcelDetails) -> dict[str, Any]:
+    def get_pickup(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "pickup")
 
     @extend_schema_field(ParcelEndSerializer)
-    def get_drop(self, obj: ParcelDetails) -> dict[str, Any]:
+    def get_drop(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "drop")
 
     def get_payment_point(self, obj: ParcelDetails) -> str:
         return _payment_point(obj)
+
+
+class ParcelSerializer(_ParcelBaseSerializer):
+    """The parcel block on a ride, as the booker sees it."""
+
+    delivery_pin = serializers.SerializerMethodField(
+        help_text="The 4-digit PIN for the receiver. Only to the booker, only when PIN "
+        "confirmation is on, and only until the parcel is delivered or goes back."
+    )
+
+    def get_delivery_pin(self, obj: ParcelDetails) -> str | None:
+        if obj.pin_required and obj.ride.state in DELIVERY_PIN_VISIBLE_STATES:
+            return parcel_delivery_pin(obj.ride_id)
+        return None
+
+
+class CaptainParcelSerializer(_ParcelBaseSerializer):
+    """The parcel block as the captain sees it: both ends' details only while it is open (D20),
+    and never the delivery PIN."""
+
+    @extend_schema_field(ParcelEndSerializer(allow_null=True))
+    def get_pickup(self, obj: ParcelDetails) -> dict[str, Any] | None:
+        return _end(obj, "pickup") if obj.ride.state in OPEN_RIDE_STATES else None
+
+    @extend_schema_field(ParcelEndSerializer(allow_null=True))
+    def get_drop(self, obj: ParcelDetails) -> dict[str, Any] | None:
+        return _end(obj, "drop") if obj.ride.state in OPEN_RIDE_STATES else None
 
 
 class RideSerializer(_RideBaseSerializer):
@@ -606,13 +636,20 @@ class CaptainRideSerializer(_RideBaseSerializer):
     """The captain's view of the ride they are doing."""
 
     rider = serializers.SerializerMethodField()
+    parcel = serializers.SerializerMethodField(help_text="Pick up & Drop only; null for a ride.")
     my_rating = serializers.SerializerMethodField(
         help_text="The stars the captain gave the rider, or null."
     )
 
     class Meta(_RideBaseSerializer.Meta):
-        fields = (*_RideBaseSerializer.Meta.fields, "rider", "my_rating")
+        fields = (*_RideBaseSerializer.Meta.fields, "rider", "parcel", "my_rating")
         read_only_fields = fields
+
+    @extend_schema_field(CaptainParcelSerializer(allow_null=True))
+    def get_parcel(self, obj: Ride) -> dict[str, Any] | None:
+        if obj.kind != RideKind.PARCEL:
+            return None
+        return dict(CaptainParcelSerializer(obj.parcel).data)
 
     def get_my_rating(self, obj: Ride) -> int | None:
         return _my_rating(obj, ActorKind.CAPTAIN)
@@ -925,6 +962,14 @@ class SosResolveSerializer(serializers.Serializer[Any]):
 
 class StartTripSerializer(serializers.Serializer[Any]):
     otp = serializers.RegexField(r"\A[0-9]{4}\Z", help_text="The rider's 4-digit start code.")
+
+
+class DeliverParcelSerializer(serializers.Serializer[Any]):
+    pin = serializers.RegexField(
+        r"\A[0-9]{4}\Z",
+        required=False,
+        help_text="The receiver's 4-digit delivery PIN. Required only when PIN confirmation is on.",
+    )
 
 
 class ParcelOfferSerializer(serializers.Serializer[Any]):

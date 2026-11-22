@@ -26,9 +26,11 @@ from apps.rides import location, notify, selectors
 from apps.rides.exceptions import (
     InvalidTransitionError,
     LocationUnavailableError,
+    NotAtDropError,
     NotAtPickupError,
     NotOnDutyError,
     ParcelDetailsRequiredError,
+    PaymentNotCollectedError,
     QuoteExpiredError,
     QuoteUsedError,
     RideAlreadyOpenError,
@@ -57,10 +59,13 @@ from apps.rides.services import require_can_drive
 
 __all__ = [
     "CAPTAIN_CANCEL_REASONS",
+    "DELIVERY_PIN_VISIBLE_STATES",
     "OTP_INVALID",
     "OTP_LOCKED",
     "OTP_MAX_ATTEMPTS",
     "OTP_VISIBLE_STATES",
+    "PIN_INVALID",
+    "PIN_LOCKED",
     "RIDER_CANCEL_REASONS",
     "RIDE_REQUESTED",
     "accept_offer",
@@ -70,10 +75,14 @@ __all__ = [
     "create_ride",
     "current_offer",
     "decline_offer",
+    "deliver_parcel",
     "mark_arrived",
+    "mark_arrived_at_drop",
     "mark_payment_received",
     "operations_cancel",
     "otp_fingerprint",
+    "parcel_delivery_pin",
+    "pin_fingerprint",
     "raise_sos",
     "rate_ride",
     "redrive_dispatch",
@@ -531,6 +540,16 @@ OTP_VISIBLE_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED)
 #: Refusals `start_trip` returns instead of raising, so the counted attempt is kept.
 OTP_INVALID = "otp_invalid"
 OTP_LOCKED = "otp_locked"
+#: The same for the parcel delivery PIN, which has its own counter (`ParcelDetails.pin_attempts`).
+PIN_INVALID = "pin_invalid"
+PIN_LOCKED = "pin_locked"
+#: The booker sees the delivery PIN from the time a captain is assigned until the parcel is
+#: delivered or goes back (§3.2).
+DELIVERY_PIN_VISIBLE_STATES = (
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.IN_TRIP,
+)
 
 
 def _otp_secret() -> bytes:
@@ -553,6 +572,20 @@ def otp_fingerprint(ride_id: UUID, otp: str) -> str:
     return hmac.new(_otp_secret(), message, hashlib.sha256).hexdigest()
 
 
+def parcel_delivery_pin(ride_id: UUID) -> str:
+    """A parcel's 4-digit delivery PIN: derived from its id like the start code, with its own
+    message prefix so the two never match. Never stored, never logged."""
+    message = f"rides.parcel-pin.v1:{ride_id}".encode()
+    digest = hmac.new(_otp_secret(), message, hashlib.sha256).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 10_000:04d}"
+
+
+def pin_fingerprint(ride_id: UUID, pin: str) -> str:
+    """What the idempotency record stores for a typed PIN, as `otp_fingerprint` does for codes."""
+    message = f"rides.parcel-pin-attempt.v1:{ride_id}:{pin}".encode()
+    return hmac.new(_otp_secret(), message, hashlib.sha256).hexdigest()
+
+
 def _captain_ride(partner: PartnerProfile, ride_id: UUID) -> Ride:
     """The captain's own ride, locked. Anyone else's ride is a 404, so ids cannot be probed."""
     ride = Ride.objects.select_for_update().filter(id=ride_id, captain=partner).first()
@@ -570,7 +603,10 @@ def _metres_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float
     return 2 * earth_m * math.asin(math.sqrt(a))
 
 
-def _at_pickup(ride: Ride, position: dict[str, str] | None, now: datetime) -> bool:
+def _is_near(
+    position: dict[str, str] | None, latitude: Decimal, longitude: Decimal, now: datetime
+) -> bool:
+    """The captain's last ping is fresh and within the arrival radius of this point."""
     if position is None:
         return False
     captured_at = datetime.fromisoformat(position["captured_at"])
@@ -579,10 +615,17 @@ def _at_pickup(ride: Ride, position: dict[str, str] | None, now: datetime) -> bo
     distance = _metres_between(
         float(position["latitude"]),
         float(position["longitude"]),
-        float(ride.pickup_latitude),
-        float(ride.pickup_longitude),
+        float(latitude),
+        float(longitude),
     )
     return distance <= int(settings.RIDES_ARRIVAL_RADIUS_M)
+
+
+def _last_position(partner: PartnerProfile) -> dict[str, str] | None:
+    try:
+        return location.last_position(partner.id)
+    except location.LocationStoreError as exc:
+        raise LocationUnavailableError from exc
 
 
 def _log_step(event: str, ride: Ride) -> None:
@@ -597,12 +640,9 @@ def mark_arrived(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
         return ride
     if ride.state != RideState.CAPTAIN_ASSIGNED:
         raise InvalidTransitionError
-    try:
-        position = location.last_position(partner.id)
-    except location.LocationStoreError as exc:
-        raise LocationUnavailableError from exc
+    position = _last_position(partner)
     now = timezone.now()
-    if not _at_pickup(ride, position, now):
+    if not _is_near(position, ride.pickup_latitude, ride.pickup_longitude, now):
         raise NotAtPickupError
 
     ride.captain_arrived_at = now
@@ -645,8 +685,13 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
         card, waited_s=int((now - arrived_at).total_seconds())
     )
     ride.started_at = now
+    if ride.kind == RideKind.PARCEL:
+        # A parcel's fare is fixed at pickup: it is collected here or at the drop (§3.3).
+        ride.final_fare_paise = ride.fare_paise + ride.waiting_paise
     _transition(ride, RideState.IN_TRIP, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now)
-    ride.save(update_fields=("state", "started_at", "waiting_paise", "updated_at"))
+    ride.save(
+        update_fields=("state", "started_at", "waiting_paise", "final_fare_paise", "updated_at")
+    )
     _log_step("ride_started", ride)
     return ride, None
 
@@ -655,6 +700,9 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
 def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     """End the trip. The rider pays the upfront fare plus waiting; GPS never re-prices it."""
     ride = _captain_ride(partner, ride_id)
+    if ride.kind == RideKind.PARCEL:
+        # A parcel ends only with `deliver_parcel`, which checks the PIN and the payment.
+        raise InvalidTransitionError
     if ride.state == RideState.COMPLETED:
         return ride
     if ride.state != RideState.IN_TRIP:
@@ -671,6 +719,79 @@ def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     )
     _log_step("ride_completed", ride)
     return ride
+
+
+@transaction.atomic
+def mark_arrived_at_drop(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The captain reached the drop: a fresh ping within 200 m of it. Repeating it is harmless.
+
+    Not a state change: the parcel stays `IN_TRIP` and gets a timestamp, which starts the free
+    waiting minutes for the receiver.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL or ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    if parcel.arrived_at_drop_at is not None:
+        return ride
+    now = timezone.now()
+    if not _is_near(_last_position(partner), ride.drop_latitude, ride.drop_longitude, now):
+        raise NotAtDropError
+    parcel.arrived_at_drop_at = now
+    parcel.save(update_fields=("arrived_at_drop_at",))
+    _log_step("parcel_arrived_at_drop", ride)
+    return ride
+
+
+@transaction.atomic
+def deliver_parcel(
+    *, partner: PartnerProfile, ride_id: UUID, pin: str | None
+) -> tuple[Ride, str | None]:
+    """Hand the parcel over. Returns (ride, refusal), like `start_trip`.
+
+    The captain must be at the drop, and when the Receiver pays the money must be collected
+    first. When PIN confirmation is on, the PIN is checked: a wrong one is counted and
+    *returned* as `pin_invalid` (or `pin_locked` on the fifth), never raised, so the count is
+    kept. When it is off, no PIN is needed.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL:
+        raise InvalidTransitionError
+    if ride.state == RideState.COMPLETED:
+        return ride, None
+    if ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    if parcel.arrived_at_drop_at is None:
+        raise NotAtDropError
+    if parcel.payer == ParcelDetails.Payer.RECEIVER and (
+        ride.payment_status != Ride.PaymentStatus.COLLECTED
+    ):
+        raise PaymentNotCollectedError
+    if parcel.pin_required:
+        if parcel.pin_attempts >= OTP_MAX_ATTEMPTS:
+            return ride, PIN_LOCKED
+        if pin is None:
+            raise ValidationError({"pin": "Enter the delivery PIN."})
+        if not hmac.compare_digest(pin, parcel_delivery_pin(ride.id)):
+            parcel.pin_attempts += 1
+            parcel.save(update_fields=("pin_attempts",))
+            logger.info(
+                "parcel_pin_wrong",
+                extra={"ride_id": str(ride.id), "attempts": parcel.pin_attempts},
+            )
+            return ride, PIN_LOCKED if parcel.pin_attempts >= OTP_MAX_ATTEMPTS else PIN_INVALID
+
+    now = timezone.now()
+    parcel.delivered_at = now
+    parcel.save(update_fields=("delivered_at",))
+    ride.completed_at = now
+    _transition(
+        ride, RideState.COMPLETED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
+    )
+    ride.save(update_fields=("state", "completed_at", "updated_at"))
+    _log_step("parcel_delivered", ride)
+    return ride, None
 
 
 @transaction.atomic

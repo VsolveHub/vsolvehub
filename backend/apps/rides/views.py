@@ -42,6 +42,7 @@ from apps.rides.serializers import (
     CaptainVehicleSerializer,
     CaptainVehicleWriteSerializer,
     CurrentOfferSerializer,
+    DeliverParcelSerializer,
     DutyStatusSerializer,
     EarningsQuerySerializer,
     EarningsSerializer,
@@ -80,6 +81,7 @@ from common.schema import IDEMPOTENCY_KEY_HEADER
 from common.throttling import ThrottledWriteMixin
 
 __all__ = [
+    "ArrivedAtDropView",
     "ArrivedView",
     "AvailabilityView",
     "CaptainCancelView",
@@ -637,7 +639,7 @@ class PaymentReceivedView(_TripStepView):
         return super().post(request, ride_id)
 
 
-_OTP_REFUSALS = {
+_CODE_REFUSALS = {
     engine.OTP_INVALID: (
         http_status.HTTP_400_BAD_REQUEST,
         "That code is wrong. Ask the rider for the 4-digit code.",
@@ -646,16 +648,24 @@ _OTP_REFUSALS = {
         http_status.HTTP_423_LOCKED,
         "Too many wrong codes. The rider can cancel, or contact support.",
     ),
+    engine.PIN_INVALID: (
+        http_status.HTTP_400_BAD_REQUEST,
+        "That PIN is wrong. Ask the receiver for the 4-digit delivery PIN.",
+    ),
+    engine.PIN_LOCKED: (
+        http_status.HTTP_423_LOCKED,
+        "Too many wrong PINs. If the receiver can't give it, use Receiver not available.",
+    ),
 }
 
 
-def _otp_refusal(code: str, ride: Any) -> tuple[int, dict[str, Any]]:
+def _code_refusal(code: str, *, attempts: int) -> tuple[int, dict[str, Any]]:
     """A refusal in the shared error envelope, returned (not raised) so it is stored with the
     counted attempt and a retry with the same key replays it."""
-    status, message = _OTP_REFUSALS[code]
+    status, message = _CODE_REFUSALS[code]
     details = (
-        {"attempts_left": engine.OTP_MAX_ATTEMPTS - ride.otp_attempts}
-        if code == engine.OTP_INVALID
+        {"attempts_left": engine.OTP_MAX_ATTEMPTS - attempts}
+        if code in (engine.OTP_INVALID, engine.PIN_INVALID)
         else None
     )
     error = {
@@ -689,7 +699,7 @@ class StartTripView(APIView):
         def command() -> tuple[int, dict[str, Any]]:
             ride, refusal = engine.start_trip(partner=partner, ride_id=ride_id, otp=otp)
             if refusal is not None:
-                return _otp_refusal(refusal, ride)
+                return _code_refusal(refusal, attempts=ride.otp_attempts)
             return http_status.HTTP_200_OK, dict(CaptainRideSerializer(ride).data)
 
         result = execute_idempotent(
@@ -700,6 +710,60 @@ class StartTripView(APIView):
             request_payload={
                 "ride_id": str(ride_id),
                 "otp_mac": engine.otp_fingerprint(ride_id, otp),
+            },
+            command=command,
+        )
+        response = Response(result.body, status=result.status_code)
+        if result.replayed:
+            response["Idempotent-Replay"] = "true"
+        return response
+
+
+class ArrivedAtDropView(_TripStepView):
+    """At the drop: the last ping is under 30 s old and within 200 m. Pick up & Drop only."""
+
+    step = staticmethod(engine.mark_arrived_at_drop)
+
+    @extend_schema(
+        operation_id="partner_rides_arrived_at_drop", request=None, responses=CaptainRideSerializer
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        return super().post(request, ride_id)
+
+
+class DeliverParcelView(APIView):
+    """Hand the parcel over, with the receiver's PIN when PIN confirmation is on. A network
+    retry never costs an attempt."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_deliver",
+        request=DeliverParcelSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses=CaptainRideSerializer,
+    )
+    def post(self, request: Any, ride_id: Any) -> Response:
+        serializer = DeliverParcelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pin = serializer.validated_data.get("pin")
+        key = _required_idempotency_key(request)
+        partner = _partner(request.user)
+
+        def command() -> tuple[int, dict[str, Any]]:
+            ride, refusal = engine.deliver_parcel(partner=partner, ride_id=ride_id, pin=pin)
+            if refusal is not None:
+                return _code_refusal(refusal, attempts=ride.parcel.pin_attempts)
+            return http_status.HTTP_200_OK, dict(CaptainRideSerializer(ride).data)
+
+        result = execute_idempotent(
+            actor=request.user,
+            operation="rides.parcel.deliver",
+            key=key,
+            # Never the PIN itself: an HMAC, so the stored fingerprint cannot be searched.
+            request_payload={
+                "ride_id": str(ride_id),
+                "pin_mac": engine.pin_fingerprint(ride_id, pin) if pin else None,
             },
             command=command,
         )

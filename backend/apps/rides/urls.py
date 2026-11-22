@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.rides.views import (
+    ArrivedAtDropView,
     ArrivedView,
     AvailabilityView,
     CaptainCancelView,
@@ -16,6 +17,7 @@ from apps.rides.views import (
     CaptainVehicleView,
     CompleteTripView,
     CurrentOfferView,
+    DeliverParcelView,
     DutyStartView,
     DutyStopView,
     FareQuotesView,
@@ -69,6 +71,12 @@ urlpatterns = [
     path("partner/rides/<uuid:ride_id>/rating/", CaptainRatingView.as_view(), name="trip-rating"),
     path("partner/rides/<uuid:ride_id>/sos/", CaptainSosView.as_view(), name="trip-sos"),
     path("partner/rides/<uuid:ride_id>/arrived/", ArrivedView.as_view(), name="trip-arrived"),
+    path(
+        "partner/rides/<uuid:ride_id>/arrived-at-drop/",
+        ArrivedAtDropView.as_view(),
+        name="trip-arrived-at-drop",
+    ),
+    path("partner/rides/<uuid:ride_id>/deliver/", DeliverParcelView.as_view(), name="trip-deliver"),
     path("partner/rides/<uuid:ride_id>/start/", StartTripView.as_view(), name="trip-start"),
     path(
         "partner/rides/<uuid:ride_id>/complete/", CompleteTripView.as_view(), name="trip-complete"
