@@ -1,4 +1,4 @@
-# 13. VSolve Rides V1: bike, auto and cab rides
+# 14. VSolve Rides V1: bike, auto and cab rides
 
 - Status: Proposed
 - Date: 2026-11-07
@@ -139,7 +139,9 @@ the Partner app Rides workspace and the Operations console are the agreed design
 20. **Proposal number 0030, contract version 1.99.0.** The brief first named proposal 0029 and
     contract 1.96.0, but `0029-operations-partner-import.md` exists and `main` was already at 1.98.0
     when the first Rides endpoints were published. The contract version moves by one minor for the
-    whole branch; later Rides endpoints join the 1.99.0 changelog entry.
+    whole branch; later Rides endpoints join the 1.99.0 changelog entry. On 22 November `main` was
+    merged in after it had taken 1.99.0 to 1.110.0, so the Rides entry became **1.111.0**, and this
+    record became ADR 0014 (the AI booking assistant had merged as 0013).
 
 ### Decided while building pricing, supply, dispatch and the revision 2 rework
 

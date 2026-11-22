@@ -47,7 +47,7 @@ this file, your ADR or your proposal disagrees with this section, **this section
 
 | Area | Status |
 |---|---|
-| Day 1: brief pointer, ADR-0013, proposal 0030, models and migrations | ✅ done. The Captain app scaffold was correctly never made. |
+| Day 1: brief pointer, ADR-0014, proposal 0030, models and migrations | ✅ done. The Captain app scaffold was correctly never made. |
 | Day 2: routing adapter, fare engine, quotes, rate-card and pass-plan APIs, captain `me` and vehicle, passes, duty, location, sweeps, seed command | ✅ done, with the rework below. `rides/availability/` is **missing**. |
 | Day 2: captain sign-up in the partner app (track card, short steps, three driving documents) | ✅ done. It still needs the vehicle step and hiding on iOS. |
 | Rider: where-to and choose-ride screens with live quotes | ✅ done. There is no **Book** yet. |
@@ -63,7 +63,7 @@ this file, your ADR or your proposal disagrees with this section, **this section
 | R3 | Make ping timing use server time (§5.6). | A phone whose clock runs 40 s slow fails every ping today, and the sweep takes it off duty after 2 minutes. |
 | R4 | Add a `QUEUED` pass status and allow one purchase in flight (§5.8). | Today a late payment capture ends a pass that is still running, which throws away time the captain paid for. Two different plans can also both be charged. |
 | R5 | Hide the "I give rides" track card on iOS (§5.12). | Owner decision 3. |
-| R6 | Update ADR-0013 (§14 and every other "Captain app" line) and proposal 0030 to match this revision. | Your design documents must match the brief. |
+| R6 | Update ADR-0014 (§14 and every other "Captain app" line) and proposal 0030 to match this revision. | Your design documents must match the brief. |
 
 Two commits on this branch are not Rides work: `d35cd004` (faster partner onboarding) and
 `cba401cc` (login phone prefill). They are outside §2. Leave them; the owner moves them to their
@@ -154,7 +154,7 @@ own pull request. Do not add more work like them.
 | `frontend/mobile/apps/customer/src/features/rides/**` | rider screens, models, queries |
 | `frontend/apps/admin/app/(operations)/operations/rides/**` | Operations routes |
 | `frontend/apps/admin/features/rides/**` | Operations screens |
-| `docs/adr/0013-rides-v1.md`, `contracts/proposals/0030-rides-v1.md`, `docs/rapido/**` | your design documents |
+| `docs/adr/0014-rides-v1.md`, `contracts/proposals/0030-rides-v1.md`, `docs/rapido/**` | your design documents |
 
 ### Registration points: these exact lines, nothing else in these files
 
@@ -271,7 +271,7 @@ must too.
 
 ### 4.3 Your two design documents (Day 1)
 
-1. **`docs/adr/0013-rides-v1.md`.** Use the format in `docs/adr/README.md`. Record every
+1. **`docs/adr/0014-rides-v1.md`.** Use the format in `docs/adr/README.md`. Record every
    decision in §5, every decision you make yourself, a **Dependencies** section (each new
    package and why), and a **References** section (what you used from §10). Set it to
    `Status: Proposed`. The owner changes it to Accepted.
@@ -281,7 +281,8 @@ must too.
    message the user sees, and the idempotency and retry behaviour.
 
 The owner reviews both at the Day 1 demo. Keep both up to date whenever you change something.
-The parked AI-assistant branch also drafted an ADR 0013. Rides keeps 0013, and that branch takes
+The AI booking assistant merged into `main` first with ADR 0013, so Rides is ADR 0014 (renumbered
+at the 22 November merge of `main`). Before that, this brief said Rides keeps 0013 and that branch takes
 the next free number when it merges.
 
 ---
@@ -782,7 +783,7 @@ Days 1 and 2 are done; Day 3 was not built and its work now sits in Days 4 and 5
 - Set up your machine with `CONTRIBUTING.md` and `frontend/mobile/guide/01-machine-setup.md`:
   Docker, backend, seed data, and customer-mobile running on your phone.
 - `git switch rapido/v1`. Add the Appendix A pointer to `AGENTS.md`. Open the Draft PR.
-- Write ADR-0013 and proposal 0030 (§4.3).
+- Write ADR-0014 and proposal 0030 (§4.3).
 - Create the `apps/rides` skeleton (`apps.py`, `models.py`, `admin.py`, `urls.py`, `services.py`,
   `selectors.py`), every model with its constraints, and the migrations. Add the partners
   `Track` and `Kind` values with their migration, and the commerce `Purpose` with its migration.
@@ -1095,7 +1096,7 @@ the captain phone's battery use per hour, and any problem.
 ## 8. Definition of done
 
 - [ ] Every item in the §1 "In V1" table works on real phones.
-- [ ] ADR-0013 and proposal 0030 are written, current (including Revision 2) and reviewed.
+- [ ] ADR-0014 and proposal 0030 are written, current (including Revision 2) and reviewed.
 - [ ] The contract is regenerated, with a CHANGELOG entry, and `pnpm contract:check` is green.
 - [ ] `quality-static.cmd` is green.
 - [ ] Every rides backend test is green, and `apps/rides` branch coverage is ≥ 85%.
@@ -1210,7 +1211,7 @@ Revision 2 changed this text. Update the copy already in `AGENTS.md` to match.
 ```markdown
 # Rides V1
 
-Brief: docs/rapido/README.md · ADR: docs/adr/0013-rides-v1.md · Contract: contracts/proposals/0030-rides-v1.md
+Brief: docs/rapido/README.md · ADR: docs/adr/0014-rides-v1.md · Contract: contracts/proposals/0030-rides-v1.md
 
 ## Daily progress
 - [x] Day 1 (Fri 6): setup, ADR + proposal, models + migrations

@@ -1,8 +1,8 @@
 # 0030. Rides V1: rider, captain and Operations API
 
-- Status: Proposed. The endpoints marked ✅ are Published at contract 1.99.0; the rest is proposed.
+- Status: Proposed. The endpoints marked ✅ are Published at contract 1.111.0 (1.99.0 before the 22 November merge of `main`); the rest is proposed.
 - Date: 2026-11-07 · Revised: 2026-11-10 (brief revision 2, and the endpoints built since)
-- Brief: `docs/rapido/README.md` §5.10 · ADR: `docs/adr/0013-rides-v1.md`
+- Brief: `docs/rapido/README.md` §5.10 · ADR: `docs/adr/0014-rides-v1.md`
 - Numbering: the brief first called this proposal 0029; that number is already
   `0029-operations-partner-import.md`.
 
@@ -12,7 +12,7 @@ Every endpoint carries one of two marks.
 
 | Mark | Meaning |
 | --- | --- |
-| ✅ **Implemented** | Built in `backend/apps/rides`, tested in `backend/tests/rides`, published in `contracts/openapi/v1.yaml` 1.99.0. The shapes are the serializers' real fields. |
+| ✅ **Implemented** | Built in `backend/apps/rides`, tested in `backend/tests/rides`, published in `contracts/openapi/v1.yaml` 1.111.0. The shapes are the serializers' real fields. |
 | 📝 **Proposed** | Not built. The path, shapes, codes and messages are what this proposal asks for. They may change when the endpoint is implemented, and this file is updated when they do. |
 
 ## Consuming applications
@@ -247,7 +247,7 @@ Response `200` (`CaptainStatus`):
 ### ✅ `PUT partner/rides/vehicle/`: save the vehicle
 
 Creates or replaces the captain's one vehicle. Allowed only while the captain application is `DRAFT`
-or `CHANGES_REQUIRED` (ADR-0013, decision 16).
+or `CHANGES_REQUIRED` (ADR-0014, decision 16).
 
 Request (`CaptainVehicleWriteRequest`) and response `200` (`CaptainVehicle`):
 
@@ -430,7 +430,7 @@ read the idempotency table. The `start` view therefore never passes the code. It
 
 #### Emergency number
 
-`emergency_number` always comes from the server setting `RIDES_EMERGENCY_NUMBER` (ADR-0013,
+`emergency_number` always comes from the server setting `RIDES_EMERGENCY_NUMBER` (ADR-0014,
 decision 13). `"112"` in the examples is the default, not a constant. The apps never hard-code a
 number. The value also appears on the live ride (`GET rides/{ride_id}/` and
 `GET partner/rides/current/`), so the **Call** button works before the SOS request is sent and even
@@ -457,7 +457,7 @@ received. `400 validation_error` for any other `period`.
 ### ✅ `GET rides/availability/?latitude=17.440000&longitude=78.348900`
 
 Open to signed-out visitors (Home is), with the existing serviceability rate limit. The Customer
-app no longer calls it for the Home card (ADR-0013, decision 38); it is kept for other clients.
+app no longer calls it for the Home card (ADR-0014, decision 38); it is kept for other clients.
 
 ```json
 { "vehicle_types": ["BIKE", "AUTO", "CAB"] }
