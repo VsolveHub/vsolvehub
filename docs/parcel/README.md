@@ -2,7 +2,8 @@
 
 - Owner decides everything in this brief. You build it.
 - Branch: **`parcel/v1`**, cut from `rapido/v1` after `main` was merged into it on 22 November 2026.
-- Five working days: **Monday 23 to Friday 27 November 2026.** The owner reviews on Saturday 28.
+- Three days, testing and review included: **Monday 23 to Wednesday 25 November 2026.** Day 3 is the
+  owner's review.
 - Ships **together with Rides V1**, in one store version, behind one server off switch.
 
 Pick up & Drop is a parcel service like Uber Parcel or Rapido Parcel. A customer books a captain to
@@ -33,7 +34,7 @@ Rides engine you already built, with parcel details, a delivery PIN and return-t
 
 1. **Every product decision is already made (§2).** Do not choose a different field, state, price
    rule, label or flow. If something you need is not in this brief, do not decide it yourself:
-   write it in the PR description under **Needs owner** and raise it at the 6:30 demo.
+   write it in the PR description under **Needs owner** and tell the owner the same day.
 2. **The Rides brief still applies.** Its ten rules (`docs/rapido/README.md` §0) are your rules
    here: Django decides everything, money is integer paise on the server, no fake data, never
    hand-edit the contract, every state change is authorized, audited and idempotent, side effects go
@@ -42,8 +43,8 @@ Rides engine you already built, with parcel details, a delivery PIN and return-t
 3. **No new native modules, no app version changes, no `eas build`, no `eas update`.** Everything
    here works with what the apps already have: `react-native-maps`, `expo-location`, `Linking` for
    calls and React Native `Share` for sharing codes.
-4. **Contract version `1.112.0`. ADR `0015`. Contract proposal `0032`.** Rides is `1.111.0`, ADR
-   `0014` and proposal `0031` after the merge of `main`.
+4. **Contract version `1.112.0`. ADR `0015`.** Rides is `1.111.0` and ADR `0014` after the merge
+   of `main`. There is no separate contract proposal for Pick up & Drop: §4.2 is the API.
 5. **The screens follow Uber Parcel's layout** (the owner's screenshots are described in §5.1), and
    the start of the flow follows Rapido: the destination is asked first.
 
@@ -59,7 +60,7 @@ Rides engine you already built, with parcel details, a delivery PIN and return-t
 | Backend | parcel kind on quotes, rides and rate cards, parcel details, optional delivery PIN, return leg priced by the fare engine, dispatch filter, payment rules, cancel rule, notifications, Operations APIs. |
 | Operations console | Kind and Unpaid filters on the Rides list, parcel block on the ride detail, parcel rate cards with max weight and size. |
 | Legal | A **Pick up & Drop** section on the customer website terms page. |
-| Testing | backend tests, app tests, device checklist on three phones, four real deliveries, a written test report. |
+| Testing | backend tests, app tests, device checklist on three phones, two real deliveries, a written test report. |
 
 Do not build anything that is not in this brief: no goods trucks, no buy-and-deliver, no online
 payment, no tips, no parcel photos, no weight or item questions, no contact picker, no SMS to the
@@ -224,12 +225,12 @@ Through `apps/rides/notify.py`, the same way as Rides, with templates in
 
 Captain cancels and Operations cancels reuse the Rides codes.
 
-### 4.4 Design documents (Day 1)
+### 4.4 Design records (Day 1)
 
-- `docs/adr/0015-pickup-drop-v1.md`: the D1–D24 table and the reasons, in the ADR format.
-- `contracts/proposals/0032-pickup-drop-v1.md`: every endpoint in §4.2 with an example request and
-  response and every error code.
-- One `contracts/openapi/CHANGELOG.md` entry, `## 1.112.0 - Pick up & Drop V1`.
+- `docs/adr/0015-pickup-drop-v1.md`, short: status, two lines of context, "Decision: see
+  `docs/parcel/README.md` §2 (D1–D24)", and the consequences.
+- One `contracts/openapi/CHANGELOG.md` entry, `## 1.112.0 - Pick up & Drop V1`, listing every
+  endpoint change in §4.2 with its error codes.
 
 ---
 
@@ -331,7 +332,7 @@ You own the same folders as in Rides (`docs/rapido/README.md` §2) plus:
 |---|---|
 | `frontend/mobile/apps/customer/app/(tabs)/rides/parcel/**` | parcel routes |
 | `frontend/mobile/apps/customer/src/features/rides/parcel/**` | parcel screens, models, queries |
-| `docs/parcel/**`, `docs/adr/0015-pickup-drop-v1.md`, `contracts/proposals/0032-pickup-drop-v1.md` | your documents |
+| `docs/parcel/**`, `docs/adr/0015-pickup-drop-v1.md` | your documents |
 
 Registration points, these exact changes only:
 
@@ -362,57 +363,44 @@ git switch parcel/v1
 - Commit messages: `feat(parcel): …`, `test(parcel): …`, `fix(parcel): …`, `docs(parcel): …`.
 - Push every evening: `git push origin parcel/v1`.
 - **Day 1:** open a Draft pull request `parcel/v1 → rapido/v1` titled **Pick up & Drop V1**. Move it
-  to Ready for review on Day 5, after §12 is met. The owner merges.
+  to Ready for review at the end of Day 2, after §12 is met. The owner merges after the Day 3 review.
 
 ---
 
-## 10. Day-by-day plan
+## 10. The three days
 
-### Day 1: Monday 23 November. Explore Uber, design, data
+The owner puts a partner-app build with Rides on the test phones before Day 2's testing: captains
+cannot go on duty in Expo Go.
 
-**Morning (two hours, no more): explore the Uber app.**
+### Day 1: Monday 23 November. Check Rides, then the backend
 
-- Open the Uber app on your phone. Look at how Uber organises its categories: the Home screen
-  tiles, the Services tab, where Parcel sits and what it is called.
-- Go through the Parcel flow screen by screen, with §5.1 beside you: addresses, vehicle and price,
-  Review delivery, the pickup and dropoff details screens, and the last screen before booking.
-- **Stop before Confirm delivery. Do not create a booking.**
-- Write `docs/parcel/uber-walkthrough.md` (text only, no screenshots in the repo): for each screen,
-  what it shows, what it asks, the order of fields, how price and limits are explained, and the
-  wording. Then one short section: which layout and wording ideas you will use in our screens (§5,
-  §6). Our fields, rules and flow stay exactly as this brief says.
+- First, run the Rides tests on `parcel/v1` (`pytest tests/rides` and `tests/partners`). `main` was
+  merged into Rides on 22 November and nothing has been tested since. If anything fails, tell the
+  owner before you write parcel code.
+- Open Uber Parcel once on your phone and go up to Confirm delivery. **Do not book.** Compare it with
+  §5.1. No write-up.
+- Draft PR (§9) and ADR 0015 (§4.4).
+- The whole backend (§4): the migration, availability and quotes, booking, the dispatch filter and
+  `parcel-preference`, pickup, arrived at drop, deliver with and without the PIN, receiver not
+  available with the return price, returned, payment received and not received, `ITEM_NOT_ALLOWED`,
+  the cancel rule, notifications, Operations APIs, the seed. Contract `1.112.0` and its changelog
+  entry.
+- The backend tests in §11.1, written and green.
 
-**Afternoon:**
+### Day 2: Tuesday 24 November. Apps, then testing
 
-- Draft PR (§9). ADR 0015 and proposal 0032 (§4.4).
-- `rides/0007_pickup_drop` migration: every model change in §4.1.
-- Availability and quotes with `kind` (§4.2), with tests.
-- 6:30 demo: the walkthrough, the ADR, the proposal, the migration.
+- Build the captain app (§6), the customer app (§5), the Operations console (§7) and the terms
+  section.
+- Test: the app tests and every command in §11.1, the device checklist (§11.2), the two road
+  deliveries (§11.3), the test report (§11.4).
+- Move the PR to Ready for review.
 
-### Day 2: Tuesday 24 November. Backend, all of it
+### Day 3: Wednesday 25 November. Owner review
 
-Booking with parcel details, dispatch filter and `parcel-preference`, pickup, arrived at drop,
-deliver (with and without PIN), receiver not available with the return price, returned, payment
-received and not received, `ITEM_NOT_ALLOWED`, cancel rule, notifications, Operations APIs, seed.
-Regenerate the contract as `1.112.0`. Tests for every endpoint and transition. Demo: the whole flow
-through the API.
+- The owner reviews the PR and tries it on the phones.
+- You fix what the review finds the same day, on `parcel/v1`. The owner merges when it passes.
 
-### Day 3: Wednesday 25 November. Captain app
-
-§6 complete: switch, offer, trip stages, both ends' details, calls, collect, PIN or Delivered, wait
-countdown, return, not paid, history. Demo on a phone.
-
-### Day 4: Thursday 26 November. Customer app, Operations, legal
-
-§5 complete, including the availability gate on both Home cards. §7 complete. The terms section.
-Demo: book on one phone, deliver on another.
-
-### Day 5: Friday 27 November. Test, fix, hand over
-
-Automated tests (§11.1), the device checklist (§11.2), four real deliveries (§11.3), the test report
-(§11.4). Move the PR to Ready for review.
-
-If you fall behind, tell the owner at the demo the same day. Do not cut anything on your own.
+If you fall behind, tell the owner the same day. Do not cut anything on your own.
 
 ---
 
@@ -459,33 +447,25 @@ for each choice, the codes card with PIN on and off) and the captain parcel trip
 
 Phone A: partner app, Bike captain. Phone B: partner app, Auto captain. Phone C: customer app.
 
-- [ ] The Pick up & Drop tile shows only in an area with a parcel card; switching the card off in Operations hides it.
-- [ ] The Rides card follows the same rule for ride cards.
+- [ ] The Pick up & Drop tile shows only where a parcel card is active, and switching the card off in Operations hides it. The Rides card follows the same rule.
 - [ ] Tapping the tile opens the drop search with the pickup set to the current location.
-- [ ] Package guidelines show each vehicle's limits; changing a parcel card's weight or size in Operations changes them.
-- [ ] Confirm stays disabled until both ends have a name and phone.
+- [ ] Package guidelines show the limits set in Operations; Confirm stays disabled until both ends have a name and phone.
 - [ ] I'm sending, Bike, Sender pays, PIN off: pickup code, collect at pickup, arrived at drop, Delivered.
-- [ ] I'm receiving, Bike, Receiver pays, PIN on: the pickup code is shared from phone C to someone else's WhatsApp; at the drop, collect first, then the PIN.
-- [ ] I'm sending, Receiver pays: the shared text says how much to pay; delivery is refused until the captain marks payment received.
-- [ ] Auto: a parcel booked on Auto is offered only to captain B.
-- [ ] "Take parcel orders" off: captain A gets no parcel offers but still gets rides.
-- [ ] PIN on, wrong PIN five times locks it; "Receiver not available" then works.
-- [ ] Return: the wait countdown, Receiver not available, the return fare shown on both phones, returned with the pickup code, Payment received.
-- [ ] Return when the Receiver was to pay, with Not paid: the parcel shows as Unpaid in Operations.
-- [ ] "Can't take this item" at the pickup: the booker is told, nothing is charged, no other captain gets it.
-- [ ] The booker cannot cancel after pickup.
-- [ ] Both ends' details are on the captain's trip screen, callable during the parcel and absent from history.
-- [ ] Notifications arrive on the right phone for every step in §4.3.
-- [ ] The terms page shows the Pick up & Drop section.
+- [ ] I'm receiving, Receiver pays, PIN on: the codes are shared from phone C on WhatsApp; at the drop, delivery is refused until payment is received, then the PIN.
+- [ ] An Auto parcel goes only to captain B; with "Take parcel orders" off, captain A gets no parcels but still gets rides.
+- [ ] Five wrong PINs lock it, and "Receiver not available" then works.
+- [ ] Return: the wait countdown, the return fare on both phones, returned with the pickup code; Not paid shows as Unpaid in Operations.
+- [ ] "Can't take this item": the booker is told, nothing is charged, no other captain gets it; the booker cannot cancel after pickup.
+- [ ] Every notice in §4.3 reaches the right phone; both ends' details are on the captain's screen during the parcel and gone from history.
 
-### 11.3 Road test (Day 5)
+### 11.3 Road test (Day 2)
 
-Four real deliveries: Bike, I'm sending, Sender pays, PIN off; Bike, I'm receiving, Receiver pays,
-PIN on; Auto, I'm sending, Receiver pays; and one Bike parcel that is returned.
+Two real deliveries: a Bike parcel, I'm receiving, Receiver pays, PIN on, delivered; and an Auto
+parcel that is returned to the sender.
 
 ### 11.4 Test report
 
-Paste into the PR: the automated output, the ticked checklist, the four deliveries (time, distance,
+Paste into the PR: the automated output, the ticked checklist, the two deliveries (time, distance,
 fare, anything odd), and known issues left open.
 
 ---
@@ -493,9 +473,9 @@ fare, anything odd), and known issues left open.
 ## 12. Definition of done
 
 - [ ] Everything in §1 works on the phones; every decision in §2 is followed exactly.
-- [ ] ADR 0015, proposal 0032 and the `1.112.0` changelog entry are written and current.
+- [ ] ADR 0015 and the `1.112.0` changelog entry are written and current.
 - [ ] Contract regenerated, `pnpm contract:check` green.
 - [ ] All tests in §11.1 written and green; coverage output pasted.
-- [ ] Device checklist ticked; four road deliveries done; test report in the PR.
+- [ ] Device checklist ticked; two road deliveries done; test report in the PR.
 - [ ] No new native modules, no app version change, no file written outside §8.
 - [ ] Anything unclear is listed under **Needs owner** in the PR, not decided in code.
