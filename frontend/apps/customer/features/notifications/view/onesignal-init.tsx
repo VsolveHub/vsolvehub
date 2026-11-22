@@ -536,6 +536,10 @@ export function OneSignalInit() {
     }
   }, [userId]);
 
+  if (!CUSTOMER_ONESIGNAL_APP_ID) {
+    return null;
+  }
+
   return (
     <Script
       src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"

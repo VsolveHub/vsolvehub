@@ -9,6 +9,7 @@ import { useState } from "react";
 import type { StepUpSession } from "@/features/finance/queries";
 import { StepUpGate } from "@/features/finance/view/step-up-gate";
 import { CustomerLedgerPanel } from "@/features/loyalty/view/customer-ledger-panel";
+import { useFileDeletionForUser } from "@/features/privacy-requests/queries";
 
 import {
   BOOKING_KIND_LABEL,
@@ -24,6 +25,88 @@ const WHEN_TIME = new Intl.DateTimeFormat("en-IN", {
   timeStyle: "short",
   timeZone: "Asia/Kolkata",
 });
+
+/**
+ * File an account deletion for someone who reached support instead of the app (the route the
+ * public deletion page offers). Support confirms it is them first; the reason records how. They
+ * get the same 30 days, and signing in again keeps the account.
+ */
+function DeleteAccountAction({ record }: { record: Record_ }) {
+  const fileDeletion = useFileDeletionForUser(record.id);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+
+  function close() {
+    if (fileDeletion.isPending) return;
+    setOpen(false);
+    setReason("");
+    fileDeletion.reset();
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        Delete account
+      </Button>
+      {open ? (
+        <Dialog
+          open
+          onOpenChange={(next) => {
+            if (!next) close();
+          }}
+          title={fileDeletion.data ? "Deletion filed" : "Delete this account?"}
+          description={
+            fileDeletion.data
+              ? `They are signed out everywhere. The account is erased on ${WHEN.format(
+                  new Date(fileDeletion.data.scheduled_for ?? fileDeletion.data.requested_at),
+                )} unless they sign in again. Follow it on Account deletions.`
+              : "Only when they asked support to. They are signed out everywhere now and the account is erased 30 days later, unless they sign in again. Open bookings must be finished or cancelled first."
+          }
+          footer={
+            fileDeletion.data ? (
+              <Button onClick={close}>Done</Button>
+            ) : (
+              <>
+                <Button variant="outline" disabled={fileDeletion.isPending} onClick={close}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={!reason.trim()}
+                  loading={fileDeletion.isPending}
+                  loadingLabel="Filing"
+                  onClick={() => fileDeletion.mutate(reason.trim())}
+                >
+                  File the deletion
+                </Button>
+              </>
+            )
+          }
+        >
+          {fileDeletion.data ? null : (
+            <Field
+              label="How they asked, and how you checked it was them"
+              description="Kept in the request's history."
+              required
+            >
+              <Textarea
+                rows={3}
+                value={reason}
+                maxLength={480}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </Field>
+          )}
+          {fileDeletion.error ? (
+            <p role="alert" className="mt-3 text-sm text-danger-text">
+              {friendlyErrorMessage(fileDeletion.error)}
+            </p>
+          ) : null}
+        </Dialog>
+      ) : null}
+    </>
+  );
+}
 
 function BlockAction({ record }: { record: Record_ }) {
   const block = useBlockCustomer(record.id);
@@ -192,6 +275,7 @@ export function CustomerRecord({ customerId }: { customerId: string }) {
               <Phone aria-hidden className="size-4" /> Call {customer.phone_number}
             </a>
             <BlockAction record={customer} />
+            <DeleteAccountAction record={customer} />
           </div>
         </div>
         {customer.block ? (

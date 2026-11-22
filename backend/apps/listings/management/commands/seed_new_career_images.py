@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,9 @@ from django.db import transaction
 from apps.foundation.catalog_media import catalog_image_url
 from apps.listings.models import Listing, ListingMedia
 
-DOWNLOADS_DIR = Path(r"C:\Users\nuner\Downloads\career")
+_SOURCE_DIR = os.environ.get("VSOLVE_CAREER_IMAGES_DIR")
+# Optional folder of raw photos to copy in; the committed catalog images are used when unset.
+DOWNLOADS_DIR = Path(_SOURCE_DIR) if _SOURCE_DIR else None
 FRONTEND_WEB_CAREER_DIR = (
     Path(settings.BASE_DIR).parent
     / "frontend"
@@ -216,7 +219,7 @@ def sync_images_to_destinations() -> dict[str, Path]:
     """
     copied_files: dict[str, Path] = {}
 
-    if not DOWNLOADS_DIR.exists():
+    if DOWNLOADS_DIR is None or not DOWNLOADS_DIR.exists():
         return copied_files
 
     FRONTEND_WEB_CAREER_DIR.mkdir(parents=True, exist_ok=True)

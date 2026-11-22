@@ -1,6 +1,7 @@
 const GATED_PREFIXES = [
   "/engagements",
   "/activity",
+  "/ai-chat",
   "/projects",
   "/account",
   "/requests",

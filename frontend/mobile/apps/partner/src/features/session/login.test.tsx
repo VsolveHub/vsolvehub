@@ -35,18 +35,49 @@ jest.mock("@/features/application/queries", () => ({
   usePartnerApplication: () => ({ isPending: false, data: undefined, error: null }),
 }));
 
+const mockUseMobileOtpFlow = jest.fn((..._args: unknown[]) => mockFlow);
+
 jest.mock("@vsolve/mobile-core", () => ({
   useAuthStore: (select: (state: { status: string }) => unknown) => select({ status: "signedOut" }),
-  useMobileOtpFlow: () => mockFlow,
+  useMobileOtpFlow: (...args: unknown[]) => mockUseMobileOtpFlow(...args),
 }));
 
 describe("login", () => {
+  it("does not ask the server to refuse numbers without a Partner account", async () => {
+    // Regression: `intendedRole: "partner"` made Django answer 404 no_account_for_role for any
+    // new number. The Partner role only exists after someone starts an application, so a new
+    // applicant (and "Register as a new Partner", which signs in first) could never get a code.
+    mockFlow.phase = "phone";
+    await render(<LoginScreen />);
+    expect(mockUseMobileOtpFlow).toHaveBeenCalled();
+    for (const args of mockUseMobileOtpFlow.mock.calls) {
+      expect(args[0] ?? {}).not.toHaveProperty("intendedRole");
+    }
+  });
+
   it("renders the phone step", async () => {
     mockFlow.phase = "phone";
     mockFlow.codeError = null;
     const view = await render(<LoginScreen />);
-    expect(view.getByText("Welcome Back")).toBeTruthy();
+    expect(view.getByText(/Welcome back/i)).toBeTruthy();
     expect(view.getByText("Send code")).toBeTruthy();
+  });
+
+  it("renders the phone app sign-in without the website header", async () => {
+    mockFlow.phase = "phone";
+    mockFlow.codeError = null;
+    const view = await render(<LoginScreen />);
+    expect(view.queryByText("Join")).toBeNull();
+    expect(view.getByText("Register as a new Partner")).toBeTruthy();
+    expect(view.getByText("Need help with your phone number or OTP?")).toBeTruthy();
+  });
+
+  it("renders a phone number error", async () => {
+    mockFlow.phase = "phone";
+    mockFlow.phoneError = "Enter your 10-digit mobile number.";
+    const view = await render(<LoginScreen />);
+    expect(view.getByText("Enter your 10-digit mobile number.")).toBeTruthy();
+    mockFlow.phoneError = null;
   });
 
   it("renders a code error", async () => {

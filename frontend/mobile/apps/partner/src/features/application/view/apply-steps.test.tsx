@@ -1,6 +1,12 @@
 // Ported from frontend/apps/partner/features/application/view/apply-steps.test.tsx
 import { ApiRequestError } from "@vsolve/api-client";
 import { fireEvent, render } from "@testing-library/react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState, useCallback, useRef } from "react";
+import { Pressable, Text } from "react-native";
+import { ApplyDockContext, type DockConfig } from "../model/dock-context";
+import { router } from "expo-router";
+const { setPathname } = require("expo-router") as { setPathname: (p: string) => void };
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -9,12 +15,7 @@ import { ApplicationEditor } from "./application-editor";
 import { DocumentsStep } from "./documents-step";
 import { usePartnerApplication, useUpdateApplication } from "../queries";
 
-const mockPush = jest.fn();
-
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush }),
-  usePathname: () => "/apply/about",
-}));
+const mockPush = router.push;
 
 jest.mock("expo-image-picker", () => ({
   requestCameraPermissionsAsync: jest.fn(async () => ({ granted: true })),
@@ -37,6 +38,7 @@ jest.mock("../queries", () => {
 });
 
 jest.mock("../upload-queries", () => ({
+  usePartnerDocumentAccess: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUploadDocument: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -58,8 +60,42 @@ const initialMetrics = {
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
 };
 
+function Harness({ children }: { children: ReactElement }) {
+  const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+  const [dockConfig, setDockConfig] = useState<DockConfig | null>(null);
+  const onCommitRef = useRef<(() => void) | null>(null);
+  const registerDock = useCallback((config: DockConfig | null) => {
+    if (config?.onCommit) onCommitRef.current = config.onCommit;
+    setDockConfig((prev) => {
+      if (!prev && !config) return null;
+      if (prev && config && prev.label === config.label && prev.proceedDisabled === config.proceedDisabled) {
+        return prev;
+      }
+      return config;
+    });
+  }, []);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider initialMetrics={initialMetrics}>
+        <ApplyDockContext.Provider value={{ dockConfig, registerDock, scrollFieldIntoView: () => {} }}>
+          {children}
+          {dockConfig ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save and Continue"
+              onPress={() => onCommitRef.current?.()}
+            >
+              <Text>Save and Continue</Text>
+            </Pressable>
+          ) : null}
+        </ApplyDockContext.Provider>
+      </SafeAreaProvider>
+    </QueryClientProvider>
+  );
+}
+
 function renderInSafeArea(ui: ReactElement) {
-  return render(<SafeAreaProvider initialMetrics={initialMetrics}>{ui}</SafeAreaProvider>);
+  return render(<Harness>{ui}</Harness>);
 }
 
 const APPLICATION = {
@@ -96,9 +132,10 @@ function refusal(status: number, code: string) {
 }
 
 beforeEach(() => {
-  mockPush.mockReset();
+  setPathname("/apply/about");
+  (mockPush as jest.Mock).mockReset();
   (useUpdateApplication as jest.Mock).mockReturnValue({
-    mutate: jest.fn(),
+    mutate: jest.fn((_vars, options) => options?.onSuccess?.()),
     reset: jest.fn(),
     isPending: false,
     isSuccess: false,
@@ -193,6 +230,64 @@ describe("documents step", () => {
     expect(missing.getAllByText("Not uploaded").length).toBeGreaterThan(0);
   });
 
+  const document = (overrides: Record<string, unknown>) => ({
+    id: "d-1",
+    kind: "GOVERNMENT_ID",
+    version: 1,
+    status: "PENDING",
+    scan_status: "CLEAN",
+    review_reason: "",
+    can_replace: true,
+    file_name: "aadhaar.jpg",
+    content_type: "image/jpeg",
+    size_bytes: 120_000,
+    uploaded_at: "2026-08-02T09:00:00Z",
+    ...overrides,
+  });
+
+  function showDocuments(documents: unknown[], applicationOverrides: Record<string, unknown> = {}) {
+    (usePartnerApplication as jest.Mock).mockReturnValue({
+      isPending: false,
+      isError: false,
+      error: null,
+      data: { ...APPLICATION, documents, ...applicationOverrides },
+      refetch: jest.fn(),
+    });
+    return renderInSafeArea(<DocumentsStep />);
+  }
+
+  it("lets a draft applicant replace a document that is still waiting for review", async () => {
+    // Regression: Replace was offered only for a rejected document, but the server lets an
+    // applicant replace any document while the application is a draft, so a wrong photo was stuck.
+    const view = await showDocuments([document({ status: "PENDING", can_replace: true })]);
+    expect(view.getByRole("button", { name: "Replace file" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Re-upload document" })).toBeNull();
+  });
+
+  it("treats a file that failed the security scan as rejected, with the reason and a re-upload", async () => {
+    // Regression: only `status` was checked, so a scan-failed file read "In review" with no way on.
+    const view = await showDocuments([document({ status: "PENDING", scan_status: "REJECTED", can_replace: true })]);
+    expect(view.getByText("This file failed our security check. Upload it again.")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Re-upload document" })).toBeTruthy();
+  });
+
+  it("shows the reviewer's reason for a rejected document", async () => {
+    const view = await showDocuments([document({ status: "REJECTED", review_reason: "Photo is blurred." })]);
+    expect(view.getByText("Reason: Photo is blurred.")).toBeTruthy();
+  });
+
+  it("is locked while the application is with a reviewer", async () => {
+    const view = await showDocuments([document({ status: "PENDING", can_replace: false })], { status: "SUBMITTED" });
+    expect(view.getByText("Locked while your application is being reviewed.")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Replace file" })).toBeNull();
+  });
+
+  it("lets the applicant view an uploaded document and shows when it was uploaded", async () => {
+    const view = await showDocuments([document({})]);
+    expect(view.getByRole("button", { name: "View document" })).toBeTruthy();
+    expect(view.getByText(/2 Aug 2026/)).toBeTruthy();
+  });
+
   it("opens a document chooser with Take photo, Choose photo and Choose PDF", async () => {
     (usePartnerApplication as jest.Mock).mockReturnValue({
       isPending: false,
@@ -204,8 +299,8 @@ describe("documents step", () => {
 
     const view = await renderInSafeArea(<DocumentsStep />);
     fireEvent.press(view.getAllByRole("button", { name: "Choose a file" })[0]!);
-    expect(await view.findByText("Take photo")).toBeTruthy();
-    expect(view.getByText("Choose photo")).toBeTruthy();
-    expect(view.getByText("Choose PDF")).toBeTruthy();
+    expect(await view.findByText(/Take photo/i)).toBeTruthy();
+    expect(view.getByText(/photo library/i)).toBeTruthy();
+    expect(view.getByText(/Choose document/i)).toBeTruthy();
   });
 });

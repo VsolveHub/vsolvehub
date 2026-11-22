@@ -15,12 +15,19 @@ interface RentalCardProps {
 
 export function RentalCard({ asset }: RentalCardProps) {
   const saved = useSavedItems("rental");
+  const href = rentalHref(asset.slug || asset.id);
   const hero =
     (Array.isArray((asset as { media?: { url?: string }[] }).media) &&
       (asset as { media: { url?: string }[] }).media[0]?.url);
 
   return (
-    <article className="group relative flex flex-col justify-between overflow-hidden rounded-card border border-line bg-surface p-4 shadow-card transition duration-fast hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised">
+    <article className="group relative flex flex-col justify-between overflow-hidden rounded-card border border-line bg-surface p-4 shadow-card transition duration-fast hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised focus-within:border-line-strong focus-within:shadow-raised">
+      {/* Stretched link: the whole card opens the rental. Interactive children sit above it (z-10). */}
+      <Link
+        href={href}
+        aria-label={`View ${asset.title}`}
+        className="absolute inset-0 z-[1] rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+      />
       {hero ? (
         <div className="relative mb-3 aspect-[4/3] w-full overflow-hidden rounded-control border border-line bg-white">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -45,7 +52,9 @@ export function RentalCard({ asset }: RentalCardProps) {
               </Badge>
             ) : null}
           </div>
-          <SaveHeart saved={saved.isSaved(asset.id)} onToggle={() => saved.toggle(asset.id)} />
+          <div className="relative z-10">
+            <SaveHeart saved={saved.isSaved(asset.id)} onToggle={() => saved.toggle(asset.id)} />
+          </div>
         </div>
 
         {/* Title and Partner */}
@@ -89,10 +98,11 @@ export function RentalCard({ asset }: RentalCardProps) {
             ) : null}
           </div>
           <Link
-            href={rentalHref(asset.slug || asset.id)}
+            href={href}
+            tabIndex={-1}
             className={buttonStyles({
               size: "sm",
-              className: "inline-flex items-center gap-1 font-bold shadow-xs",
+              className: "relative z-10 inline-flex items-center gap-1 font-bold shadow-xs",
             })}
           >
             Rent Now

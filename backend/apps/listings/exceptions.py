@@ -88,6 +88,18 @@ class ListingStateConflictApiError(ListingApiError):
         super().__init__()
 
 
+class JobTextAsksForMoneyApiError(ListingApiError):
+    """A job's text asks candidates to pay. Refused for every employer."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_code = "job_text_asks_for_money"
+    error_code = "job_text_asks_for_money"
+
+    def __init__(self, message: str) -> None:
+        self.safe_message = message
+        super().__init__()
+
+
 class UnsupportedListingActionApiError(ListingApiError):
     status_code = status.HTTP_404_NOT_FOUND
     default_code = "unsupported_listing_action"

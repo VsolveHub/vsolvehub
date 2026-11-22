@@ -43,6 +43,7 @@ from apps.mobile.services import (
     version_is_below,
 )
 from common.errors.serializers import ApiErrorSerializer
+from common.http import client_ip
 from common.observability.context import get_request_id
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,7 @@ class MobileFirebaseVerifyView(APIView):
                 id_token=data["id_token"],
                 intended_role=data.get("intended_role", ""),
                 referral_code=data.get("referral_code", ""),
-                request_ip=str(request.META.get("REMOTE_ADDR") or "unknown"),
+                request_ip=client_ip(request),
                 request_id=get_request_id() or "",
             )
         except NoAccountForRoleError as exc:

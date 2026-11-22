@@ -76,6 +76,11 @@ def _create_document_upload_intent(
     suffix = DOCUMENT_CONTENT_TYPE_SUFFIXES.get(normalized_content_type)
     if suffix is None:
         raise PartnerDocumentUploadError("Choose a supported document file type.")
+    if kind == PartnerDocument.Kind.SELFIE and normalized_content_type == "application/pdf":
+        raise PartnerDocumentUploadError(
+            "A selfie must be a JPEG or PNG photo.",
+            code="document_selfie_image_only",
+        )
     if size_bytes > MAX_PARTNER_DOCUMENT_SIZE_BYTES:
         raise PartnerDocumentUploadError("The document exceeds the allowed size.")
     if not SHA256_PATTERN.fullmatch(sha256):

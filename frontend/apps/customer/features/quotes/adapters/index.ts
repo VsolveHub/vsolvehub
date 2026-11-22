@@ -931,12 +931,6 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
         "These are the things you would pay for separately. They are the most common reason two quotes that look alike are not.",
       values: cards.map((card) => joinOrNull(card.exclusions)),
     },
-    {
-      label: "Warranty",
-      equivalent: false,
-      caveat: "Warranty terms are the vendor's own words, not a platform promise.",
-      values: cards.map((card) => card.warrantyTerms),
-    },
     // "Commission treatment" was a row here until 1.44.0. It was vendor-authored
     // free text, and BE-5A took it off the proposal entirely: commission is
     // policy, decided by an approved Operations version, not something a vendor
@@ -1034,22 +1028,11 @@ export function stageTotalMismatchPaise(card: QuoteCardView): number | null {
   return Math.abs(drift) <= STAGE_TOTAL_TOLERANCE_PAISE ? null : drift;
 }
 
-export type SuperlativeKind = "CHEAPEST" | "LONGEST_WARRANTY" | "SOONEST";
+export type SuperlativeKind = "CHEAPEST" | "SOONEST";
 
 export interface Superlative {
   kind: SuperlativeKind;
   label: string;
-}
-
-/** Months of cover read out of free-text warranty terms — "24 months", "2 years", "12 mo". */
-function warrantyMonths(terms: string | null): number | null {
-  if (terms === null) return null;
-  const text = terms.toLowerCase();
-  const months = /(\d+)\s*(?:months?|mos?\b)/.exec(text);
-  if (months?.[1] !== undefined) return Number(months[1]);
-  const years = /(\d+)\s*(?:years?|yrs?\b)/.exec(text);
-  if (years?.[1] !== undefined) return Number(years[1]) * 12;
-  return null;
 }
 
 /** The last dated stage, as a sortable timestamp. Null when the vendor dated nothing. */
@@ -1079,13 +1062,6 @@ export function superlativeFor(
     return { kind: "CHEAPEST", label: "Cheapest" };
   }
 
-  const own = warrantyMonths(card.warrantyTerms);
-  if (own !== null) {
-    const rivals = others.map((other) => warrantyMonths(other.warrantyTerms));
-    if (rivals.every((other) => other === null || own > other)) {
-      return { kind: "LONGEST_WARRANTY", label: `Longest warranty — ${own} months` };
-    }
-  }
 
   const finish = completionTime(card);
   if (finish !== null) {

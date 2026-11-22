@@ -94,6 +94,9 @@ def upsert_business_profile(
     gstin: str = "",
     years_in_operation: int = 0,
     upi_vpa: str = "",
+    business_category: str = "",
+    city: str = "",
+    address: str = "",
 ) -> PartnerBusinessProfile:
     """Create or replace the business profile. A replace, not a merge.
 
@@ -138,6 +141,9 @@ def upsert_business_profile(
         "gstin": gstin,
         "years_in_operation": years_in_operation,
         "upi_vpa": handle,
+        "business_category": business_category,
+        "city": " ".join(city.split()),
+        "address": " ".join(address.split()),
     }
     if tax_identity_changed:
         defaults.update(

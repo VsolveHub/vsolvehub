@@ -3,7 +3,7 @@ import type { Schemas } from "@vsolve/api-client";
 import {
   canSubmit,
   isEditable,
-  offeredDocuments,
+  offeredDocumentKinds,
   outstandingRequirements,
   rejectedDocuments,
   requirements,
@@ -153,20 +153,17 @@ describe("requirements in 4-step flow", () => {
     expect(codes).not.toContain("ADDRESS_PROOF");
   });
 
-  it("offers the identity documents to every partner", () => {
-    expect(offeredDocuments(application()).map((item) => item.kind)).toEqual(["GOVERNMENT_ID", "ADDRESS_PROOF"]);
-  });
-
-  it("also offers a ride captain's licence, RC and insurance", () => {
+  it("offers the slots the server lists, a ride captain's driving documents included", () => {
+    expect(offeredDocumentKinds(application())).toEqual(["GOVERNMENT_ID", "ADDRESS_PROOF"]);
     const rides = application({
-      required_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF", "DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE"],
+      offered_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF", "DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE"],
     });
-    expect(offeredDocuments(rides).map((item) => item.label)).toEqual([
-      "Government photo ID",
-      "Proof of address",
-      "Driving licence",
-      "Vehicle RC",
-      "Vehicle insurance",
+    expect(offeredDocumentKinds(rides)).toEqual([
+      "GOVERNMENT_ID",
+      "ADDRESS_PROOF",
+      "DRIVING_LICENCE",
+      "VEHICLE_RC",
+      "VEHICLE_INSURANCE",
     ]);
   });
 
@@ -226,5 +223,100 @@ describe("submission", () => {
 
   it("permits resubmitting after changes were requested", () => {
     expect(canSubmit(completeApplication({ status: "CHANGES_REQUIRED" }))).toBe(true);
+  });
+});
+
+function employer(
+  hiringAs: "" | "INDIVIDUAL" | "BUSINESS",
+  missingFields: string[],
+): Application["employer"] {
+  return {
+    hiring_as: hiringAs,
+    poster_role: "",
+    id_document_type: "",
+    email: "",
+    area: "",
+    city: "",
+    pin_code: "",
+    business: null,
+    missing_fields: missingFields,
+  } as unknown as Application["employer"];
+}
+
+const byCode = (items: ReturnType<typeof requirements>) =>
+  Object.fromEntries(items.map((item) => [item.code, item]));
+
+describe("an employer's details", () => {
+  it("asks only who is hiring until they choose", () => {
+    const items = requirements(
+      application({ track: "EMPLOYER", employer: employer("", ["hiring_as"]) }),
+    );
+
+    expect(items.map((item) => item.code).slice(0, 2)).toEqual(["HIRING_AS", "CONSENTS"]);
+    expect(byCode(items).HIRING_AS).toMatchObject({ href: "/apply/hiring-as", isMet: false });
+  });
+
+  it("asks the same of an employer with no employer record yet", () => {
+    const items = requirements(application({ track: "EMPLOYER", employer: undefined }));
+
+    expect(byCode(items).HIRING_AS).toMatchObject({ isMet: false });
+  });
+
+  it("puts everything an individual gives on one screen, read from the server's missing fields", () => {
+    const missing = requirements(
+      application({
+        track: "EMPLOYER",
+        employer: employer("INDIVIDUAL", ["area", "pin_code", "display_name", "id_document_type"]),
+      }),
+    );
+    expect(byCode(missing).HIRING_AS?.isMet).toBe(true);
+    expect(byCode(missing).EMPLOYER_ABOUT).toMatchObject({ href: "/apply/employer/about", isMet: false });
+    expect(byCode(missing)).not.toHaveProperty("EMPLOYER_BUSINESS");
+    expect(byCode(missing)).not.toHaveProperty("DISPLAY_NAME");
+
+    const done = requirements(
+      application({ track: "EMPLOYER", employer: employer("INDIVIDUAL", []) }),
+    );
+    expect(byCode(done).EMPLOYER_ABOUT?.isMet).toBe(true);
+  });
+
+  it("splits a business's fields between its two screens", () => {
+    const items = requirements(
+      application({
+        track: "EMPLOYER",
+        employer: employer("BUSINESS", ["legal_name", "pin_code", "poster_role"]),
+      }),
+    );
+
+    expect(byCode(items).EMPLOYER_BUSINESS).toMatchObject({
+      href: "/apply/employer/business",
+      isMet: false,
+    });
+    expect(byCode(items).EMPLOYER_CONTACT).toMatchObject({
+      href: "/apply/employer/contact",
+      isMet: false,
+    });
+  });
+
+  it("marks only the screen that still has something missing", () => {
+    const items = requirements(
+      application({
+        track: "EMPLOYER",
+        employer: employer("BUSINESS", ["display_name", "id_document_type"]),
+      }),
+    );
+
+    expect(byCode(items).EMPLOYER_BUSINESS?.isMet).toBe(true);
+    expect(byCode(items).EMPLOYER_CONTACT?.isMet).toBe(false);
+  });
+
+  it("is never asked of other tracks", () => {
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER"] as const) {
+      const codes = requirements(application({ track })).map((item) => item.code);
+      expect(codes).not.toContain("HIRING_AS");
+      expect(codes).not.toContain("EMPLOYER_ABOUT");
+      expect(codes).not.toContain("EMPLOYER_BUSINESS");
+      expect(codes).not.toContain("EMPLOYER_CONTACT");
+    }
   });
 });

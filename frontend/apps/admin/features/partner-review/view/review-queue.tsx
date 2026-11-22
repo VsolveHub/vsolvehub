@@ -1,13 +1,13 @@
 "use client";
 
 import { useCurrentSession } from "@vsolve/query";
-import { Badge, Button, Card, EmptyState, ErrorState, Spinner } from "@vsolve/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Select, Spinner } from "@vsolve/ui";
 import { Clock, Search, X } from "lucide-react";
 import { useState, useMemo } from "react";
 
 
 import { getApiClient } from "@/lib/api/browser";
-import { useApplicationQueue, type QueueFilters } from "../queries";
+import { useApplicationQueue, type ApplicantTrack, type QueueFilters } from "../queries";
 
 /**
  * The work a reviewer has to get through.
@@ -30,10 +30,29 @@ const FILTER_TABS: { label: string; filters: QueueFilters }[] = [
   { label: "All in-review", filters: {} },
   { label: "Unassigned", filters: { unassigned: true } },
   { label: "Mine", filters: { assignedToMe: true } },
+  { label: "Area pending", filters: { areaPending: true } },
   { label: "Submitted", filters: { status: "SUBMITTED" } },
   { label: "Under review", filters: { status: "UNDER_REVIEW" } },
   { label: "Changes requested", filters: { status: "CHANGES_REQUIRED" } },
 ];
+
+/** The kinds of applicant a reviewer can narrow the queue to. */
+const TYPE_OPTIONS: { value: ApplicantTrack; label: string }[] = [
+  { value: "SERVICES", label: "Technicians" },
+  { value: "STAY_HOST", label: "Property hosts" },
+  { value: "RENTAL_OWNER", label: "Rental owners" },
+  { value: "EMPLOYER", label: "Employers" },
+  { value: "RIDE_CAPTAIN", label: "Ride captains" },
+];
+
+/** What a row says about the applicant's kind, in the singular. */
+const TYPE_BADGE: Record<ApplicantTrack, string> = {
+  SERVICES: "Technician",
+  STAY_HOST: "Property host",
+  RENTAL_OWNER: "Rental owner",
+  EMPLOYER: "Employer",
+  RIDE_CAPTAIN: "Ride captain",
+};
 
 const STATUS_TONE: Record<string, "info" | "warning" | "success" | "danger" | "neutral"> = {
   SUBMITTED: "info",
@@ -63,11 +82,13 @@ export function ReviewQueue({
   onSelect: (applicationId: string) => void;
 }) {
   const [tab, setTab] = useState(0);
+  const [track, setTrack] = useState<ApplicantTrack | "">("");
   const [search, setSearch] = useState("");
   const session = useCurrentSession(getApiClient());
   const myId = session.data?.user?.id ?? null;
 
-  const filters = FILTER_TABS[tab]?.filters ?? {};
+  // The type narrows whatever the tab already shows; "All types" adds nothing.
+  const filters: QueueFilters = { ...(FILTER_TABS[tab]?.filters ?? {}), ...(track ? { track } : {}) };
   const queue = useApplicationQueue(filters);
 
   const allItems = useMemo(
@@ -116,6 +137,23 @@ export function ReviewQueue({
             </button>
           );
         })}
+      </div>
+
+      {/* Type of applicant */}
+      <div className="mt-3">
+        <Select
+          aria-label="Type of applicant"
+          value={track}
+          onChange={(event) => setTrack(event.target.value as ApplicantTrack | "")}
+          className="h-9 py-0 text-xs"
+        >
+          <option value="">All types</option>
+          {TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
       </div>
 
       {/* Instant Search Filter */}
@@ -194,8 +232,11 @@ export function ReviewQueue({
                         className="w-full text-left focus:outline-none"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
-                          <span className="font-bold text-sm text-text">
-                            {item.display_name}
+                          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-sm text-text">{item.display_name}</span>
+                            <Badge tone="neutral" className="text-[11px]">
+                              {TYPE_BADGE[item.track] ?? item.track}
+                            </Badge>
                           </span>
 
                           {/* Ownership Badge */}
@@ -216,12 +257,24 @@ export function ReviewQueue({
 
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                           {/* Status Badge */}
-                          <Badge
-                            tone={STATUS_TONE[item.status] ?? "neutral"}
-                            className="text-[11px]"
-                          >
-                            {STATUS_LABELS[item.status] ?? item.status.toLowerCase().replace(/_/g, " ")}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              tone={STATUS_TONE[item.status] ?? "neutral"}
+                              className="text-[11px]"
+                            >
+                              {STATUS_LABELS[item.status] ?? item.status.toLowerCase().replace(/_/g, " ")}
+                            </Badge>
+                            {item.area_pending ? (
+                              <Badge tone="warning" className="text-[11px]">
+                                Area pending
+                              </Badge>
+                            ) : null}
+                            {item.area_tag ? (
+                              <span className="text-[11px] font-medium text-text-secondary">
+                                {item.area_tag}
+                              </span>
+                            ) : null}
+                          </div>
 
                           {/* Submitted Date */}
                           {item.submitted_at ? (

@@ -207,10 +207,6 @@ function comparisonRows(cards: readonly QuoteCardView[]): readonly MatrixRow[] {
       values: cards.map((card) => validityLabel(card)?.text ?? null),
     },
     {
-      label: "Warranty",
-      values: cards.map((card) => card.warrantyTerms ?? "Not stated"),
-    },
-    {
       label: "Priced",
       values: cards.map((card) =>
         card.itemLines.length > 0

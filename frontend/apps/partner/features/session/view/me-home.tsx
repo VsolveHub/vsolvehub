@@ -7,6 +7,7 @@ import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import { PartnerPushPreferencesCard } from "@/features/notifications/view/partner-push-preferences";
+import { PartnerWhatsAppUpdatesCard } from "@/features/notifications/view/partner-whatsapp-updates";
 import {
   PARTNER_SUPPORT_HOURS_KEY,
   PARTNER_SUPPORT_PHONE,
@@ -96,6 +97,7 @@ export function MeHome() {
             Notifications
           </p>
           <PartnerPushPreferencesCard />
+          <PartnerWhatsAppUpdatesCard />
         </section>
 
         {/* Work & Financials Section */}

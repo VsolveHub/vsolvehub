@@ -3,6 +3,7 @@
 import uuid
 from typing import Any, cast
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.locations.models import Address, ServiceArea
@@ -100,15 +101,22 @@ class ServiceabilityRequestSerializer(serializers.Serializer[dict[str, object]])
 class ServiceAreaSerializer(serializers.ModelSerializer[ServiceArea]):
     class Meta:
         model = ServiceArea
-        fields = ("id", "slug", "name", "timezone")
+        fields = ("id", "slug", "name", "zone", "timezone")
         read_only_fields = fields
 
 
 class PartnerServiceAreaOptionSerializer(serializers.ModelSerializer[ServiceArea]):
+    postal_codes = serializers.SerializerMethodField()
+
     class Meta:
         model = ServiceArea
-        fields = ("id", "slug", "name", "timezone", "is_accepting_partners")
+        fields = ("id", "slug", "name", "zone", "timezone", "is_accepting_partners", "postal_codes")
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_postal_codes(service_area: ServiceArea) -> list[str]:
+        return sorted(link.postal_code.code for link in service_area.postal_code_links.all())
 
 
 class PartnerSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):

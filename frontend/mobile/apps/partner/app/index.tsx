@@ -53,6 +53,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MarketingHeader } from "../src/components/marketing-header";
 import { MarketingFooter } from "../src/components/marketing-footer";
+import { SignedInEntry } from "../src/features/session/view/signed-in-entry";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -347,7 +348,10 @@ export default function Index() {
 
   if (status === "loading") return null;
   if (status === "signedIn") {
-    return <Redirect href="/home" />;
+    return <SignedInEntry />;
+  }
+  if (Platform.OS !== "web") {
+    return <Redirect href="/login" />;
   }
 
   const activeOffer = DEMO_OFFERS[offerIndex];

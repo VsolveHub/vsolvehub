@@ -2,14 +2,21 @@ import Link from "next/link";
 import { ArrowLeft, Clock, FileCheck2, Flame, MapPin } from "lucide-react";
 import { Badge, formatDate } from "@vsolve/ui";
 import type { ListingDetail } from "../queries";
-import { getCareerImage } from "../career-images";
+import {
+  EmployerMark,
+  VerifiedBadge,
+  employerDetailLine,
+  employerName,
+  listingEmployer,
+} from "./employer-identity";
 
 export interface RoleHeaderProps {
   listing: ListingDetail;
 }
 
 export function RoleHeader({ listing }: RoleHeaderProps) {
-  const heroImage = getCareerImage(listing);
+  const employer = listingEmployer(listing);
+  const employerDetail = employerDetailLine(employer);
 
   return (
     <>
@@ -30,15 +37,14 @@ export function RoleHeader({ listing }: RoleHeaderProps) {
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-sunken border border-line px-3 py-1 text-xs font-semibold text-text-secondary">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {heroImage ? (<img
-              src={heroImage}
-              alt=""
-              className="size-4 rounded-full object-cover shrink-0"
-            />) : null}
-            {listing.poster_name || "Verified Employer"}
+          <span className="inline-flex items-center gap-2 rounded-full bg-surface-sunken border border-line py-1 pl-1 pr-3 text-xs font-semibold text-text-secondary">
+            <span className="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-surface text-[11px] font-extrabold text-text">
+              <EmployerMark employer={employer} />
+            </span>
+            {employerName(employer)}
           </span>
+          <VerifiedBadge employer={employer} className="text-xs font-semibold text-success-text" />
+          {employerDetail ? <span className="text-xs text-text-muted">{employerDetail}</span> : null}
           {listing.is_premium && (
             <Badge tone="action" dot>
               <Flame className="size-3.5 text-signal-600" />

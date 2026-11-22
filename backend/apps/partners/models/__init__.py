@@ -38,9 +38,11 @@ from .crew import (
     PartnerCrewMembership,
     PartnerLanguage,
 )
+from .employer import EmployerProfile, EmployerReviewCheck
 from .onboarding import (
     PartnerApplication,
     PartnerApplicationTransition,
+    PartnerAreaRequest,
     PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
@@ -57,15 +59,21 @@ from .standing import (
     PartnerIdentityCluster,
     PartnerStandingEvent,
 )
+from .supply import AreaSupplyTarget, CoverageSnapshot
 
 __all__ = [
+    "AreaSupplyTarget",
+    "CoverageSnapshot",
     "CrewAvailabilityException",
     "CrewDocument",
     "CrewMember",
     "CrewSkill",
+    "EmployerProfile",
+    "EmployerReviewCheck",
     "MinimumWageFloor",
     "PartnerApplication",
     "PartnerApplicationTransition",
+    "PartnerAreaRequest",
     "PartnerAvailabilityException",
     "PartnerAvailabilityRule",
     "PartnerBusinessProfile",

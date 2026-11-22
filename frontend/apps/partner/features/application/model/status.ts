@@ -78,7 +78,18 @@ const APPLICATION: Record<ApplicationStatus, StatusPresentation> = {
   },
 };
 
-export function applicationStatusPresentation(status: ApplicationStatus): StatusPresentation {
+export function applicationStatusPresentation(
+  status: ApplicationStatus,
+  options?: { isAreaPending?: boolean },
+): StatusPresentation {
+  if (options?.isAreaPending && (status === "SUBMITTED" || status === "UNDER_REVIEW")) {
+    return {
+      tone: "info",
+      labelKey: "apply.status.underReview.label",
+      headlineKey: "apply.status.waitingForArea.headline",
+      nextKey: "apply.status.waitingForArea.next",
+    };
+  }
   return APPLICATION[status];
 }
 
@@ -132,6 +143,12 @@ const DOCUMENT_LABEL_KEYS: Record<DocumentKind, string> = {
   TAX: "apply.overview.documentLabels.tax",
   BANK: "apply.overview.documentLabels.bank",
   BACKGROUND_CHECK: "apply.overview.documentLabels.backgroundCheck",
+  SELFIE: "apply.overview.documentLabels.selfie",
+  BUSINESS_PROOF: "apply.overview.documentLabels.businessProof",
+  AUTHORIZATION_LETTER: "apply.overview.documentLabels.authorizationLetter",
+  DRIVING_LICENCE: "apply.overview.documentLabels.drivingLicence",
+  VEHICLE_RC: "apply.overview.documentLabels.vehicleRc",
+  VEHICLE_INSURANCE: "apply.overview.documentLabels.vehicleInsurance",
   OTHER: "apply.overview.documentLabels.other",
 };
 
@@ -144,6 +161,7 @@ const TRACK_LABEL_KEYS: Record<Schemas["TrackEnum"], string> = {
   STAY_HOST: "apply.track.stays",
   RENTAL_OWNER: "apply.track.rentals",
   EMPLOYER: "apply.track.employer",
+  RIDE_CAPTAIN: "apply.track.rideCaptain",
 };
 
 export function trackLabelKey(track: Schemas["TrackEnum"] | null | undefined): string {

@@ -1,5 +1,5 @@
 // Ported from frontend/apps/partner/features/application/view/document-upload.tsx
-import { ErrorState, Sheet, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Sheet, Text, useT } from "@vsolve/mobile-ui";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { CloudUpload, Upload as UploadIcon } from "lucide-react-native";
@@ -35,6 +35,8 @@ export interface DocumentUploadProps {
   expectedVersion: number | null;
   replacing?: boolean;
   disabled?: boolean;
+  /** Called once the server has accepted the file, so a step can leave its "replacing" state. */
+  onSuccess?: () => void;
 }
 
 export function DocumentUpload({
@@ -43,8 +45,12 @@ export function DocumentUpload({
   expectedVersion,
   replacing = false,
   disabled = false,
+  onSuccess,
 }: DocumentUploadProps) {
+  const t = useT();
   const upload = useUploadDocument();
+  // A selfie is matched against the ID photo: only a photo, and the phone opens its front camera.
+  const isSelfie = kind === "SELFIE";
   const [chooserOpen, setChooserOpen] = useState(false);
   const [progress, setProgress] = useState<UploadProgress>({ phase: "idle", percent: 0 });
   const [rejection, setRejection] = useState<string | null>(null);
@@ -67,6 +73,7 @@ export function DocumentUpload({
         onProgress: setProgress,
       });
       setPendingFile(null);
+      onSuccess?.();
     } catch (error) {
       setProgress({ phase: "failed", percent: 0 });
       setFailure(
@@ -78,7 +85,7 @@ export function DocumentUpload({
   }
 
   function acceptFile(file: LocalDocumentFile) {
-    const problem = rejectFile({ size: file.size, type: file.mimeType });
+    const problem = rejectFile({ size: file.size, type: file.mimeType }, { imageOnly: isSelfie });
     if (problem) {
       setRejection(problem.message);
       setPendingFile(null);
@@ -97,7 +104,11 @@ export function DocumentUpload({
       setPermissionDenied(true);
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.85 });
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.85,
+      ...(isSelfie ? { cameraType: ImagePicker.CameraType?.front ?? "front" } : {}),
+    });
     if (result.canceled) return;
     const asset = result.assets[0];
     if (!asset) return;
@@ -150,7 +161,7 @@ export function DocumentUpload({
       {/* Dashed Upload Dropzone Box matching Mockup */}
       <Pressable cssInterop={false}
         accessibilityRole="button"
-        accessibilityLabel={`Upload ${label}`}
+        accessibilityLabel={replacing ? "Replace file" : "Choose a file"}
         accessibilityState={{ disabled: blocked }}
         disabled={blocked}
         onPress={() => setChooserOpen(true)}
@@ -161,18 +172,17 @@ export function DocumentUpload({
         ]}
       >
         {/* Orange Cloud Icon */}
-        <CloudUpload size={32} color="#ea580c" />
+        <CloudUpload size={28} color="#ea580c" strokeWidth={1.8} />
 
-        {/* Peach Pill Button [^ Upload] */}
-        <View style={styles.uploadPill}>
-          <UploadIcon size={14} color="#c2410c" strokeWidth={2.5} />
-          <Text style={styles.uploadPillText}>
-            {replacing ? "Replace file" : "Upload"}
-          </Text>
-        </View>
+        {/* Text: Choose a file */}
+        <Text style={styles.chooseFileText}>
+          {replacing ? "Replace file" : "Choose a file"}
+        </Text>
 
         {/* Helper Subtext */}
-        <Text style={styles.dropzoneSubtext}>JPG, PNG or PDF • up to 20 MB</Text>
+        <Text style={styles.dropzoneSubtext}>
+          {isSelfie ? t("apply.upload.supportHintImage", { size: "20 MB" }) : "JPG, PNG or PDF · max 20 MB"}
+        </Text>
       </Pressable>
 
       {/* File Chooser Sheet */}
@@ -191,13 +201,15 @@ export function DocumentUpload({
         >
           <Text style={styles.sheetOptionText}>Choose from photo library</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void choosePdf()}
-          style={styles.sheetOption}
-        >
-          <Text style={styles.sheetOptionText}>Choose document (PDF / Image)</Text>
-        </Pressable>
+        {isSelfie ? null : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void choosePdf()}
+            style={styles.sheetOption}
+          >
+            <Text style={styles.sheetOptionText}>Choose document (PDF / Image)</Text>
+          </Pressable>
+        )}
       </Sheet>
 
       {permissionDenied ? (
@@ -257,43 +269,34 @@ const styles = StyleSheet.create({
   },
   dropzone: {
     width: "100%",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderStyle: "dashed",
-    borderColor: "#fed7aa",
-    backgroundColor: "#fffaf5",
-    paddingVertical: 22,
+    borderColor: "#78716c",
+    backgroundColor: "#ffffff",
+    paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   dropzonePressed: {
     borderColor: "#ea580c",
-    backgroundColor: "#fff7ed",
+    backgroundColor: "#fbf9f6",
   },
   dropzoneDisabled: {
     opacity: 0.6,
   },
-  uploadPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 6,
-    backgroundColor: "#ffedd5",
-    borderRadius: 9999,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginTop: 10,
-  },
-  uploadPillText: {
-    color: "#c2410c",
-    fontSize: 13,
+  chooseFileText: {
+    fontSize: 15,
     fontWeight: "700",
+    color: "#00112e",
+    marginTop: 6,
   },
   dropzoneSubtext: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#64748b",
-    marginTop: 8,
-    fontWeight: "500",
+    marginTop: 4,
+    fontWeight: "400",
   },
   sheetOption: {
     minHeight: 48,

@@ -12,14 +12,19 @@ describe("isOptimizableImage", () => {
     expect(isOptimizableImage(R2)).toBe(true);
   });
 
-  it("accepts the app's own public files", () => {
-    expect(isOptimizableImage("/catalog/tiles/fan.png")).toBe(true);
+  it("serves the app's own public files as they are, not through the resize quota", () => {
+    expect(isOptimizableImage("/catalog/tiles/fan.png")).toBe(false);
+    expect(isOptimizableImage("/catalog/featured/electrician.jpg")).toBe(false);
   });
 
   it("refuses hosts the optimizer would answer with a broken image", () => {
     expect(isOptimizableImage("https://cdn.example/a.png")).toBe(false);
     expect(isOptimizableImage("http://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/a.png")).toBe(false);
     expect(isOptimizableImage("//images.unsplash.com/photo-1")).toBe(false);
+  });
+
+  it("loads the media domain directly instead of spending Vercel's resize quota", () => {
+    expect(isOptimizableImage("https://media.vsolvehub.com/catalog/tiles/hotels.png")).toBe(false);
   });
 
   it("refuses anything that is not a URL", () => {

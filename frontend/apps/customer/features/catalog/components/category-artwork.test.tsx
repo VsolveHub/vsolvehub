@@ -60,4 +60,15 @@ describe("category artwork", () => {
     expect(image?.className).toContain("object-contain");
     expect(image?.className).not.toContain("object-cover");
   });
+
+  it("renders a 3D rental category tile full-bleed with object-cover and no inset box", () => {
+    const { container } = render(
+      <ServicePhoto imageUrl="https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev/catalog/tiles/Spotlight_stand_icon_rental_2616c2cb_2K.jpg" />,
+    );
+    const image = container.querySelector("img");
+    expect(image).not.toBeNull();
+    expect(image?.className).toContain("object-cover");
+    expect(image?.className).not.toContain("object-contain");
+    expect(container.querySelector(".inset-\\[14\\%\\]")).toBeNull();
+  });
 });

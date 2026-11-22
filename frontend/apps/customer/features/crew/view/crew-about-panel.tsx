@@ -31,12 +31,13 @@ function PolicyLines({
   items: string[];
   mark: "check" | "cross";
 }) {
-  if (items.length === 0) return null;
+  const filtered = items.filter((text) => !/(?:warranty|guarantee|workmanship)/i.test(text));
+  if (filtered.length === 0) return null;
   return (
     <div>
       <h3 className="text-xs font-bold uppercase tracking-[0.1em] text-text-muted">{title}</h3>
       <ul className="mt-2 flex list-none flex-col gap-1.5 p-0">
-        {items.map((text) => (
+        {filtered.map((text) => (
           <li key={text} className="flex items-start gap-2.5 text-sm leading-6 text-text-secondary">
             <span
               aria-hidden

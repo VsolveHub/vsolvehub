@@ -1,0 +1,1664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step 3 Flow Mock</title>
+<style>
+:root{
+  --bg:#eef1f6; --panel:#ffffff; --ink:#0d1b2e; --ink2:#4a5a70; --muted:#8392a6; --line:#dde3ec;
+  --navy:#00204d; --navy2:#123d7a; --teal:#0f7d72; --teal-bg:#e4f5f2; --amber:#a24a05; --amber-bg:#fff4e0;
+  --red:#b4123a; --red-bg:#fdecef; --blue:#1d4ed8; --blue-bg:#eaf1ff; --grey-bg:#f2f4f8;
+  --shadow:0 12px 32px rgba(13,27,46,.14);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+code{font:12px/1.3 ui-monospace,Consolas,monospace;background:var(--grey-bg);border:1px solid var(--line);border-radius:5px;padding:0 4px;word-break:break-all}
+
+/* ---------- top bar ---------- */
+.top{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--navy);color:#fff;flex-wrap:wrap}
+.top .t{font-weight:800;letter-spacing:.01em}
+.top .sub{opacity:.75;font-size:12.5px}
+.top .sp{flex:1}
+.top button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;color:#fff;font-weight:600}
+.top button:hover{background:rgba(255,255,255,.22)}
+.top button:disabled{opacity:.35;cursor:default}
+.count{font-variant-numeric:tabular-nums;font-weight:700;min-width:58px;text-align:center}
+.mock-badge{display:inline-block;background:#ffe9a8;color:#5c4300;border:1px solid #e9c55a;border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+
+/* ---------- slides ---------- */
+.slide{display:none;max-width:1440px;margin:0 auto;padding:18px 24px 40px}
+.slide.on{display:block}
+.s-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.kicker{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--teal)}
+.s-head h2{margin:2px 0 0;font-size:26px;line-height:1.15}
+.s-body{display:grid;grid-template-columns:minmax(260px,350px) minmax(0,1fr);gap:24px;align-items:start}
+.s-body.full{grid-template-columns:minmax(0,1fr)}
+.notes{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;font-size:13.5px}
+.notes h4{margin:12px 0 6px;font-size:13px}
+.notes h4:first-child{margin-top:0}
+.notes ul,.notes ol{margin:4px 0 8px;padding-left:18px}
+.notes li{margin:3px 0}
+.tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;margin-right:6px;vertical-align:1px}
+.tag.today{background:var(--grey-bg);color:var(--ink2);border:1px solid var(--line)}
+.tag.prop{background:var(--teal-bg);color:var(--teal);border:1px solid #b9e3dc}
+.tag.prob{background:var(--red-bg);color:var(--red);border:1px solid #f4c3cf}
+.frames{min-width:0}
+.phones{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+figcaption{font-size:12.5px;color:var(--ink2);max-width:300px;text-align:center}
+@media (max-width:1000px){.s-body{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){.slide{padding:14px 16px 32px}.s-head h2{font-size:21px}}
+
+/* ---------- phone ---------- */
+.phone{width:300px;height:620px;border:10px solid #121826;border-radius:38px;background:#f6f7fa;position:relative;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.ph-status{display:flex;justify-content:space-between;padding:5px 18px 3px;font-size:11px;font-weight:700;background:#fff}
+.ph-mock{background:#ffe9a8;color:#5c4300;font-size:9.5px;font-weight:800;text-align:center;padding:2px 4px;letter-spacing:.02em}
+.ph-bar{display:flex;align-items:center;gap:6px;padding:7px 10px 7px 4px;background:#fff}
+.ph-back{border:0;background:none;font-size:24px;line-height:1;padding:0 8px;color:var(--navy)}
+.ph-step{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.ph-title{font-size:14px;font-weight:800}
+.ph-prog{height:3px;background:var(--line)}
+.ph-prog i{display:block;height:100%;background:var(--teal)}
+.ph-body{flex:1;overflow:auto;padding:12px 13px 16px}
+.ph-foot{padding:9px 12px 12px;background:#fff;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.ph-tools{display:flex;justify-content:center}
+.ph-tools button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:3px 10px;font-size:12px;color:var(--ink2)}
+.ph-h{margin:2px 0 4px;font-size:18px;line-height:1.2;font-weight:800}
+.ph-p{margin:0 0 10px;color:var(--ink2);font-size:12.5px}
+.lbl{font-size:11px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px}
+.card .lbl:first-child{margin-top:0}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px;margin:10px 0}
+.fine{font-size:11.5px;color:var(--muted);margin:6px 0}
+.pbtn{display:block;width:100%;border-radius:11px;padding:10px 12px;font-weight:700;font-size:13px;border:1px solid transparent;text-align:center}
+.pbtn.primary{background:var(--navy);color:#fff}
+.pbtn.ghost{background:#fff;border-color:var(--line);color:var(--navy)}
+.pbtn.link{background:none;color:var(--navy2);text-decoration:underline;padding:6px}
+.pbtn.sm{width:auto;padding:8px 12px}
+.pbtn:disabled{opacity:.4;cursor:default}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.row2 .pbtn{font-size:12px;padding:9px 6px}
+.prow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin:6px 0}
+.prow.on{border-color:#7cc7bb;background:var(--teal-bg)}
+.prow.off{opacity:.7;cursor:default}
+.prow small{display:block;color:var(--muted);font-size:11px}
+.prow .nm{flex:1;font-weight:600;font-size:13px}
+.cbx{width:20px;height:20px;border:2px solid #9aa8bb;border-radius:6px;display:grid;place-items:center;font-size:12px;font-weight:900;flex:none;color:#fff}
+.prow.on .cbx{background:var(--teal);border-color:var(--teal)}
+.banner{border-radius:12px;padding:9px 11px;font-size:12.5px;margin:8px 0;border:1px solid}
+.banner small{color:inherit;opacity:.85}
+.banner.ok{background:var(--teal-bg);border-color:#b9e3dc;color:#0b5a52}
+.banner.warn{background:var(--amber-bg);border-color:#f3d39c;color:var(--amber)}
+.banner.info{background:var(--blue-bg);border-color:#c6d7fb;color:#1e3a8a}
+.banner.err{background:var(--red-bg);border-color:#f4c3cf;color:var(--red)}
+.banner .pbtn{margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;background:#fff}
+button.chip{cursor:pointer}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.chip.warn{background:var(--amber-bg);border-color:#f3d39c;color:var(--amber)}
+.chip.info{background:var(--blue-bg);border-color:#c6d7fb;color:#1e3a8a}
+.in{width:100%;border:1px solid #c5cfdc;border-radius:10px;padding:9px 10px;background:#fff;font-size:14px}
+.in:focus{outline:2px solid #7aa7f0;border-color:transparent}
+.inrow{display:flex;gap:6px}
+.inrow .in{flex:1;min-width:0}
+.err{color:var(--red);font-size:12px;font-weight:600;margin:5px 0}
+.try{font-size:11px;color:var(--muted);margin:6px 0;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.mini{border:1px solid var(--line);background:#fff;border-radius:7px;padding:2px 7px;font-size:11px;font-weight:700;color:var(--navy2)}
+.or{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;margin:12px 0 2px}
+.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.srow{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;padding:9px 6px;font-size:13px}
+.sugg{background:#fff;border-radius:10px;margin-top:4px}
+.done{width:54px;height:54px;border-radius:50%;background:var(--teal);color:#fff;display:grid;place-items:center;font-size:28px;font-weight:900;margin:8px auto 10px}
+.center{text-align:center}
+.grp{display:flex;align-items:center;gap:6px;margin:12px 0 2px;font-size:12px}
+.grp b{flex:1}
+.grp span{color:var(--muted)}
+.list-head{position:sticky;top:-12px;background:#f6f7fa;padding:2px 0 6px;z-index:2}
+.sec{display:flex;align-items:center;gap:6px;font-weight:800;font-size:13px;margin:12px 0 4px}
+.sec .n{margin-left:auto;font-size:11px;color:var(--muted);font-weight:700}
+.li{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin:4px 0;font-size:12.5px}
+.li .grow{flex:1}
+.li small{color:var(--muted)}
+.x{border:0;background:none;color:var(--muted);font-size:16px;line-height:1;padding:0 2px}
+.minitag{font-size:10px;font-weight:800;border-radius:6px;padding:1px 6px}
+.minitag.warn{background:var(--amber-bg);color:var(--amber)}
+.minitag.err{background:var(--red-bg);color:var(--red)}
+.minitag.info{background:var(--blue-bg);color:#1e3a8a}
+.swrow{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-weight:700;font-size:13px;text-align:left}
+.sw{width:38px;height:22px;border-radius:999px;background:#c5cfdc;position:relative;flex:none;transition:background .15s}
+.sw i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:var(--teal)}
+.sw.on i{left:19px}
+.seg{display:flex;background:#e7ebf1;border-radius:10px;padding:3px;gap:3px;margin:8px 0}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:6px 4px;font-size:12px;font-weight:700;color:var(--ink2)}
+.seg button.on{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.hgrid{background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px 10px}
+.hgrid div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eef1f5;font-size:12.5px}
+.hgrid div:last-child{border-bottom:0}
+.hgrid .off{color:var(--muted)}
+.acc{background:#fff;border:1px solid var(--line);border-radius:12px;margin:6px 0;padding:8px 10px;font-size:12.5px}
+.acc .h{display:flex;justify-content:space-between;font-weight:700}
+.sumrow{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #eef1f5;font-size:12.5px}
+.sumrow b{font-weight:700}
+.sumrow span{text-align:right;color:var(--ink2)}
+.tl{margin:12px 0;padding-left:4px}
+.tl div{display:flex;gap:8px;align-items:center;font-size:12.5px;margin:6px 0}
+.tl i{width:12px;height:12px;border-radius:50%;border:2px solid var(--teal);flex:none}
+.tl i.f{background:var(--teal)}
+.radio{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin:6px 0;font-size:12.5px;width:100%;text-align:left}
+.radio .dot{width:18px;height:18px;border-radius:50%;border:2px solid #9aa8bb;flex:none;margin-top:1px}
+.radio.on{border-color:#7cc7bb;background:var(--teal-bg)}
+.radio.on .dot{border:5px solid var(--teal)}
+.ovl{position:absolute;inset:0;background:rgba(10,18,32,.5);display:flex;flex-direction:column;justify-content:flex-end;z-index:5}
+.ovl.mid{justify-content:center;align-items:center}
+.sheet{background:#fff;border-radius:18px 18px 0 0;padding:16px 14px 14px}
+.sheet h4{margin:0 0 6px;font-size:16px}
+.sheet ul{padding-left:18px;margin:6px 0 10px;font-size:12.5px;color:var(--ink2)}
+.sheet .pbtn{margin-top:6px}
+.sysdlg{width:84%;background:#fbfbfd;border-radius:16px;overflow:hidden;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.sysdlg .q{padding:16px 14px 12px;font-size:13.5px}
+.sysdlg .q small{display:block;color:var(--muted);margin-top:6px;font-size:11.5px}
+.sysdlg button{display:block;width:100%;border:0;border-top:1px solid #e3e6ec;background:none;padding:11px;color:#1a5fd8;font-weight:600;font-size:13.5px}
+.spin{width:38px;height:38px;border-radius:50%;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;animation:sp .8s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+.loading{color:#fff;text-align:center;font-weight:700}
+.lock{flex:1;background:linear-gradient(160deg,#0b2a5b,#0f7d72);color:#fff;padding:40px 14px 14px;display:flex;flex-direction:column;align-items:center}
+.lk-time{font-size:56px;font-weight:300;line-height:1}
+.lk-date{font-size:13px;opacity:.85;margin:6px 0 26px}
+.notif{width:100%;text-align:left;background:rgba(255,255,255,.92);color:var(--ink);border:0;border-radius:16px;padding:10px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+.nt-app{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2);margin-bottom:4px}
+.ico{width:18px;height:18px;border-radius:5px;background:var(--navy);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:900}
+.lk-hint{margin-top:auto;font-size:11.5px;opacity:.8}
+
+/* ---------- desktop frame ---------- */
+.desk{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;width:100%;position:relative}
+.desk-top{display:flex;align-items:center;gap:10px;background:#e8ecf2;padding:7px 12px;flex-wrap:wrap}
+.dots{display:flex;gap:5px}
+.dots i{width:10px;height:10px;border-radius:50%;background:#c3cad6}
+.url{flex:1;background:#fff;border-radius:6px;padding:3px 10px;font-size:11.5px;color:var(--muted);min-width:140px}
+.desk-main{display:grid;grid-template-columns:170px minmax(0,1fr);min-height:580px}
+.desk-nav{background:var(--navy);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+.desk-nav .brand{color:#fff;font-weight:800;padding:4px 8px 12px}
+.desk-nav button{border:0;background:none;color:#c6d4ea;text-align:left;padding:7px 10px;border-radius:8px;font-size:13px}
+.desk-nav button.on{background:rgba(255,255,255,.14);color:#fff;font-weight:700}
+.desk-nav button:hover{background:rgba(255,255,255,.08)}
+.desk-body{padding:16px;min-width:0;position:relative}
+.d-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.d-h h3{margin:0;font-size:18px;flex:1}
+.dbtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font-weight:600;font-size:12.5px;color:var(--navy)}
+.dbtn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.dbtn.warn{color:var(--amber);border-color:#f3d39c;background:var(--amber-bg)}
+.dbtn.danger{color:var(--red);border-color:#f4c3cf;background:#fff}
+.dbtn:disabled{opacity:.4;cursor:default}
+.dbtn.sm{padding:3px 8px;font-size:11.5px}
+.tw{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:7px 8px;border-bottom:1px solid #eef1f5;vertical-align:middle}
+.tbl tr.click{cursor:pointer}
+.tbl tr.click:hover td{background:#f7f9fc}
+.tbl tr.sel td{background:var(--blue-bg)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap}
+.pill.ok{background:var(--teal-bg);color:#0b5a52}
+.pill.low{background:var(--amber-bg);color:var(--amber)}
+.pill.crit{background:var(--red-bg);color:var(--red)}
+.pill.gap{background:#ede9fe;color:#5b21b6}
+.pill.grey{background:var(--grey-bg);color:var(--ink2)}
+.pill.info{background:var(--blue-bg);color:#1e3a8a}
+.d-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px}
+@media (max-width:1100px){.d-grid{grid-template-columns:minmax(0,1fr)}}
+.panel{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;min-width:0}
+.panel h5{margin:0 0 8px;font-size:13px}
+.frow{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;align-items:center;margin:6px 0;font-size:12.5px}
+.frow label{color:var(--ink2);font-weight:600}
+.din{border:1px solid #c5cfdc;border-radius:7px;padding:5px 8px;width:100%;background:#fff;font-size:12.5px}
+textarea.din{min-height:96px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.pinchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 9px;font-size:12px;margin:2px;background:#fff}
+.svc{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:3px 0}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+@media (max-width:800px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+.kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi .k{font-size:11.5px;color:var(--ink2)}
+.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center}
+.fgrp{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink2);flex-wrap:wrap}
+.fgrp b{margin-right:2px}
+.fgrp button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:600}
+.fgrp button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.tbar{display:flex;align-items:center;gap:6px;min-width:120px}
+.tbar .b{flex:1;height:7px;background:#e7ebf1;border-radius:4px;overflow:hidden;min-width:50px}
+.tbar .b i{display:block;height:100%}
+.tbar span{font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.modal{position:absolute;inset:0;background:rgba(10,18,32,.45);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+.mbox{background:#fff;border-radius:14px;width:min(520px,100%);padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.3);max-height:100%;overflow:auto}
+.mbox h4{margin:0 0 4px}
+.msg{background:var(--grey-bg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12.5px;margin:8px 0}
+.flag{display:flex;gap:8px;align-items:flex-start;border-radius:10px;padding:9px 10px;margin:6px 0;font-size:12.5px;border:1px solid}
+.flag.warn{background:var(--amber-bg);border-color:#f3d39c}
+.flag.ok{background:var(--teal-bg);border-color:#b9e3dc}
+.flag.info{background:var(--blue-bg);border-color:#c6d7fb}
+.flag.bad{background:var(--red-bg);border-color:#f4c3cf;color:var(--red)}
+.flag .grow{flex:1}
+.ghostold{border:1px dashed #c5cfdc;border-radius:10px;padding:8px 10px;font-size:12px;color:var(--muted);margin-bottom:10px}
+.ghostold s{color:var(--ink2)}
+.decision{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 0 0;margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+@media (max-width:700px){.desk-main{grid-template-columns:minmax(0,1fr)}.desk-nav{flex-direction:row;overflow-x:auto}.desk-nav .brand{display:none}.frow{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- misc slide content ---------- */
+.lead{font-size:18px;max-width:900px;margin:0 0 14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:900px){.grid3,.grid2{grid-template-columns:minmax(0,1fr)}}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.box h4{margin:0 0 6px}
+.case{display:flex;flex-direction:column;gap:6px}
+.case .L{font-size:22px;font-weight:900;color:var(--teal)}
+.case p{margin:0;font-size:12.5px;color:var(--ink2)}
+.case .dbtn{align-self:flex-start;margin-top:auto}
+.ribbon{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 16px}
+.ribbon span{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12.5px;font-weight:600}
+.ribbon em{color:var(--muted);font-style:normal}
+.scn{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0}
+.scn button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 4px;font-weight:800;font-size:12.5px}
+.scn button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+pre.store{background:#0d1b2e;color:#d6e2f5;border-radius:10px;padding:10px;font-size:11.5px;overflow:auto;max-height:260px;margin:6px 0 0;white-space:pre-wrap;word-break:break-word}
+.road .box ul{padding-left:18px;margin:6px 0;font-size:13px}
+.road .box li{margin:4px 0}
+.sz{display:inline-block;min-width:20px;text-align:center;font-size:10.5px;font-weight:900;border-radius:5px;padding:1px 5px;background:var(--navy);color:#fff;margin-right:4px}
+.dep{color:var(--muted);font-size:11.5px}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.svgwrap{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;overflow-x:auto}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;margin-top:8px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:22px;height:12px;border-radius:3px}
+
+/* ---------- index + toast ---------- */
+.idx{position:fixed;inset:0;background:rgba(10,18,32,.55);z-index:80;display:none;align-items:flex-start;justify-content:center;padding:60px 16px 16px;overflow:auto}
+.idx.on{display:flex}
+.idx .ib{background:#fff;border-radius:16px;padding:16px;width:min(760px,100%)}
+.idx .ib h3{margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.idx ol{margin:0;padding:0;list-style:none;columns:2;column-gap:14px}
+@media (max-width:640px){.idx ol{columns:1}}
+.idx li button{width:100%;text-align:left;border:0;background:none;padding:6px 8px;border-radius:8px;font-size:13.5px;display:flex;gap:8px}
+.idx li button:hover{background:var(--grey-bg)}
+.idx li button.cur{background:var(--blue-bg);font-weight:700}
+.idx li .n{color:var(--muted);font-variant-numeric:tabular-nums;min-width:22px}
+.idx .grp-t{column-span:all;font-size:11px;font-weight:800;color:var(--teal);text-transform:uppercase;letter-spacing:.06em;margin:8px 8px 2px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;max-width:min(560px,calc(100% - 32px));opacity:0;pointer-events:none;transition:all .2s;z-index:90}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <div class="t">Partner onboarding · Step 3 "Where you work"</div>
+    <div class="sub">Updated flow, mock presentation</div>
+  </div>
+  <span class="mock-badge">MOCK - not connected to real data</span>
+  <span class="sp"></span>
+  <button data-act="index" aria-label="Open slide index">☰ Index</button>
+  <button data-act="prev" id="btn-prev" aria-label="Previous slide">← Prev</button>
+  <span class="count" id="count">1 / 1</span>
+  <button data-act="next" id="btn-next" aria-label="Next slide">Next →</button>
+</div>
+
+<main id="deck"></main>
+
+<div class="idx" id="idx" role="dialog" aria-label="Slide index">
+  <div class="ib">
+    <h3>Slides <button class="dbtn" data-act="closeIndex">Close ✕</button></h3>
+    <ol id="idx-list"></ol>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   MOCK DATA ONLY. Nothing here talks to a server.
+   ===================================================================== */
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const ZONES = ["Hyderabad West", "Hyderabad Central", "Secunderabad", "Hyderabad South"];
+const AREAS = [
+  {id:"kukatpally", name:"Kukatpally", zone:"Hyderabad West", pin:"500072", accepting:true},
+  {id:"kphb", name:"KPHB Colony", zone:"Hyderabad West", pin:"500085", accepting:true},
+  {id:"miyapur", name:"Miyapur", zone:"Hyderabad West", pin:"500049", accepting:true},
+  {id:"chandanagar", name:"Chandanagar", zone:"Hyderabad West", pin:"500050", accepting:true},
+  {id:"madhapur", name:"Madhapur", zone:"Hyderabad West", pin:"500081", accepting:true},
+  {id:"kondapur", name:"Kondapur", zone:"Hyderabad West", pin:"500084", accepting:true},
+  {id:"gachibowli", name:"Gachibowli", zone:"Hyderabad West", pin:"500032", accepting:false},
+  {id:"moosapet", name:"Moosapet", zone:"Hyderabad West", pin:"500018", accepting:true},
+  {id:"manikonda", name:"Manikonda", zone:"Hyderabad West", pin:"500089", accepting:true},
+  {id:"abids", name:"Abids", zone:"Hyderabad Central", pin:"500001", accepting:true},
+  {id:"koti", name:"Koti", zone:"Hyderabad Central", pin:"500095", accepting:true},
+  {id:"himayatnagar", name:"Himayatnagar", zone:"Hyderabad Central", pin:"500029", accepting:true},
+  {id:"ameerpet", name:"Ameerpet", zone:"Hyderabad Central", pin:"500016", accepting:true},
+  {id:"banjara", name:"Banjara Hills", zone:"Hyderabad Central", pin:"500034", accepting:true},
+  {id:"somajiguda", name:"Somajiguda", zone:"Hyderabad Central", pin:"500082", accepting:true},
+  {id:"khairatabad", name:"Khairatabad", zone:"Hyderabad Central", pin:"500004", accepting:true},
+  {id:"secunderabad", name:"Secunderabad", zone:"Secunderabad", pin:"500003", accepting:true},
+  {id:"trimulgherry", name:"Trimulgherry", zone:"Secunderabad", pin:"500015", accepting:true},
+  {id:"marredpally", name:"Marredpally", zone:"Secunderabad", pin:"500026", accepting:true},
+  {id:"bowenpally", name:"Bowenpally", zone:"Secunderabad", pin:"500011", accepting:true},
+  {id:"alwal", name:"Alwal", zone:"Secunderabad", pin:"500010", accepting:true},
+  {id:"charminar", name:"Charminar", zone:"Hyderabad South", pin:"500002", accepting:true},
+  {id:"malakpet", name:"Malakpet", zone:"Hyderabad South", pin:"500036", accepting:true},
+  {id:"dilsukhnagar", name:"Dilsukhnagar", zone:"Hyderabad South", pin:"500060", accepting:true},
+  {id:"lbnagar", name:"LB Nagar", zone:"Hyderabad South", pin:"500074", accepting:true}
+];
+const areaById = id => AREAS.find(a => a.id === id) || {id, name:id, zone:"", pin:"", accepting:true};
+const OPEN_IDS = AREAS.filter(a => a.accepting).map(a => a.id);
+const NO_AREA = {
+  "509216": {city:"Shadnagar", state:"Telangana"},
+  "502001": {city:"Sangareddy", state:"Telangana"},
+  "560001": {city:"Bengaluru", state:"Karnataka"},
+  "500087": {city:"Kukatpally outskirts", state:"Telangana"}
+};
+const FAKE_PINS = ["599999", "555555", "111111", "599990"];
+const PLACES = [
+  {label:"Kukatpally, Hyderabad", pin:"500072", country:"IN"},
+  {label:"KPHB Colony, Hyderabad", pin:"500085", country:"IN"},
+  {label:"Gachibowli, Hyderabad", pin:"500032", country:"IN"},
+  {label:"Shadnagar, Telangana", pin:"509216", country:"IN"},
+  {label:"Sangareddy, Telangana", pin:"502001", country:"IN"},
+  {label:"Dubai Marina, Dubai, UAE", pin:null, country:"AE"},
+  {label:"Kathmandu, Nepal", pin:null, country:"NP"}
+];
+const TRADES = ["Electrician", "AC repair", "Plumber", "Carpenter", "Cleaning"];
+const SRC = {GPS:"your location", PIN:"the PIN you typed", SEARCH:"place search"};
+const SCN_PIN = {A:"500072", B:"500032", C:"509216", D:null, E:"500072", F:"500072"};
+
+function lookup(pin) {
+  pin = String(pin || "").replace(/\s/g, "");
+  if (!/^[1-9]\d{5}$/.test(pin)) return {kind:"format", pin};
+  if (FAKE_PINS.includes(pin)) return {kind:"unknown", pin};
+  const a = AREAS.find(x => x.pin === pin);
+  if (a) return {kind: a.accepting ? "open" : "full", pin, area:a, place:{city:a.name, state:"Telangana"}};
+  return {kind:"none", pin, place: NO_AREA[pin] || {city:"Near PIN " + pin, state:"India"}};
+}
+
+/* =====================================================================
+   PHONE MOCK ENGINE
+   ===================================================================== */
+const PH = {};
+const F_PRESET = {
+  selected:["kukatpally","kphb","miyapur"],
+  waitlisted:[{id:"gachibowli", name:"Gachibowli", pin:"500032", trades:["Electrician","AC repair"]}],
+  requested:[
+    {pin:"509216", city:"Shadnagar", state:"Telangana", trades:["Electrician","AC repair"], source:"GPS"},
+    {pin:"502001", city:"Sangareddy", state:"Telangana", trades:["Electrician"], source:"PIN"}
+  ]
+};
+const E_PRESET = {selected: OPEN_IDS.filter(id => id !== "lbnagar")};
+
+function newState(spec) {
+  const st = {scenario:"A", screen:"home", hist:[], selected:[], waitlisted:[], requested:[],
+    trades:["Electrician","AC repair"], last:null, reason:"", pinErr:"", pinVal:"", placeQ:"", listQ:"",
+    sameHours:true, preset:"weekdays", copied:false, g:null, pay:null};
+  Object.assign(st, JSON.parse(JSON.stringify(spec.preset || {})));
+  st.scenario = spec.scenario || "A";
+  st.screen = spec.screen || "home";
+  return st;
+}
+function regPhone(pid, spec) { PH[pid] = {spec, st:newState(spec), onRender:null}; }
+
+function btn(label, act, arg, cls, disabled) {
+  return `<button class="pbtn ${cls || ""}" data-act="${act}"${arg !== undefined && arg !== "" ? ` data-arg="${esc(arg)}"` : ""}${disabled ? " disabled" : ""}>${label}</button>`;
+}
+function bar(step, title, back) {
+  return `<div class="ph-bar">${back === false ? '<span style="width:30px"></span>' : '<button class="ph-back" data-act="back" aria-label="Back">‹</button>'}<div><div class="ph-step">${step ? "Step " + step + " of 6" : "Profile"}</div><div class="ph-title">${esc(title)}</div></div></div>${step ? `<div class="ph-prog"><i style="width:${(step / 6 * 100).toFixed(0)}%"></i></div>` : ""}`;
+}
+const BAR3 = () => bar(3, "Where you work");
+function tradeChips(st) {
+  return `<div class="chips">${TRADES.map(t => `<button class="chip ${st.trades.includes(t) ? "on" : ""}" data-act="toggleTrade" data-arg="${esc(t)}">${esc(t)}</button>`).join("")}</div>`;
+}
+function rowArea(a, st) {
+  if (!a.accepting) {
+    return `<div class="prow off"><span class="cbx"></span><span class="nm">${esc(a.name)}<small>PIN ${a.pin} · Full right now</small></span><button class="mini" data-act="tryPin" data-arg="${a.pin}">Join waitlist</button></div>`;
+  }
+  const on = st.selected.includes(a.id);
+  return `<button class="prow ${on ? "on" : ""}" data-act="toggleArea" data-arg="${a.id}"><span class="cbx">${on ? "✓" : ""}</span><span class="nm">${esc(a.name)}<small>PIN ${a.pin} · ${esc(a.zone)}</small></span></button>`;
+}
+function hoursGrid(preset) {
+  const D = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const H = {
+    weekdays: D.map((d, i) => i < 6 ? "09:00 – 19:00" : null),
+    everyday: D.map(() => "09:00 – 19:00"),
+    custom: D.map((d, i) => i < 5 ? "08:00–13:00, 17:00–21:00" : i === 5 ? "10:00 – 16:00" : null)
+  }[preset];
+  return `<div class="hgrid">${D.map((d, i) => `<div><b>${d}</b>${H[i] ? `<span>${H[i]}</span>` : '<span class="off">Off</span>'}</div>`).join("")}</div>`;
+}
+const pendingName = st => (st.requested[0] && st.requested[0].city) || (st.waitlisted[0] && st.waitlisted[0].name) || "your area";
+
+const SCREENS = {
+  /* ---- today (for slide 2) ---- */
+  today(st) {
+    const four = ["kukatpally","abids","secunderabad","charminar"].map(areaById);
+    return {bar:BAR3(), body:`
+      <h3 class="ph-h">Where you work</h3>
+      <p class="ph-p">Pick the areas you can travel to. You will only get jobs inside them.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Service Locations <span style="color:var(--red)">*</span></b><span class="mini">Select all</span></div>
+      ${four.map(a => `<div class="prow"><span class="cbx"></span><span class="nm">${esc(a.name)}</span></div>`).join("")}
+      <div class="err">* Please select at least one service location.</div>
+      <div class="fine">Can't find your area? We are adding more. Ask us from Help and we will tell you when it opens.</div>
+      <div class="banner err" style="margin-top:10px"><b>Problem:</b> this hint saves nothing. The partner just leaves.</div>`,
+      footer: btn("Continue", "noop", "", "primary", true)};
+  },
+  todayEmpty() {
+    return {bar:BAR3(), body:`
+      <h3 class="ph-h">Where you work</h3>
+      <p class="ph-p">Pick the areas you can travel to. You will only get jobs inside them.</p>
+      <div class="card" style="color:var(--ink2)">No service areas are currently available for registration.</div>
+      <div class="banner err"><b>Dead end:</b> no PIN entry, no request, no way forward. Continue stays disabled.</div>`,
+      footer: btn("Continue", "noop", "", "primary", true)};
+  },
+
+  /* ---- proposed ---- */
+  home(st) {
+    const n = st.selected.length + st.waitlisted.length + st.requested.length;
+    const chosen = n ? `<div class="card"><div class="lbl">Your areas so far</div><div class="chips">
+        ${st.selected.slice(0, 6).map(id => `<span class="chip on">${esc(areaById(id).name)} ✓</span>`).join("")}
+        ${st.selected.length > 6 ? `<span class="chip on">+${st.selected.length - 6} more</span>` : ""}
+        ${st.waitlisted.map(w => `<span class="chip warn">${esc(w.name)} · waitlist</span>`).join("")}
+        ${st.requested.map(r => `<span class="chip info">${esc(r.pin)} · requested</span>`).join("")}</div></div>` : "";
+    return {bar:BAR3(), body:`
+      <h3 class="ph-h">Where you work</h3>
+      <p class="ph-p">Pick every area you travel to. You'll only get jobs inside them. There's no limit.</p>
+      <div class="card">
+        <div class="lbl">Find areas near you</div>
+        ${btn("📍 Use my current location", "useLoc", "", "primary")}
+        <div class="row2">${btn("# Enter PIN code", "goManual", "pin", "ghost")}${btn("🔍 Search a place", "goManual", "place", "ghost")}</div>
+        <div class="fine">🔒 We keep only your PIN code, never your exact location.</div>
+      </div>
+      ${chosen}
+      ${btn(`Browse all ${AREAS.length} areas ›`, "go", "list", "link")}`,
+      footer: btn("Continue", "go", "summary", "primary", !n)};
+  },
+  consent(st) {
+    return Object.assign(SCREENS.home(st), {overlay:`<div class="ovl"><div class="sheet">
+      <h4>📍 Use your location?</h4>
+      <ul>
+        <li>We use it <b>once</b> to find VSolve areas near you.</li>
+        <li>We keep only the <b>PIN code</b> (like 500072), not your exact location.</li>
+        <li>It only suggests. <b>You choose</b> your areas.</li>
+      </ul>
+      ${btn("Continue", "consentAllow", "", "primary")}
+      ${btn("Not now, I'll type my PIN", "consentNo", "", "ghost")}
+      <div class="fine center">You can turn location off anytime in Settings.</div>
+    </div></div>`});
+  },
+  osprompt(st) {
+    return Object.assign(SCREENS.home(st), {overlay:`<div class="ovl mid"><div class="sysdlg">
+      <div class="q">Allow <b>VSolve Partner</b> to access this device's location?<small>System prompt (iOS / Android / browser)</small></div>
+      <button data-act="osAllow">While using the app</button>
+      <button data-act="osAllow">Only this time</button>
+      <button data-act="osDeny">Don't allow</button>
+    </div></div>`});
+  },
+  locating(st) {
+    return Object.assign(SCREENS.home(st), {overlay:`<div class="ovl mid"><div class="loading"><div class="spin"></div>Finding areas near you…<div class="fine" style="color:#cfe0ff">Reading the PIN code only</div></div></div>`});
+  },
+  manual(st) {
+    const msg = {
+      denied:["info", "Location is off. No problem: type your PIN code or search a place."],
+      nopin:["warn", "We couldn't read a PIN code from your location. Type it or search instead."]
+    }[st.reason];
+    const q = st.placeQ.trim().toLowerCase();
+    const sugg = q.length >= 2 ? PLACES.map((p, i) => [p, i]).filter(([p]) => p.label.toLowerCase().includes(q)) : [];
+    return {bar:BAR3(), body:`
+      ${msg ? `<div class="banner ${msg[0]}">${msg[1]}</div>` : ""}
+      <h3 class="ph-h">Find your area</h3>
+      <div class="lbl">PIN code</div>
+      <div class="inrow"><input class="in" data-key="pinVal" inputmode="numeric" maxlength="7" placeholder="e.g. 500072" value="${esc(st.pinVal)}" aria-label="PIN code">${btn("Check", "checkPin", "", "primary sm")}</div>
+      ${st.pinErr ? `<div class="err">${esc(st.pinErr)}</div>` : ""}
+      <div class="try">Mock PINs: ${["500072","500032","509216","599999","12345"].map(p => `<button class="mini" data-act="tryPin" data-arg="${p}">${p}</button>`).join("")}</div>
+      <div class="or">or</div>
+      <div class="lbl">Search a place</div>
+      <input class="in" data-key="placeQ" data-live="1" placeholder="Area, street or landmark" value="${esc(st.placeQ)}" aria-label="Search a place">
+      <div class="sugg">${q.length >= 2
+        ? (sugg.length ? sugg.map(([p, i]) => `<button class="srow" data-act="placePick" data-arg="${i}">📍 ${esc(p.label)}</button>`).join("")
+          : '<div class="fine">No places in the mock list. Try "Kuk", "Shad" or "Dubai".</div>')
+        : '<div class="fine">Try "Kuk", "Gachi", "Shad" or "Dubai".</div>'}</div>
+      <div class="fine">We read the PIN code of the place you pick. Nothing else is stored.</div>`,
+      footer: btn("Back to Where you work", "go", "home", "ghost")};
+  },
+  resultA(st) {
+    const l = st.last, a = l.area;
+    const near = AREAS.filter(x => x.zone === a.zone && x.accepting && x.id !== a.id).slice(0, 4);
+    return {bar:BAR3(), body:`
+      <div class="banner ok">✓ <b>You're in ${esc(a.name)}</b><br><small>PIN ${l.pin} · ${esc(a.zone)} · from ${SRC[l.source]}</small></div>
+      <div class="lbl">Selected for you</div>
+      ${rowArea(a, st)}
+      <div class="fine">Your location only suggested this. You can untick it.</div>
+      <div class="lbl">Nearby areas taking partners</div>
+      ${near.map(x => rowArea(x, st)).join("")}
+      <div class="row2">${btn("+ Another PIN", "goManual", "pin", "ghost")}${btn("Browse all", "go", "list", "ghost")}</div>`,
+      footer: btn(`Continue · ${st.selected.length} area${st.selected.length === 1 ? "" : "s"}`, "go", "summary", "primary", st.selected.length === 0)};
+  },
+  resultB(st) {
+    const l = st.last, a = l.area;
+    const on = st.waitlisted.some(w => w.id === a.id);
+    const near = AREAS.filter(x => x.zone === a.zone && x.accepting).slice(3, 6);
+    const n = st.selected.length + st.waitlisted.length + st.requested.length;
+    return {bar:BAR3(), body:`
+      <div class="banner warn">⏳ <b>${esc(a.name)} is full right now</b><br><small>PIN ${l.pin} · ${esc(a.zone)}</small></div>
+      <p class="ph-p">We have enough partners there for now. Join the waitlist and we'll message you when spots open. <b>Your application isn't blocked.</b></p>
+      <div class="lbl">What would you do in ${esc(a.name)}?</div>
+      ${tradeChips(st)}
+      <div style="margin-top:10px">${on ? btn("On the waitlist ✓", "noop", "", "ghost", true) : btn(`Join ${esc(a.name)} waitlist`, "joinWaitlist", "", "primary", st.trades.length === 0)}</div>
+      <div class="lbl">Open areas nearby</div>
+      ${near.map(x => rowArea(x, st)).join("")}`,
+      footer: btn("Continue", "go", "summary", "primary", n === 0)};
+  },
+  waitlistSaved(st) {
+    const w = st.waitlisted[st.waitlisted.length - 1] || {name:"Gachibowli", trades:[]};
+    return {bar:BAR3(), body:`
+      <div class="done">✓</div>
+      <h3 class="ph-h center">You're on the ${esc(w.name)} waitlist</h3>
+      <p class="ph-p center">We'll tell you by push and SMS when ${esc(w.name)} takes new partners.</p>
+      <div class="card"><div class="lbl">Your trades there</div><div class="chips">${w.trades.map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div></div>
+      <div class="banner info">Your application isn't blocked. Add an open area to start sooner, or send it as "area pending".</div>
+      ${btn("Add open areas", "go", "list", "ghost")}`,
+      footer: btn("Continue", "go", "summary", "primary")};
+  },
+  resultC(st) {
+    const l = st.last, on = st.requested.some(r => r.pin === l.pin);
+    return {bar:BAR3(), body:`
+      <div class="banner info">📍 <b>We're not in ${l.pin} yet</b><br><small>${esc(l.place.city)}, ${esc(l.place.state)} · ✓ found on map</small></div>
+      <p class="ph-p">Tell us what you'd do there. When enough partners and customers ask, we open the area, and you'll hear first.</p>
+      <div class="lbl">Your trades in ${esc(l.place.city)}</div>
+      ${tradeChips(st)}
+      <div style="margin-top:10px">${on ? btn("Requested ✓", "noop", "", "ghost", true) : btn(`Request ${esc(l.place.city)}`, "requestArea", "", "primary", st.trades.length === 0)}</div>
+      ${btn("Try another PIN", "goManual", "pin", "link")}
+      <div class="fine">We save only PIN ${l.pin}, the town name and your trades.</div>`,
+      footer: btn("Continue", "go", "summary", "primary", st.selected.length + st.waitlisted.length + st.requested.length === 0)};
+  },
+  interestSaved(st) {
+    const r = st.requested[st.requested.length - 1] || {city:"your area", pin:""};
+    return {bar:BAR3(), body:`
+      <div class="done">✓</div>
+      <h3 class="ph-h center">Request saved</h3>
+      <p class="ph-p center">We'll tell you when <b>${esc(r.city)}</b> opens.</p>
+      ${r.pin === "509216" ? '<div class="card fine" style="color:var(--ink2)">You\'re not alone: 38 partners have asked for 509216.</div>' : ""}
+      <div class="banner ok">You can still finish your application now. We'll check your documents so you're ready on day one.</div>
+      ${btn("Add areas that are open", "go", "list", "ghost")}`,
+      footer: btn("Continue", "go", "summary", "primary")};
+  },
+  outside(st) {
+    const p = st.last && st.last.place ? st.last.place : {label:"That place"};
+    return {bar:BAR3(), body:`
+      <div class="done" style="background:var(--blue)">🌏</div>
+      <h3 class="ph-h center">VSolve works in India only, for now</h3>
+      <p class="ph-p center">"${esc(p.label)}" is outside India. We haven't saved anything.</p>`,
+      footer: btn("Try another place", "goManual", "place", "primary")};
+  },
+  list(st) {
+    const q = st.listQ.trim().toLowerCase();
+    const allOn = OPEN_IDS.every(id => st.selected.includes(id));
+    const groups = ZONES.map(z => {
+      const items = AREAS.filter(a => a.zone === z && (!q || a.name.toLowerCase().includes(q) || a.pin.includes(q)));
+      if (!items.length) return "";
+      const openZ = AREAS.filter(a => a.zone === z && a.accepting);
+      const c = openZ.filter(a => st.selected.includes(a.id)).length;
+      const zAll = c === openZ.length;
+      return `<div class="grp"><b>${esc(z)}</b><span>${c}/${openZ.length}</span><button class="mini" data-act="groupAll" data-arg="${esc(z)}">${zAll ? "Clear" : "Select all"}</button></div>${items.map(a => rowArea(a, st)).join("")}`;
+    }).join("");
+    return {bar:BAR3(), body:`
+      <div class="list-head">
+        <input class="in" data-key="listQ" data-live="1" placeholder="Search area or PIN" value="${esc(st.listQ)}" aria-label="Search areas">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <span class="chip on">${st.selected.length} selected</span>
+          <span style="flex:1"></span>
+          <button class="mini" data-act="selectAllOpen">${allOn ? "Clear all" : `Select all ${OPEN_IDS.length} open`}</button>
+        </div>
+      </div>
+      ${groups || '<div class="fine">No area matches. Not here? Use "Enter PIN code" to request it.</div>'}
+      ${btn("Can't find it? Enter PIN code", "goManual", "pin", "link")}`,
+      footer: btn(`Continue · ${st.selected.length} area${st.selected.length === 1 ? "" : "s"}`, "go", "summary", "primary", st.selected.length + st.waitlisted.length + st.requested.length === 0)};
+  },
+  summary(st) {
+    const act = st.selected.map(areaById), g = st.g;
+    const closedLeft = g ? g.closed.filter(id => st.selected.includes(id)) : [];
+    const tagFor = a => !g ? "" :
+      g.full.includes(a.id) ? '<span class="minitag info">full · kept</span>' :
+      g.closed.includes(a.id) ? '<span class="minitag err">closed</span>' :
+      g.paused.includes(a.id) ? '<span class="minitag warn">paused</span>' : "";
+    const banners = !g ? "" : act.map(a =>
+      g.full.includes(a.id) ? `<div class="banner info"><b>${esc(a.name)}</b> stopped taking new partners. You keep it, nothing to do.</div>` :
+      g.closed.includes(a.id) ? `<div class="banner err"><b>${esc(a.name)}</b> was closed by VSolve. Remove it to continue.${btn("Remove " + esc(a.name), "toggleArea", a.id, "ghost")}</div>` :
+      g.paused.includes(a.id) ? `<div class="banner warn"><b>${esc(a.name)}</b> is paused for a few days (heavy rain). You keep it; jobs resume when it reopens.</div>` : "").join("");
+    const shown = act.slice(0, 6);
+    const n = act.length + st.waitlisted.length + st.requested.length;
+    return {bar:BAR3(), body:`
+      <h3 class="ph-h">Your areas</h3>
+      ${banners}
+      <div class="sec">✅ Active when approved <span class="n">${act.length}</span></div>
+      ${shown.map(a => `<div class="li"><span class="grow">${esc(a.name)} <small>${a.pin}</small></span>${tagFor(a)}<button class="x" data-act="toggleArea" data-arg="${a.id}" aria-label="Remove">×</button></div>`).join("")}
+      ${act.length > 6 ? `<div class="li"><span class="grow">+ ${act.length - 6} more</span><button class="mini" data-act="go" data-arg="list">Edit</button></div>` : ""}
+      ${act.length === 0 ? '<div class="fine">None yet.</div>' : ""}
+      <div class="sec">⏳ Waitlist, area full <span class="n">${st.waitlisted.length}</span></div>
+      ${st.waitlisted.map(w => `<div class="li"><span class="grow">${esc(w.name)} <small>${w.pin}</small></span><button class="x" data-act="removeWait" data-arg="${w.id}" aria-label="Remove">×</button></div>`).join("") || '<div class="fine">None.</div>'}
+      <div class="sec">📍 Requested, not open yet <span class="n">${st.requested.length}</span></div>
+      ${st.requested.map(r => `<div class="li"><span class="grow">${esc(r.city)} <small>${r.pin}</small></span><button class="x" data-act="removeReq" data-arg="${r.pin}" aria-label="Remove">×</button></div>`).join("") || '<div class="fine">None.</div>'}
+      ${act.length === 0 && n > 0 ? '<div class="banner warn">No open areas yet. You can still send your application. It goes in as "area pending".</div>' : '<div class="banner info">Hours are needed only for active areas. Waitlisted and requested areas never block your application.</div>'}
+      ${btn("+ Add more areas", "go", "home", "link")}`,
+      footer: btn(closedLeft.length ? "Remove closed areas to continue" : act.length ? "Continue to hours" : "Continue (no hours needed yet)", "go", act.length ? "hours" : "submit", "primary", n === 0 || closedLeft.length > 0)};
+  },
+  hours(st) {
+    const act = st.selected.map(areaById), n = act.length;
+    const pend = st.waitlisted.map(w => "⏳ " + w.name).concat(st.requested.map(r => "📍 " + r.city));
+    const ok = st.sameHours || st.copied || n <= 1;
+    return {bar:bar(4, "Your hours"), body:`
+      <h3 class="ph-h">When can you take jobs?</h3>
+      <button class="swrow" data-act="toggleSame"><span>Same hours in all ${n} area${n === 1 ? "" : "s"}</span><span class="sw ${st.sameHours ? "on" : ""}"><i></i></span></button>
+      <div class="seg">${[["weekdays","Mon–Sat"],["everyday","Every day"],["custom","Custom"]].map(([k, l]) => `<button class="${st.preset === k ? "on" : ""}" data-act="setPreset" data-arg="${k}">${l}</button>`).join("")}</div>
+      ${st.sameHours ? hoursGrid(st.preset) : `
+        ${n > 1 ? btn(st.copied ? "Copied to all areas ✓" : `Copy ${esc(act[0].name)}'s hours to all ${n - 1} other areas`, "copyHours", "", st.copied ? "ghost" : "primary", st.copied) : ""}
+        <div class="acc"><div class="h"><span>${esc(act[0] ? act[0].name : "")}</span><span style="color:var(--teal)">Set ✓</span></div><div style="margin-top:6px">${hoursGrid(st.preset)}</div></div>
+        ${act.slice(1, 6).map(a => `<div class="acc"><div class="h"><span>${esc(a.name)}</span><span style="color:${st.copied ? "var(--teal)" : "var(--red)"}">${st.copied ? "Same as " + esc(act[0].name) + " ✓" : "No hours yet"}</span></div></div>`).join("")}
+        ${n > 6 ? `<div class="fine">+ ${n - 6} more areas ${st.copied ? "(copied ✓)" : "(no hours yet)"}</div>` : ""}`}
+      ${pend.length ? `<div class="fine" style="margin-top:10px">${pend.map(esc).join(" · ")}: you'll confirm hours when they open.</div>` : ""}`,
+      footer: btn(ok ? "Continue" : "Set hours for every area to continue", "go", "submit", "primary", !ok)};
+  },
+  submit(st) {
+    const a = st.selected.length, w = st.waitlisted.length, r = st.requested.length;
+    const pend = st.waitlisted.map(x => `<div class="li"><span class="grow">⏳ ${esc(x.name)} <small>waitlist</small></span></div>`).concat(st.requested.map(x => `<div class="li"><span class="grow">📍 ${esc(x.city)} <small>${x.pin} · requested</small></span></div>`)).join("");
+    return {bar:bar(6, "Agree & send"), body:`
+      <h3 class="ph-h">Check and send</h3>
+      <div class="card" style="padding:4px 11px">
+        <div class="sumrow"><b>About you</b><span>✓</span></div>
+        <div class="sumrow"><b>Your work</b><span>Electrician, AC repair ✓</span></div>
+        <div class="sumrow"><b>Where you work</b><span>${a} active · ${w} waitlisted · ${r} requested</span></div>
+        <div class="sumrow"><b>Your hours</b><span>${a ? "Set for " + a + " area" + (a === 1 ? "" : "s") + " ✓" : "Not needed yet"}</span></div>
+        <div class="sumrow"><b>Documents</b><span>3 of 3 ✓</span></div>
+      </div>
+      ${pend ? `<div class="sec">Pending areas <span class="n">no jobs there until they open</span></div>${pend}` : ""}
+      ${a === 0 ? '<div class="banner info">Sent as "area pending". We\'ll check your documents now and switch you on when your area opens.</div>' : ""}
+      <div class="li"><span class="cbx" style="background:var(--teal);border-color:var(--teal)">✓</span><span class="grow">I agree to the partner terms (mock)</span></div>`,
+      footer: btn("Send application", "go", "submitted", "primary")};
+  },
+  submitted(st) {
+    const pend = st.waitlisted.length + st.requested.length;
+    return {bar:bar(6, "Application sent", false), body:`
+      <div class="done">✓</div>
+      <h3 class="ph-h center">Application sent</h3>
+      <div class="tl">
+        <div><i class="f"></i>Sent today</div>
+        <div><i></i>Under review (1–2 days)</div>
+        <div><i></i>${st.selected.length ? "Approved: jobs in " + st.selected.length + " area" + (st.selected.length === 1 ? "" : "s") : "Approved: waiting for your area"}</div>
+      </div>
+      ${pend ? `<div class="card"><div class="lbl">Waiting to open</div>${st.waitlisted.map(w => `<div class="fine">⏳ ${esc(w.name)}</div>`).join("")}${st.requested.map(r => `<div class="fine">📍 ${esc(r.city)} · ${r.pin}</div>`).join("")}</div>
+      ${btn("▶ Demo: VSolve opens " + esc(pendingName(st)), "go", "notif", "primary")}` : '<div class="fine center">No pending areas in this path. Try scenario B, C or F to see the "we opened your area" flow.</div>'}`};
+  },
+  notif(st) {
+    return {lock:true, body:`<div class="lock">
+      <div class="lk-time">9:41</div><div class="lk-date">Thursday, 4 December</div>
+      <button class="notif" data-act="go" data-arg="activate"><div class="nt-app"><span class="ico">V</span>VSolve Partner · now</div>
+      <b>We opened ${esc(pendingName(st))} 🎉</b><div>You asked for this area. Tap to start getting jobs there.</div></button>
+      <div class="lk-hint">Tap the notification</div></div>`};
+  },
+  activate(st) {
+    const r = st.requested[0], w = st.waitlisted[0];
+    const name = pendingName(st), label = r ? "PIN " + r.pin : w ? w.name : "";
+    if (st.pay === null) st.pay = "usual";
+    return {bar:bar(null, "Where you work"), body:`
+      <div class="banner ok">🎉 <b>${esc(name)} is open</b></div>
+      <p class="ph-p">You asked for ${esc(label)} on 12 Nov. Add it to your areas?</p>
+      <div class="lbl">Your trades there</div>
+      <div class="chips">${((r || w || {}).trades || []).map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div>
+      <div class="lbl">Hours in ${esc(name)}</div>
+      <button class="radio ${st.pay === "usual" ? "on" : ""}" data-act="setPay" data-arg="usual"><span class="dot"></span><span><b>Use my usual hours</b><br><span class="fine">Mon–Sat, 9:00–19:00</span></span></button>
+      <button class="radio ${st.pay === "diff" ? "on" : ""}" data-act="setPay" data-arg="diff"><span class="dot"></span><span><b>Set different hours</b></span></button>
+      <div class="fine">If you don't answer within 14 days, we'll remind you once.</div>`,
+      footer: btn("Start getting jobs in " + esc(name), "go", "activated", "primary") + btn("Not now", "back", "", "link")};
+  },
+  activated(st) {
+    const name = pendingName(st);
+    return {bar:bar(null, "Where you work", false), body:`
+      <div class="done">✓</div>
+      <h3 class="ph-h center">You're active in ${esc(name)}</h3>
+      <p class="ph-p center">New jobs in ${esc(name)} reach you from now on.</p>
+      <div class="card fine" style="color:var(--ink2)">Link status: <b>PENDING_ACTIVATION → ACTIVE</b>. Dispatch now sees this area for you.</div>
+      <p class="ph-p center">Change areas anytime: Profile → Where you work.</p>`};
+  }
+};
+
+function phoneFrame(scr) {
+  return `<div class="phone">
+    <div class="ph-status"><span>9:41</span><span>📶 4G 🔋</span></div>
+    <div class="ph-mock">MOCK - not connected to real data</div>
+    ${scr.lock ? scr.body : `${scr.bar || ""}<div class="ph-body">${scr.body}</div>${scr.footer ? `<div class="ph-foot">${scr.footer}</div>` : ""}`}
+    ${scr.overlay || ""}
+  </div>`;
+}
+function renderPhone(pid) {
+  const host = document.querySelector(`[data-phone="${pid}"]`);
+  if (!host || !PH[pid]) return;
+  const st = PH[pid].st;
+  const ae = document.activeElement;
+  let fkey = null, sel = null;
+  if (ae && host.contains(ae) && ae.dataset && ae.dataset.key) { fkey = ae.dataset.key; sel = [ae.selectionStart, ae.selectionEnd]; }
+  const scr = (SCREENS[st.screen] || SCREENS.home)(st);
+  host.innerHTML = phoneFrame(scr) + `<div class="ph-tools"><button data-act="reset">↺ Reset this phone</button></div>`;
+  if (fkey) {
+    const el = host.querySelector(`[data-key="${fkey}"]`);
+    if (el) { el.focus(); try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { /* ignore */ } }
+  }
+  if (PH[pid].onRender) PH[pid].onRender(st);
+}
+
+function applyLookup(st, pin, source) {
+  const r = lookup(pin);
+  st.pinErr = "";
+  if (r.kind === "format") { st.pinErr = "Enter a 6-digit Indian PIN code, like 500072."; st.screen = "manual"; return; }
+  if (r.kind === "unknown") { st.pinErr = `We couldn't find PIN ${r.pin} on the map. Check it, or search a place instead.`; st.screen = "manual"; return; }
+  r.source = source;
+  st.last = r;
+  st.hist.push(st.screen === "locating" ? "home" : st.screen);
+  if (r.kind === "open") { if (!st.selected.includes(r.area.id)) st.selected.push(r.area.id); st.screen = "resultA"; }
+  else if (r.kind === "full") st.screen = "resultB";
+  else st.screen = "resultC";
+}
+const toggleIn = (arr, v) => { const i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); };
+
+const PA = {
+  noop() {},
+  go(st, a) { st.hist.push(st.screen); st.screen = a; },
+  goManual(st, a) { st.hist.push(st.screen); st.reason = ""; st.pinErr = ""; st.screen = "manual"; },
+  back(st) { st.screen = st.hist.pop() || "home"; },
+  reset(st, a, pid) { PH[pid].st = newState(PH[pid].spec); },
+  useLoc(st) { st.hist.push(st.screen); st.screen = "consent"; },
+  consentAllow(st) { st.screen = "osprompt"; },
+  consentNo(st) { st.reason = ""; st.screen = "manual"; },
+  osDeny(st) { st.reason = "denied"; st.screen = "manual"; },
+  osAllow(st, a, pid) {
+    st.screen = "locating";
+    setTimeout(() => {
+      const s = PH[pid].st;
+      if (s !== st || s.screen !== "locating") return;
+      const pin = SCN_PIN[s.scenario];
+      if (!pin) { s.reason = "nopin"; s.screen = "manual"; } else applyLookup(s, pin, "GPS");
+      renderPhone(pid);
+    }, 900);
+  },
+  checkPin(st) { applyLookup(st, st.pinVal, "PIN"); },
+  tryPin(st, a) { st.pinVal = a; applyLookup(st, a, "PIN"); },
+  placePick(st, a) {
+    const p = PLACES[+a];
+    if (p.country !== "IN") { st.last = {kind:"outside", place:p}; st.hist.push(st.screen); st.screen = "outside"; return; }
+    applyLookup(st, p.pin, "SEARCH");
+  },
+  toggleArea(st, id) { toggleIn(st.selected, id); },
+  toggleTrade(st, t) { toggleIn(st.trades, t); },
+  joinWaitlist(st) {
+    const a = st.last.area;
+    if (!st.waitlisted.some(w => w.id === a.id)) st.waitlisted.push({id:a.id, name:a.name, pin:a.pin, trades:st.trades.slice()});
+    PA.go(st, "waitlistSaved");
+  },
+  requestArea(st) {
+    const l = st.last;
+    if (!st.requested.some(r => r.pin === l.pin)) st.requested.push({pin:l.pin, city:l.place.city, state:l.place.state, trades:st.trades.slice(), source:l.source});
+    PA.go(st, "interestSaved");
+  },
+  removeWait(st, id) { st.waitlisted = st.waitlisted.filter(w => w.id !== id); },
+  removeReq(st, pin) { st.requested = st.requested.filter(r => r.pin !== pin); },
+  selectAllOpen(st) {
+    const allOn = OPEN_IDS.every(id => st.selected.includes(id));
+    st.selected = allOn ? [] : OPEN_IDS.slice();
+  },
+  groupAll(st, z) {
+    const ids = AREAS.filter(a => a.zone === z && a.accepting).map(a => a.id);
+    const allOn = ids.every(id => st.selected.includes(id));
+    if (allOn) st.selected = st.selected.filter(id => !ids.includes(id));
+    else ids.forEach(id => { if (!st.selected.includes(id)) st.selected.push(id); });
+  },
+  toggleSame(st) { st.sameHours = !st.sameHours; },
+  setPreset(st, a) { st.preset = a; st.copied = false; },
+  copyHours(st) { st.copied = true; },
+  setPay(st, a) { st.pay = a; }
+};
+
+/* =====================================================================
+   ADMIN MOCK ENGINE
+   ===================================================================== */
+const AD = {};
+const PARTNERS_BY_AREA = {abids:100, charminar:50, kukatpally:64, gachibowli:41, miyapur:18, chandanagar:12};
+const partnersOf = id => PARTNERS_BY_AREA[id] != null ? PARTNERS_BY_AREA[id] : 20 + (id.length * 7) % 37;
+const SERVICES = {
+  "Electrician":["Fan installation","Switch & socket repair","Wiring check"],
+  "AC repair":["AC service","Gas refill","AC installation"],
+  "Plumber":["Tap & leak repair","Blockage removal"],
+  "Cleaning":["Bathroom cleaning","Kitchen deep clean"]
+};
+const ALL_SVC = Object.values(SERVICES).flat();
+
+function initAdmin() {
+  const pins = {}, svc = {}, accept = {};
+  AREAS.forEach(a => {
+    pins[a.id] = [a.pin];
+    accept[a.id] = a.accepting;
+    svc[a.id] = {};
+    ALL_SVC.forEach(s => { svc[a.id][s] = true; });
+  });
+  pins.kondapur.push("500019");
+  [...SERVICES["Electrician"], ...SERVICES["AC repair"]].forEach(s => { svc.miyapur[s] = false; });
+  AD.areas = {sel:"kondapur", pins, svc, accept, extra:[], addPin:"", pinMsg:null, newName:"Shadnagar", newPins:"509216",
+    bulk:"pin,area\n500072,kukatpally\n500091,kondapur\n500032,kondapur\n12345,kondapur\n500084,kondapur\n500099,narsingi",
+    preview:null, decisions:{}};
+  AD.review = {removed:false, spam:{}, linkOpen:false, decision:null};
+  AD.waitlist = {trade:"All", exp:"509216", modal:null, opened:{}};
+  AD.dash = {status:"APPROVED", trade:"All", avail:"any", zone:"All", sel:"500050"};
+}
+
+function deskFrame(active, inner) {
+  const NAV = [["admin-dash","Coverage"],["admin-review","Partner reviews"],["admin-areas","Areas"],["admin-waitlist","Area requests"]];
+  return `<div class="desk">
+    <div class="desk-top"><span class="dots"><i></i><i></i><i></i></span><span class="url">admin console · /operations (mock)</span><span class="mock-badge">MOCK - not connected to real data</span></div>
+    <div class="desk-main">
+      <nav class="desk-nav"><div class="brand">VSolve Admin</div>
+        ${NAV.map(([k, l]) => `<button class="${k === active ? "on" : ""}" data-act="gotoKey" data-arg="${k}">${l}</button>`).join("")}
+        <button disabled style="opacity:.5">Partners</button><button disabled style="opacity:.5">Kill switches</button>
+      </nav>
+      <div class="desk-body">${inner}</div>
+    </div></div>`;
+}
+const ownerOf = (s, pin) => Object.keys(s.pins).find(id => s.pins[id].includes(pin));
+const allAdminAreas = s => AREAS.concat(s.extra);
+const adminAreaName = (s, id) => (allAdminAreas(s).find(a => a.id === id) || {name:id}).name;
+
+const ADMIN = {
+  areas(s) {
+    const rows = allAdminAreas(s).map(a => {
+      const svcOn = ALL_SVC.filter(x => s.svc[a.id][x]).length;
+      return `<tr class="click ${s.sel === a.id ? "sel" : ""}" data-act="aSel" data-arg="${a.id}">
+        <td><b>${esc(a.name)}</b><br><small style="color:var(--muted)">${esc(a.zone)}</small></td>
+        <td class="num">${s.pins[a.id].length}</td><td class="num">${svcOn}/${ALL_SVC.length}</td>
+        <td class="num">${a.id === "shadnagar" ? 0 : partnersOf(a.id)}</td>
+        <td><button class="sw ${s.accept[a.id] ? "on" : ""}" style="border:0" data-act="aAccept" data-arg="${a.id}" aria-label="Accepting partners"><i></i></button></td>
+        <td>${a.id === "kondapur" ? '<span class="pill low">paused</span>' : '<span class="pill ok">live</span>'}</td></tr>`;
+    }).join("");
+    let detail;
+    if (s.sel === "__new") {
+      detail = `<h5>New area</h5>
+        <div class="frow"><label>Name</label><input class="din" data-key="newName" value="${esc(s.newName)}"></div>
+        <div class="frow"><label>City / zone</label><select class="din"><option>Rangareddy</option>${ZONES.map(z => `<option>${z}</option>`).join("")}</select></div>
+        <div class="frow"><label>State code</label><input class="din" value="TS"></div>
+        <div class="frow"><label>Timezone</label><input class="din" value="Asia/Kolkata"></div>
+        <div class="frow"><label>PINs</label><input class="din" data-key="newPins" value="${esc(s.newPins)}" placeholder="comma separated"></div>
+        <div class="fine">Services, hours and targets are set after creating (same panel as edit).</div>
+        <div style="display:flex;gap:6px;margin-top:8px"><button class="dbtn primary" data-act="aCreate">Create area</button><button class="dbtn" data-act="aSel" data-arg="kondapur">Cancel</button></div>`;
+    } else {
+      const a = allAdminAreas(s).find(x => x.id === s.sel);
+      const m = s.pinMsg;
+      detail = `<h5>${esc(a.name)} <span style="font-weight:400;color:var(--muted)">· ${esc(a.zone)}</span></h5>
+        <div class="frow"><label>Accepting partners</label><span><button class="sw ${s.accept[a.id] ? "on" : ""}" style="border:0;vertical-align:middle" data-act="aAccept" data-arg="${a.id}"><i></i></button> <small style="color:var(--muted)">${s.accept[a.id] ? "Shown in Step 3" : "Shown as \"Full · Join waitlist\""}</small></span></div>
+        <div class="frow"><label>Paused</label><span>${a.id === "kondapur" ? '<span class="pill low">paused · heavy rain</span> <small style="color:var(--muted)">kill switch; onboarding unaffected</small>' : '<small style="color:var(--muted)">No · pause from Kill switches</small>'}</span></div>
+        <div class="frow"><label>PIN codes</label><span>${s.pins[a.id].map(p => `<span class="pinchip">${p}<button class="x" data-act="aRmPin" data-arg="${p}" aria-label="Remove ${p}">×</button></span>`).join("")}</span></div>
+        <div class="frow"><label></label><span style="display:flex;gap:6px"><input class="din" data-key="addPin" placeholder="Add PIN, e.g. 500032" value="${esc(s.addPin)}"><button class="dbtn" data-act="aAddPin">Add</button></span></div>
+        ${m ? `<div class="flag ${m.type}"><span class="grow">${m.text}</span>${m.type === "warn" ? `<button class="dbtn sm warn" data-act="aMovePin">Move here</button><button class="dbtn sm" data-act="aCancelPin">Cancel</button>` : ""}</div>` : ""}
+        <div class="lbl" style="margin-top:12px">Services enabled</div>
+        ${Object.entries(SERVICES).map(([t, list]) => `<div style="margin:6px 0"><b style="font-size:12px">${t}</b>${list.map(x => `<div class="svc"><span>${x}</span><button class="sw ${s.svc[a.id][x] ? "on" : ""}" style="border:0" data-act="aSvc" data-arg="${esc(x)}"><i></i></button></div>`).join("")}</div>`).join("")}
+        <div class="lbl">Target partners per trade</div>
+        <div class="fine">Electrician 15 · AC repair 10 · Plumber 10 · Cleaning 5 (editable)</div>`;
+    }
+    const pv = s.preview;
+    const undecided = pv ? pv.filter(r => r.st === "conflict" && !s.decisions[r.pin]).length : 0;
+    const bulk = `<div class="panel" style="margin-top:14px"><h5>Bulk PIN upload <small style="font-weight:400;color:var(--muted)">CSV: pin,area_slug · dry run first</small></h5>
+      <textarea class="din" data-key="bulk" aria-label="Bulk PIN CSV">${esc(s.bulk)}</textarea>
+      <div style="display:flex;gap:6px;margin:8px 0"><button class="dbtn" data-act="aPreview">Preview</button>${pv ? `<button class="dbtn primary" data-act="aApply" ${undecided ? "disabled" : ""}>Apply${undecided ? ` (decide ${undecided} conflict${undecided > 1 ? "s" : ""})` : ""}</button>` : ""}</div>
+      ${pv ? `<div class="tw"><table class="tbl"><tr><th>PIN</th><th>Area</th><th>Result</th><th></th></tr>${pv.map(r => `<tr><td>${esc(r.pin)}</td><td>${esc(r.slug)}</td><td>${{
+        add:'<span class="pill ok">new: will add</span>', same:'<span class="pill grey">already there</span>',
+        conflict:`<span class="pill low">conflict: in ${esc(r.ownerName)}</span>`, invalid:'<span class="pill crit">invalid PIN</span>',
+        unknown:'<span class="pill crit">unknown area</span>'}[r.st]}</td>
+        <td>${r.st === "conflict" ? `<button class="dbtn sm ${s.decisions[r.pin] === "move" ? "primary" : ""}" data-act="aDecide" data-arg="${r.pin}:move">Move</button> <button class="dbtn sm ${s.decisions[r.pin] === "skip" ? "primary" : ""}" data-act="aDecide" data-arg="${r.pin}:skip">Skip</button>` : ""}</td></tr>`).join("")}</table></div>
+        <div class="fine">Rule (proposed): one PIN belongs to one area. Today a PIN can sit in two areas and customers silently go to the alphabetically first one.</div>` : ""}
+    </div>`;
+    return deskFrame("admin-areas", `
+      <div class="d-h"><h3>Areas</h3><button class="dbtn primary" data-act="aSel" data-arg="__new">+ New area</button></div>
+      <div class="d-grid">
+        <div class="panel"><div class="tw"><table class="tbl"><tr><th>Area</th><th class="num">PINs</th><th class="num">Services</th><th class="num">Partners</th><th>Accepting</th><th>Status</th></tr>${rows}</table></div></div>
+        <div><div class="panel">${detail}</div>${bulk}</div>
+      </div>`);
+  },
+
+  review(s) {
+    const act = s.removed ? ["kukatpally","kphb"] : ["kukatpally","kphb","miyapur"];
+    const dec = s.decision;
+    return deskFrame("admin-review", `
+      <div class="d-h"><h3>Application A-1042 <span class="pill info">Under review</span></h3><span class="fine">Services track · submitted 18 Nov · mock applicant</span></div>
+      <div class="d-grid">
+        <div>
+          <div class="panel">
+            <h5>Where they work</h5>
+            <div class="ghostold">Today this card only says: <s>Coverage Areas · 3 service areas</s> (<code>review-detail.tsx:437-444</code>)</div>
+            <div class="lbl">Active on approval · ${act.length}</div>
+            <div class="chips">${act.map(id => `<span class="chip">${esc(areaById(id).name)} · ${areaById(id).zone.replace("Hyderabad ", "")} · hours ✓${id === "miyapur" ? " ⚠" : ""}</span>`).join("")}</div>
+            ${s.removed ? '<div class="flag ok"><span class="grow">✓ Miyapur removed. All active areas offer at least one of their trades.</span></div>' :
+            `<div class="flag warn"><span>⚠</span><span class="grow"><b>Trade / area mismatch:</b> Miyapur offers none of this partner's trades (Electrician, AC repair). They would get no jobs there.</span><button class="dbtn sm warn" data-act="rRemove">Approve without Miyapur</button></div>`}
+            <div class="flag ok"><span>✓</span><span class="grow">All 9 chosen services are enabled in at least one active area.</span></div>
+            <div class="lbl" style="margin-top:14px">Requested, not available · pending</div>
+            <div class="tw"><table class="tbl">
+              <tr><th>Place</th><th>PIN</th><th>Status</th><th>Check</th><th></th></tr>
+              <tr><td>Gachibowli</td><td>500032</td><td><span class="pill low">area full · waitlisted</span></td><td>✓ area exists</td><td><span class="fine">Re-opens from Area requests</span></td></tr>
+              <tr><td>Shadnagar, Telangana</td><td>509216</td><td><span class="pill gap">no area</span></td><td>✓ found on map<br><small style="color:var(--muted)">38 partners asked</small></td>
+                <td><button class="dbtn sm" data-act="rLink">Link PIN to an area…</button>${s.linkOpen ? `<div class="flag info" style="margin-top:6px"><span class="grow">No area within 25 km. <button class="dbtn sm" data-act="gotoKey" data-arg="admin-waitlist">Open a new area →</button></span></div>` : ""}</td></tr>
+              <tr style="${s.spam["599990"] ? "opacity:.45" : ""}"><td>Unknown</td><td>599990</td><td>${s.spam["599990"] ? '<span class="pill grey">marked spam</span>' : '<span class="pill crit">unverified</span>'}</td><td>✗ not found on map</td><td><button class="dbtn sm danger" data-act="rSpam" data-arg="599990">${s.spam["599990"] ? "Undo" : "Mark spam"}</button></td></tr>
+            </table></div>
+          </div>
+        </div>
+        <div>
+          <div class="panel"><h5>Approval rules with pending areas</h5>
+            <ul style="font-size:12.5px;padding-left:18px;margin:4px 0">
+              <li>At least 1 covered area with hours → <b>Approve</b>. Pending areas stay open and never block approval.</li>
+              <li>Pending areas <b>never reach dispatch</b>. Only active links plus an approved application do.</li>
+              <li>Mismatch → approve without that area, or request changes.</li>
+              <li>0 covered areas → <b>Approve dormant</b> (verified, no jobs) or keep on waitlist.</li>
+              <li>A chosen area was deactivated after submit → request changes.</li>
+              <li>Hours missing for a covered area → blocked (unchanged; <code>review.py:257-279</code>).</li>
+            </ul></div>
+          <div class="panel" style="margin-top:12px"><h5>Rest of the application</h5>
+            <div class="sumrow"><b>About you</b><span>6 years experience ✓</span></div>
+            <div class="sumrow"><b>Your work</b><span>Electrician, AC repair · 9 services</span></div>
+            <div class="sumrow"><b>Hours</b><span>Set for ${act.length} of ${act.length} active areas ✓</span></div>
+            <div class="sumrow"><b>Documents</b><span>3 of 3 ✓</span></div></div>
+        </div>
+      </div>
+      ${dec ? `<div class="flag ok" style="margin-top:12px"><span class="grow">${dec}</span><button class="dbtn sm" data-act="rUndo">Undo (mock)</button></div>` : ""}
+      <div class="decision">
+        <button class="dbtn primary" data-act="rDecide" data-arg="approve" ${s.removed ? "" : "disabled"}>Approve · ${act.length} active, 2 pending stay open</button>
+        ${s.removed ? "" : '<button class="dbtn warn" data-act="rRemove">Approve without Miyapur</button>'}
+        <button class="dbtn" data-act="rDecide" data-arg="changes">Request changes</button>
+        <button class="dbtn danger" data-act="rDecide" data-arg="decline">Decline</button>
+      </div>`);
+  },
+
+  waitlist(s) {
+    const WL = [
+      {pin:"509216", place:"Shadnagar, Telangana", kind:"none", trades:{"Electrician":14,"Plumber":9,"AC repair":8,"Cleaning":7}, lookups:112, first:"3 Oct", verified:true},
+      {pin:"500032", place:"Gachibowli, Hyderabad", kind:"full", area:"Gachibowli", trades:{"Electrician":6,"AC repair":10,"Plumber":4,"Cleaning":2}, lookups:0, first:"14 Sep", verified:true},
+      {pin:"502001", place:"Sangareddy, Telangana", kind:"none", trades:{"Electrician":4,"Plumber":4,"AC repair":1,"Cleaning":2}, lookups:19, first:"21 Oct", verified:true},
+      {pin:"500087", place:"Kukatpally outskirts (PIN not mapped)", kind:"unmapped", suggest:"Kukatpally", trades:{"Electrician":3,"Plumber":2,"AC repair":1,"Cleaning":1}, lookups:26, first:"2 Nov", verified:true},
+      {pin:"560001", place:"Bengaluru, Karnataka", kind:"none", trades:{"Electrician":1,"Plumber":1,"AC repair":1,"Cleaning":0}, lookups:2, first:"9 Nov", verified:true},
+      {pin:"599990", place:"Not found on map", kind:"unverified", trades:{"Electrician":1,"Plumber":0,"AC repair":0,"Cleaning":0}, lookups:0, first:"17 Nov", verified:false}
+    ];
+    AD._wl = WL;
+    const cnt = r => s.trade === "All" ? Object.values(r.trades).reduce((x, y) => x + y, 0) : (r.trades[s.trade] || 0);
+    const kindPill = r => ({none:'<span class="pill gap">no area</span>', full:'<span class="pill low">area full</span>', unmapped:'<span class="pill info">PIN not mapped</span>', unverified:'<span class="pill crit">unverified</span>'}[r.kind]);
+    const action = r => {
+      if (s.opened[r.pin]) return `<span class="pill ok">✓ ${r.kind === "unverified" ? "marked spam" : "opened · " + s.opened[r.pin] + " notified · 0 activated"}</span>`;
+      if (r.kind === "none") return `<button class="dbtn sm primary" data-act="wOpen" data-arg="${r.pin}">Open area &amp; notify</button>`;
+      if (r.kind === "full") return `<button class="dbtn sm primary" data-act="wOpen" data-arg="${r.pin}">Re-open to partners &amp; notify</button>`;
+      if (r.kind === "unmapped") return `<button class="dbtn sm primary" data-act="wOpen" data-arg="${r.pin}">Link to ${r.suggest} &amp; notify</button>`;
+      return `<button class="dbtn sm danger" data-act="wSpam" data-arg="${r.pin}">Mark spam</button>`;
+    };
+    const rows = WL.map(r => `<tr class="click ${s.exp === r.pin ? "sel" : ""}" data-act="wExp" data-arg="${r.pin}">
+        <td><b>${r.pin}</b></td><td>${esc(r.place)}</td><td>${kindPill(r)}</td><td class="num"><b>${cnt(r)}</b></td><td class="num">${r.lookups}</td><td>${r.first}</td><td>${action(r)}</td></tr>
+        ${s.exp === r.pin ? `<tr><td colspan="7" style="background:#fafbfd"><div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px">${Object.entries(r.trades).map(([t, n]) => `<span><b>${t}</b> ${n}</span>`).join("")}<span style="color:var(--muted)">${r.verified ? "PIN verified with geocoder" : "PIN not verified"} · requests de-duplicated per partner + PIN</span></div></td></tr>` : ""}`).join("");
+    let modal = "";
+    if (s.modal) {
+      const r = WL.find(x => x.pin === s.modal.pin), n = cnt(r);
+      const name = r.kind === "full" ? r.area : r.kind === "unmapped" ? r.suggest : r.place.split(",")[0];
+      if (s.modal.step === "form") {
+        modal = `<div class="modal"><div class="mbox"><h4>Open new area · step 1 of 2</h4><div class="fine">Prefilled from ${n} requests for ${r.pin}</div>
+          <div class="frow"><label>Name</label><input class="din" value="${esc(name)}"></div>
+          <div class="frow"><label>City / zone</label><input class="din" value="Rangareddy"></div>
+          <div class="frow"><label>PINs</label><input class="din" value="${r.pin}"></div>
+          <div class="frow"><label>Services</label><span>${Object.entries(r.trades).map(([t, c]) => `<span class="chip ${c >= 5 ? "on" : ""}" style="margin:2px;display:inline-block">${t}</span>`).join("")}<br><small style="color:var(--muted)">Pre-ticked: trades with 5+ requests</small></span></div>
+          <div class="frow"><label>Accepting</label><span><span class="sw on" style="display:inline-block;vertical-align:middle"><i></i></span> partners</span></div>
+          <div class="frow"><label>Target</label><input class="din" value="Electrician 15 · Plumber 10 · AC repair 8 · Cleaning 6"></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px"><button class="dbtn" data-act="wClose">Cancel</button><button class="dbtn primary" data-act="wStep" data-arg="notify">Next: notify →</button></div></div></div>`;
+      } else {
+        modal = `<div class="modal"><div class="mbox"><h4>${r.kind === "none" ? "Step 2 of 2 · " : ""}Notify ${n} partner${n === 1 ? "" : "s"}</h4>
+          <div class="fine">${r.kind === "full" ? "Gachibowli will show again in Step 3." : r.kind === "unmapped" ? `${r.pin} will be added to ${r.suggest} (conflict check passed).` : `${esc(name)} will be created with PIN ${r.pin}.`}</div>
+          <div class="chips" style="margin:8px 0"><span class="chip on">Push ✓</span><span class="chip on">SMS ✓</span><span class="chip">WhatsApp</span></div>
+          <div class="msg"><b>We opened ${esc(name)} 🎉</b><br>You asked for this area. Tap to start getting jobs there.</div>
+          <div class="fine">Partners move to <b>PENDING_ACTIVATION</b>. They get no jobs until they tap Activate and confirm hours. One reminder after 14 days.</div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">${r.kind === "none" ? '<button class="dbtn" data-act="wStep" data-arg="form">← Back</button>' : '<button class="dbtn" data-act="wClose">Cancel</button>'}<button class="dbtn primary" data-act="wConfirm">Confirm &amp; notify ${n}</button></div></div></div>`;
+      }
+    }
+    return deskFrame("admin-waitlist", `
+      <div class="d-h"><h3>Area requests</h3><button class="dbtn" data-act="exportCsv" data-arg="requests">⬇ Export CSV</button></div>
+      <div class="filters"><div class="fgrp"><b>Trade</b>${["All","Electrician","AC repair","Plumber","Cleaning"].map(t => `<button class="${s.trade === t ? "on" : ""}" data-act="wTrade" data-arg="${t}">${t}</button>`).join("")}</div>
+        <div class="fgrp"><b>Status</b><button class="on">Open</button><button disabled>Notified</button><button disabled>Spam</button></div></div>
+      <div class="panel"><div class="tw"><table class="tbl"><tr><th>PIN</th><th>Place</th><th>Kind</th><th class="num">Partners</th><th class="num">Customer lookups 28d</th><th>First</th><th>Action</th></tr>${rows}</table></div>
+      <div class="fine">Click a row to see the trade split. "Customer lookups" needs the new UnservedDemandEvent; today it is not recorded (<code>locations/services.py:113</code>).</div></div>
+      ${modal}`);
+  },
+
+  dash(s) {
+    const D = dashRows(s);
+    const flagged = D.filter(r => r.flag === "crit" || r.flag === "low").length;
+    const total = D.reduce((x, r) => x + r.partners, 0);
+    const FL = {gap:'<span class="pill gap">⚪ gap: no area</span>', crit:'<span class="pill crit">🔴 critical</span>', low:'<span class="pill low">🟠 low</span>', ok:'<span class="pill ok">🟢 healthy</span>', na:'<span class="pill grey">pipeline</span>'};
+    const seg = (key, label, opts) => `<div class="fgrp"><b>${label}</b>${opts.map(([v, l]) => `<button class="${s[key] === v ? "on" : ""}" data-act="dSet" data-arg="${key}:${v}">${l}</button>`).join("")}</div>`;
+    const rows = D.map(r => {
+      const pct = r.target ? Math.min(100, r.partners / r.target * 100) : 0;
+      const col = r.flag === "crit" ? "var(--red)" : r.flag === "low" ? "#d97706" : "var(--teal)";
+      return `<tr class="click ${s.sel === r.pin ? "sel" : ""}" data-act="dSel" data-arg="${r.pin}">
+        <td><b>${r.pin}</b></td><td>${esc(r.area)}<br><small style="color:var(--muted)">${esc(r.zone)}</small></td>
+        <td class="num"><b>${r.partners}</b></td>
+        <td>${r.target ? `<div class="tbar"><div class="b"><i style="width:${pct}%;background:${col}"></i></div><span>${r.partners}/${r.target}</span></div>` : '<span class="fine">no target</span>'}</td>
+        <td class="num">${r.noArea ? `<span style="color:#5b21b6">${r.unserved} turned away</span>` : r.demand}</td>
+        <td class="num">${r.noArea ? "–" : r.per100.toFixed(1)}</td>
+        <td class="num">${r.noArea ? "–" : r.expiry + "%"}</td>
+        <td class="num">${r.requests || "–"}</td>
+        <td>${FL[r.flag]}</td></tr>`;
+    }).join("");
+    const sel = D.find(r => r.pin === s.sel);
+    let drill = "";
+    if (sel) {
+      const shares = TRADE_SHARE[sel.pin] || TRADE_SHARE._;
+      const base = DASH.find(r => r.pin === sel.pin);
+      const trend = Array.from({length:12}, (_, i) => Math.max(0, Math.round(base.p.APPROVED * (0.62 + 0.38 * i / 11) + ((i * 7) % 5) - 2)));
+      const mx = Math.max(...trend, 1);
+      const pts = trend.map((v, i) => `${(i * 20 + 4).toFixed(0)},${(54 - v / mx * 46).toFixed(1)}`).join(" ");
+      drill = `<div class="panel" style="margin-top:12px"><div class="d-h" style="margin-bottom:6px"><h3 style="font-size:15px">${sel.pin} · ${esc(sel.area)}</h3>
+        <button class="dbtn sm" data-act="gotoKey" data-arg="admin-waitlist">Open waitlist</button>
+        <button class="dbtn sm" data-act="dPush" data-arg="${sel.pin}">Recruitment push</button>
+        <button class="dbtn sm" data-act="dTarget">Edit target</button></div>
+        <div class="grid2"><div>${Object.entries(shares).map(([t, sh]) => {
+          const p = Math.round(base.p.APPROVED * sh), tg = base.target ? Math.round(base.target * sh) : 0;
+          const pc = tg ? Math.min(100, p / tg * 100) : 0, c = !tg ? "#9aa8bb" : p / tg < .3 ? "var(--red)" : p / tg < .7 ? "#d97706" : "var(--teal)";
+          return `<div class="tbar" style="margin:5px 0"><span style="width:78px;font-weight:600">${t}</span><div class="b"><i style="width:${pc}%;background:${c}"></i></div><span>${p}/${tg || "–"}</span></div>`;
+        }).join("")}<div class="fine">Approved partners covering this PIN vs target, per trade.</div></div>
+        <div><svg viewBox="0 0 230 60" width="100%" height="70" role="img" aria-label="12-week trend of approved partners"><polyline fill="none" stroke="var(--navy2)" stroke-width="2" points="${pts}"/></svg>
+        <div class="fine">12-week trend (approved partners). Needs nightly snapshots or <code>disabled_at</code>; adds are already dated (<code>enabled_at</code>).</div></div></div></div>`;
+    }
+    return deskFrame("admin-dash", `
+      <div class="d-h"><h3>Partner coverage</h3>
+        <button class="dbtn" data-act="gotoKey" data-arg="admin-waitlist">Open waitlist</button>
+        <button class="dbtn" data-act="dPush" data-arg="all">Recruitment push</button>
+        <button class="dbtn primary" data-act="exportCsv" data-arg="coverage">⬇ Export CSV</button></div>
+      <div class="filters">
+        ${seg("status", "Status", [["APPROVED","Approved"],["UNDER_REVIEW","Under review"],["APPLIED","Applied"],["SUSPENDED","Suspended"]])}
+        ${seg("trade", "Trade", [["All","All"],["Electrician","Electrician"],["Plumber","Plumber"],["AC repair","AC repair"],["Cleaning","Cleaning"]])}
+        ${seg("avail", "Hours", [["any","Any"],["evenings","Evenings 6pm+"],["weekends","Weekends"]])}
+        ${seg("zone", "Zone", [["All","All"],["Hyderabad West","West"],["Hyderabad Central","Central"],["Hyderabad South","South"]])}
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="v">${total}</div><div class="k">${STATUS_LABEL[s.status]} partners (filtered)</div></div>
+        <div class="kpi"><div class="v" style="color:var(--red)">${s.status === "APPROVED" ? flagged : "–"}</div><div class="k">Areas below target</div></div>
+        <div class="kpi"><div class="v">82</div><div class="k">Open area requests</div></div>
+        <div class="kpi"><div class="v">159</div><div class="k">Customers turned away (28d)</div></div>
+      </div>
+      <div class="panel"><div class="tw"><table class="tbl"><tr><th>PIN</th><th>Area</th><th class="num">Partners*</th><th>vs target</th><th class="num">Demand 28d</th><th class="num">Per 100 jobs</th><th class="num">Offer expiry</th><th class="num">Requests</th><th>Flag</th></tr>${rows}</table></div>
+      <div class="fine">*Partners covering the PIN (area → PINs → partners). Sorted most under-supplied first. Flags: 🔴 below 30% of target or expiry above 25% · 🟠 30–70% of target or fewer than 8 per 100 jobs · ⚪ demand or requests with no area. Flags apply to Approved only.</div></div>
+      ${drill}`);
+  }
+};
+
+const STATUS_LABEL = {APPROVED:"Approved", UNDER_REVIEW:"Under review", APPLIED:"Applied", SUSPENDED:"Suspended"};
+const DASH = [
+  {pin:"500001", area:"Abids", zone:"Hyderabad Central", p:{APPROVED:100, UNDER_REVIEW:9, APPLIED:14, SUSPENDED:3}, target:80, demand:420, expiry:4, requests:0},
+  {pin:"500002", area:"Charminar", zone:"Hyderabad South", p:{APPROVED:50, UNDER_REVIEW:6, APPLIED:11, SUSPENDED:2}, target:90, demand:610, expiry:21, requests:0},
+  {pin:"500072", area:"Kukatpally", zone:"Hyderabad West", p:{APPROVED:64, UNDER_REVIEW:7, APPLIED:12, SUSPENDED:1}, target:70, demand:380, expiry:9, requests:0},
+  {pin:"500032", area:"Gachibowli (full)", zone:"Hyderabad West", p:{APPROVED:41, UNDER_REVIEW:0, APPLIED:0, SUSPENDED:1}, target:40, demand:300, expiry:6, requests:22},
+  {pin:"500049", area:"Miyapur", zone:"Hyderabad West", p:{APPROVED:18, UNDER_REVIEW:4, APPLIED:6, SUSPENDED:0}, target:40, demand:160, expiry:19, requests:0},
+  {pin:"500050", area:"Chandanagar", zone:"Hyderabad West", p:{APPROVED:12, UNDER_REVIEW:2, APPLIED:3, SUSPENDED:1}, target:40, demand:210, expiry:34, requests:0},
+  {pin:"509216", area:"No area (Shadnagar)", zone:"Outside current zones", p:{APPROVED:0, UNDER_REVIEW:0, APPLIED:0, SUSPENDED:0}, target:0, demand:0, expiry:0, requests:38, unserved:112, noArea:true}
+];
+const TRADE_SHARE = {
+  _: {"Electrician":.34, "Plumber":.24, "AC repair":.22, "Cleaning":.20},
+  "500050": {"Electrician":.25, "Plumber":.35, "AC repair":.10, "Cleaning":.30},
+  "500002": {"Electrician":.40, "Plumber":.20, "AC repair":.15, "Cleaning":.25}
+};
+const AVAIL = {any:1, evenings:.42, weekends:.63};
+function dashRows(s) {
+  const order = {gap:0, crit:1, low:2, ok:3, na:4};
+  return DASH.filter(r => s.zone === "All" || r.zone === s.zone || r.noArea).map(r => {
+    const sh = s.trade === "All" ? 1 : (TRADE_SHARE[r.pin] || TRADE_SHARE._)[s.trade];
+    const partners = Math.round(r.p[s.status] * sh * AVAIL[s.avail]);
+    const target = Math.round(r.target * sh);
+    const demand = Math.round(r.demand * sh);
+    const per100 = demand ? partners / demand * 100 : 0;
+    let flag;
+    if (r.noArea) flag = "gap";
+    else if (s.status !== "APPROVED") flag = "na";
+    else if ((target && partners / target < .3) || r.expiry > 25) flag = "crit";
+    else if ((target && partners / target < .7) || per100 < 8) flag = "low";
+    else flag = "ok";
+    return Object.assign({}, r, {partners, target, demand, per100, flag});
+  }).sort((a, b) => order[a.flag] - order[b.flag] || a.partners - b.partners);
+}
+
+const AA = {
+  aSel(s, id) { s.sel = id; s.pinMsg = null; s.addPin = ""; },
+  aAccept(s, id) { s.accept[id] = !s.accept[id]; toast(`Mock: ${adminAreaName(s, id)} ${s.accept[id] ? "now accepts new partners (shows in Step 3)" : "is full: Step 3 shows \"Join waitlist\""}`); },
+  aSvc(s, svc) { s.svc[s.sel][svc] = !s.svc[s.sel][svc]; },
+  aRmPin(s, pin) { s.pins[s.sel] = s.pins[s.sel].filter(p => p !== pin); s.pinMsg = {type:"info", text:`Removed ${pin}. Customers there will see "outside service area".`}; },
+  aAddPin(s) {
+    const pin = s.addPin.trim();
+    if (!/^[1-9]\d{5}$/.test(pin)) { s.pinMsg = {type:"bad", text:`"${esc(pin)}" is not a 6-digit Indian PIN.`}; return; }
+    const owner = ownerOf(s, pin);
+    if (owner === s.sel) { s.pinMsg = {type:"info", text:`${pin} is already in this area.`}; return; }
+    if (owner) { s.pinMsg = {type:"warn", text:`<b>${pin}</b> is already in <b>${esc(adminAreaName(s, owner))}</b>. A PIN can belong to one area only.`, pin, from:owner}; return; }
+    s.pins[s.sel].push(pin); s.addPin = ""; s.pinMsg = {type:"ok", text:`Added ${pin}.`};
+  },
+  aMovePin(s) {
+    const m = s.pinMsg; if (!m || !m.pin) return;
+    s.pins[m.from] = s.pins[m.from].filter(p => p !== m.pin); s.pins[s.sel].push(m.pin);
+    s.pinMsg = {type:"ok", text:`Moved ${m.pin} from ${esc(adminAreaName(s, m.from))}. Partners and open bookings there are listed for review (mock).`}; s.addPin = "";
+  },
+  aCancelPin(s) { s.pinMsg = null; },
+  aCreate(s) {
+    const id = s.newName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "new-area";
+    if (!allAdminAreas(s).some(a => a.id === id)) {
+      s.extra.push({id, name:s.newName || "New area", zone:"Rangareddy", pin:"", accepting:true});
+      s.pins[id] = s.newPins.split(/[,\s]+/).filter(p => /^[1-9]\d{5}$/.test(p) && !ownerOf(s, p));
+      s.accept[id] = true; s.svc[id] = {}; ALL_SVC.forEach(x => { s.svc[id][x] = false; });
+    }
+    s.sel = id; toast(`Mock: created ${s.newName}. Next: enable services and set targets.`);
+  },
+  aPreview(s) {
+    s.decisions = {};
+    s.preview = s.bulk.split(/\n/).map(l => l.trim()).filter(l => l && !/^pin\b/i.test(l)).map(l => {
+      const [pin = "", slug = ""] = l.split(",").map(x => x.trim());
+      if (!/^[1-9]\d{5}$/.test(pin)) return {pin, slug, st:"invalid"};
+      if (!allAdminAreas(s).some(a => a.id === slug)) return {pin, slug, st:"unknown"};
+      const owner = ownerOf(s, pin);
+      if (owner === slug) return {pin, slug, st:"same"};
+      if (owner) return {pin, slug, st:"conflict", owner, ownerName:adminAreaName(s, owner)};
+      return {pin, slug, st:"add"};
+    });
+  },
+  aDecide(s, a) { const [pin, d] = a.split(":"); s.decisions[pin] = d; },
+  aApply(s) {
+    let add = 0, mv = 0, sk = 0, rej = 0;
+    s.preview.forEach(r => {
+      if (r.st === "add") { s.pins[r.slug].push(r.pin); add++; }
+      else if (r.st === "conflict") {
+        if (s.decisions[r.pin] === "move") { s.pins[r.owner] = s.pins[r.owner].filter(p => p !== r.pin); s.pins[r.slug].push(r.pin); mv++; } else sk++;
+      } else if (r.st === "invalid" || r.st === "unknown") rej++;
+    });
+    s.preview = null; toast(`Mock: applied · ${add} added · ${mv} moved · ${sk} skipped · ${rej} rejected`);
+  },
+  rRemove(s) { s.removed = true; s.decision = null; },
+  rLink(s) { s.linkOpen = !s.linkOpen; },
+  rSpam(s, pin) { s.spam[pin] = !s.spam[pin]; },
+  rDecide(s, a) {
+    s.decision = {
+      approve:"Mock: approved. Kukatpally + KPHB Colony are ACTIVE (dispatch can offer jobs). Gachibowli and Shadnagar stay pending; the partner is told they'll hear when those open.",
+      changes:"Mock: sent back as CHANGES_REQUIRED with note \"Miyapur doesn't offer your trades. Remove it or add matching services.\"",
+      decline:"Mock: declined. Pending area requests are withdrawn."
+    }[a];
+  },
+  rUndo(s) { s.decision = null; },
+  wTrade(s, t) { s.trade = t; },
+  wExp(s, pin) { s.exp = s.exp === pin ? null : pin; },
+  wOpen(s, pin) { const r = AD._wl.find(x => x.pin === pin); s.modal = {pin, step: r.kind === "none" ? "form" : "notify"}; },
+  wStep(s, st) { s.modal.step = st; },
+  wClose(s) { s.modal = null; },
+  wConfirm(s) {
+    const r = AD._wl.find(x => x.pin === s.modal.pin);
+    const n = s.trade === "All" ? Object.values(r.trades).reduce((x, y) => x + y, 0) : (r.trades[s.trade] || 0);
+    s.opened[r.pin] = n; s.modal = null;
+    toast(`Mock: ${n} partner${n === 1 ? "" : "s"} notified. They are PENDING_ACTIVATION until they tap Activate.`);
+  },
+  wSpam(s, pin) { s.opened[pin] = 1; toast(`Mock: ${pin} marked spam. Hidden from demand counts.`); },
+  dSet(s, a) { const i = a.indexOf(":"); s[a.slice(0, i)] = a.slice(i + 1); },
+  dSel(s, pin) { s.sel = s.sel === pin ? null : pin; },
+  dPush(s, pin) {
+    toast(pin === "all" ? "Mock: recruitment campaign drafted for all 🔴/🟠 areas, with contact export and a tagged apply link." :
+      `Mock: recruitment push for ${pin}: tagged apply link + SMS to nearby waitlisted partners + referral bonus banner.`);
+  },
+  dTarget() { toast("Mock: opens target editor (per area × trade): AreaSupplyTarget."); }
+};
+
+function renderAdmin(aid) {
+  const host = document.querySelector(`[data-admin="${aid}"]`);
+  if (!host) return;
+  const ae = document.activeElement;
+  let fkey = null;
+  if (ae && host.contains(ae) && ae.dataset && ae.dataset.key) fkey = ae.dataset.key;
+  host.innerHTML = ADMIN[aid](AD[aid]);
+  if (fkey) { const el = host.querySelector(`[data-key="${fkey}"]`); if (el) el.focus(); }
+}
+
+/* =====================================================================
+   CSV export (local file, no network)
+   ===================================================================== */
+function exportCsv(kind) {
+  let csv;
+  if (kind === "coverage") {
+    const s = AD.dash;
+    csv = "pin,area,zone,status_filter,trade_filter,hours_filter,partners,target,demand_28d,partners_per_100_jobs,offer_expiry_pct,requests,flag\n" +
+      dashRows(s).map(r => [r.pin, r.area, r.zone, s.status, s.trade, s.avail, r.partners, r.target, r.demand, r.per100.toFixed(1), r.expiry, r.requests, r.flag].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  } else {
+    csv = "pin,place,kind,electrician,ac_repair,plumber,cleaning,customer_lookups_28d,first_request\n" +
+      (AD._wl || []).map(r => [r.pin, r.place, r.kind, r.trades["Electrician"], r.trades["AC repair"], r.trades["Plumber"], r.trades["Cleaning"], r.lookups, r.first].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  }
+  const blob = new Blob(["MOCK DATA - not real\n" + csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `mock-${kind}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(`Mock: downloaded mock-${kind}.csv (generated in the browser).`);
+}
+
+/* =====================================================================
+   SLIDES
+   ===================================================================== */
+function phoneFig(pid, spec, caption) {
+  regPhone(pid, spec);
+  return `<figure><div data-phone="${pid}"></div>${caption ? `<figcaption>${caption}</figcaption>` : ""}</figure>`;
+}
+const T = (label, html) => `<h4><span class="tag ${label}">${{today:"Today", prop:"Proposed", prob:"Problem"}[label]}</span></h4>${html}`;
+
+const SCN_INFO = {
+  A:"<b>A: area open.</b> Tap <i>Use my current location</i> → Continue → <i>While using the app</i>. The mock location gives PIN 500072, so Kukatpally is pre-ticked.",
+  B:"<b>B: area full.</b> Same steps; the mock location gives PIN 500032. Gachibowli isn't accepting partners, so pick trades and <i>Join waitlist</i>.",
+  C:"<b>C: no area.</b> Same steps; the mock location gives PIN 509216 (Shadnagar). <i>Request this area</i> saves an area-interest record.",
+  D:"<b>D: no PIN / denied.</b> Allowing returns no PIN; <i>Don't allow</i> is denied. Either way: type a PIN or search a place. Try 500072, 500032, 509216, 599999 (fake), 12345 (bad format) or search \"Dubai\".",
+  E:"<b>E: many areas.</b> Starts in the full list with 23 areas ticked. Search, <i>Select all</i> per group, then Continue → hours with <i>Copy to all</i>.",
+  F:"<b>F: mixed.</b> Starts at the summary: 3 covered, 1 waitlisted, 2 requested. Continue → hours → submit → \"we opened your area\" → Activate."
+};
+const PROTO_SPECS = {
+  A:{scenario:"A"}, B:{scenario:"B"}, C:{scenario:"C"}, D:{scenario:"D"},
+  E:{scenario:"E", screen:"list", preset:E_PRESET},
+  F:{scenario:"F", screen:"summary", preset:F_PRESET}
+};
+
+const SLIDES = [
+  {key:"goal", group:"Intro", title:"Goal & design principles", kicker:"Step 3 · Where you work", full:true, html:() => `
+    <p class="lead">Help every partner who works at customers' homes say <b>where they work</b>, with no limit, and never lose someone just because their area isn't set up yet. Give admins the numbers to decide where to open next.</p>
+    <div class="grid3">
+      <div class="box"><h4>1 · No limit</h4>Pick 1 area or all of them. Search, groups, select-all and copy-hours make many areas easy.</div>
+      <div class="box"><h4>2 · Never blocked</h4>Area full → waitlist. No area → area request. The partner can still submit.</div>
+      <div class="box"><h4>3 · Location only suggests</h4>"Use my location" pre-ticks an <b>existing</b> area. It never creates one. Typing a PIN or searching a place works just as well.</div>
+      <div class="box"><h4>4 · Consent and DPDP</h4>Optional, asked on tap, purpose explained first. We keep the <b>PIN</b> (or about 1 km rounding), never exact coordinates.</div>
+      <div class="box"><h4>5 · Dispatch unchanged</h4>Only <b>active</b> area links on an approved partner get jobs. Pending areas never reach dispatch.</div>
+      <div class="box"><h4>6 · Admin sees supply</h4>Partners per area and PIN, targets, low-supply flags, waitlist, and "open area and notify".</div>
+    </div>
+    <div class="box" style="margin-top:12px"><h4>How to use this deck</h4>← / → keys or the buttons move between slides. ☰ Index jumps anywhere. <b>Every phone and admin screen is clickable</b>; "Reset this phone" restarts it. Slide 4 has a scenario switcher. The written flow is in <code>FLOW.md</code> next to this file. Web and phone app behave the same: one design, shown in a phone frame.</div>`},
+
+  {key:"today", group:"Intro", title:"Today: how Step 3 works and where it fails", kicker:"Current behaviour (read from code)", notes:() => `
+    ${T("today", `<ol>
+      <li>Step 3 lists areas that are <b>active and accepting partners</b> (<code>partners/selectors.py:50-54</code>).</li>
+      <li>Checkboxes, "Select all", at least 1 to continue. <b>No limit</b> (<code>areas-step.tsx:13</code>, <code>:58-73</code>).</li>
+      <li>Save checks every area is open, and every service is enabled in a chosen area (<code>services/application.py:225-246</code>, <code>:104-145</code>).</li>
+      <li>Step 4 hours per area; submit needs hours in every area (<code>:419-426</code>).</li>
+      <li>Dispatch only offers jobs in the partner's active areas, ranked by ID, not distance (<code>assignments/ranking.py:44</code>, <code>:283-293</code>).</li>
+    </ol>`)}
+    ${T("prob", `<ul>
+      <li><b>Dead end</b> when no area is open (<code>areas-step.tsx:35-44</code>).</li>
+      <li><b>Silent help text</b>: "Ask us from Help" saves nothing (<code>areas-step.tsx:94</code>).</li>
+      <li><b>No admin Areas screen</b>: Django admin only (<code>locations/admin.py</code>).</li>
+      <li><b>Count-only review</b>: "Coverage Areas · 3" (<code>review-detail.tsx:437-444</code>).</li>
+      <li>Phone text is hard-coded English (<code>mobile …/areas-step.tsx</code>).</li>
+      <li>A PIN can sit in two areas (<code>locations/models.py:86-92</code>).</li>
+      <li>Approved partners can't change areas (<code>models/onboarding.py:186-188</code>).</li>
+    </ul>`)}`, frames:() => `<div class="phones">
+      ${phoneFig("today1", {screen:"today"}, "Today: flat list with a help line that records nothing")}
+      ${phoneFig("today2", {screen:"todayEmpty"}, "Today: zero open areas means a dead end")}
+    </div>`},
+
+  {key:"overview", group:"Partner", title:"Proposed partner journey, cases A–I", kicker:"Overview", full:true, html:() => `
+    <div class="ribbon"><span>Find: 📍 location · # PIN · 🔍 place · browse</span><em>→</em><span>Look up PIN</span><em>→</em><span>Open / Full / None</span><em>→</em><span>Summary</span><em>→</em><span>Hours (covered only)</span><em>→</em><span>Submit</span><em>→</em><span>Review</span><em>→</em><span>Area opens → Activate</span></div>
+    <div class="grid3">
+      ${[
+        ["A","Area open","Pre-ticked with \"You're in Kukatpally\", plus nearby open areas.","caseA"],
+        ["B","Area full","\"Full right now\" → Join waitlist with trades. Not blocked.","caseB"],
+        ["C","No area for PIN","\"Not in 509216 yet\" → Request this area → saved.","caseC"],
+        ["D","Denied / no PIN","Friendly fallback: type a PIN or search a place.","caseD"],
+        ["E","Many areas","Search, city groups, Select all, \"23 selected\", copy hours.","caseE"],
+        ["F","Mixed","Summary: Active when approved · Waitlist · Requested.","caseF"],
+        ["G","Changed mid-application","Paused: keep. Full: keep (already held). Closed: remove to continue.","caseGH"],
+        ["H","Bad PIN / outside India","Inline errors. Outside India: polite stop, nothing saved.","caseGH"],
+        ["I","Submit with pending","Covered areas go live on approval; requested stay pending.","submit"]
+      ].map(([L, t, d, k]) => `<div class="box case"><span class="L">${L}</span><b>${t}</b><p>${d}</p><button class="dbtn sm" data-act="gotoKey" data-arg="${k}">View →</button></div>`).join("")}
+    </div>`},
+
+  {key:"proto", group:"Partner", title:"Clickable prototype: pick a scenario", kicker:"Partner · interactive", notes:() => `
+    <h4>Scenario</h4>
+    <div class="scn" id="scn">${Object.keys(PROTO_SPECS).map(k => `<button data-act="scn" data-arg="${k}" class="${k === "A" ? "on" : ""}">${k}</button>`).join("")}</div>
+    <div id="scn-info" style="font-size:13px">${SCN_INFO.A}</div>
+    <h4 style="margin-top:14px">What would be stored (mock)</h4>
+    <pre class="store" id="proto-store"></pre>
+    <div class="fine">Only PIN, town and trades. No coordinates. "Use my location" just feeds a PIN into the same lookup.</div>`,
+    frames:() => `<div class="phones">${phoneFig("proto", PROTO_SPECS.A, "Tap through it. ↺ Reset restarts the scenario.")}</div>`},
+
+  {key:"entry", group:"Partner", title:"Step 3 entry: location, PIN or search", kicker:"Partner · Step 3", notes:() => `
+    ${T("today", "<p>A flat list of open areas; nothing else (<code>areas-step.tsx:75</code>).</p>")}
+    ${T("prop", `<ul><li><b>Use my current location</b> is the main button but optional.</li>
+    <li><b>Enter PIN code</b> and <b>Search a place</b> work just as well (search reuses <code>/geocoding/search/</code>, then <code>/geocoding/reverse/</code> for the PIN).</li>
+    <li>"Browse all areas" keeps today's list, improved (case E).</li>
+    <li>Privacy line visible before any tap.</li>
+    <li>New: partner lookup endpoint <code>GET /partner/service-areas/lookup?postal_code=</code> returns OPEN / FULL / NONE / INVALID / OUTSIDE_INDIA.</li></ul>`)}`,
+    frames:() => `<div class="phones">${phoneFig("entry", {scenario:"A"}, "Entry screen (clickable)")}</div>`},
+
+  {key:"consent", group:"Partner", title:"Location consent", kicker:"Partner · consent & DPDP", notes:() => `
+    ${T("prop", `<ul><li>Our own sheet first: <b>why</b>, <b>what we keep</b> (PIN only), and that it only suggests.</li>
+    <li>Then the system prompt. If the OS has already said no, skip straight to PIN entry.</li>
+    <li>The device location is used once for reverse geocoding and <b>never stored</b>. Store PIN, city, state and source (GPS/PIN/SEARCH). If anything else is kept, round it to 2 decimals (about 1 km).</li>
+    <li>Web: request on tap (user gesture), like the customer <code>locate-device.ts</code>. Phone: <code>expo-location</code> foreground permission.</li>
+    <li>Delete area requests on abandoned drafts after the retention period.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("consent1", {scenario:"A", screen:"consent"}, "1 · Our explanation sheet")}
+      ${phoneFig("consent2", {scenario:"A", screen:"osprompt"}, "2 · System prompt")}
+    </div>`},
+
+  {key:"caseA", group:"Partner", title:"Case A: area exists and is open → pre-selected", kicker:"Partner · case A", notes:() => `
+    ${T("prop", `<ul><li>PIN 500072 maps to Kukatpally, which is active and accepting partners, so it's <b>pre-ticked</b>.</li>
+    <li>Banner says where the suggestion came from; the partner can untick it.</li>
+    <li>Nearby open areas in the same zone are one tap away.</li>
+    <li>Saved like today: a <code>PartnerServiceArea</code> link.</li></ul>`)}`,
+    frames:() => `<div class="phones">${phoneFig("caseA", {scenario:"A", screen:"resultA", preset:{selected:["kukatpally"], last:{kind:"open", pin:"500072", area:AREAS[0], source:"GPS"}}}, "You're in Kukatpally ✓")}</div>`},
+
+  {key:"caseB", group:"Partner", title:"Case B: area full → join waitlist", kicker:"Partner · case B", notes:() => `
+    ${T("today", "<p>Full areas are hidden (<code>selectors.py:50-54</code>), so the partner assumes we don't work there.</p>")}
+    ${T("prop", `<ul><li>Show it as <b>Full right now</b>, with trades preset from "Your work".</li>
+    <li>Join waitlist → <code>AreaRequest(status=WAITLISTED, matched_area=Gachibowli)</code>.</li>
+    <li>Suggest open areas nearby. The application is never blocked.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("caseB1", {scenario:"B", screen:"resultB", preset:{last:{kind:"full", pin:"500032", area:areaById("gachibowli"), source:"GPS"}}}, "1 · Area is full")}
+      ${phoneFig("caseB2", {scenario:"B", screen:"waitlistSaved", preset:{waitlisted:[{id:"gachibowli", name:"Gachibowli", pin:"500032", trades:["Electrician","AC repair"]}]}}, "2 · On the waitlist")}
+    </div>`},
+
+  {key:"caseC", group:"Partner", title:"Case C: no area covers the PIN → area request", kicker:"Partner · case C", notes:() => `
+    ${T("today", "<p>Dead end, or a help line that saves nothing (<code>areas-step.tsx:35-44</code>, <code>:94</code>).</p>")}
+    ${T("prop", `<ul><li>"We're not in 509216 yet", with town and state from the geocoder (✓ found on map).</li>
+    <li>Request this area → <code>AreaRequest(status=REQUESTED)</code>, one per partner + PIN.</li>
+    <li>Confirmation says they can still finish the application now.</li>
+    <li>Feeds the admin Area requests view and dashboard.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("caseC1", {scenario:"C", screen:"resultC", preset:{last:{kind:"none", pin:"509216", place:{city:"Shadnagar", state:"Telangana"}, source:"GPS"}}}, "1 · Not here yet")}
+      ${phoneFig("caseC2", {scenario:"C", screen:"interestSaved", preset:{requested:[{pin:"509216", city:"Shadnagar", state:"Telangana", trades:["Electrician","AC repair"], source:"GPS"}]}}, "2 · Request saved")}
+    </div>`},
+
+  {key:"caseD", group:"Partner", title:"Case D: location denied or no PIN → type PIN / search place", kicker:"Partner · case D", notes:() => `
+    ${T("prop", `<ul><li>Never a dead end: PIN box and place search on the same screen.</li>
+    <li>PIN: 6 digits, first 1–9, then a lookup. Unknown to the geocoder → "We couldn't find it" (case H).</li>
+    <li>Place search → pick → reverse geocode → PIN → same lookup.</li>
+    <li>Geocoder down → accept a typed PIN marked <i>unverified</i> for admin.</li>
+    <li>Try the mock PIN chips, or type "Kuk", "Shad", "Dubai".</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("caseD1", {scenario:"D", screen:"manual", preset:{reason:"denied"}}, "Location denied")}
+      ${phoneFig("caseD2", {scenario:"D", screen:"manual", preset:{reason:"nopin", placeQ:"Shad"}}, "No PIN from location, place search")}
+    </div>`},
+
+  {key:"caseE", group:"Partner", title:"Case E: many areas (20+, or all)", kicker:"Partner · case E", notes:() => `
+    ${T("today", "<p>No cap anywhere (frontend, serializer, DB, dispatch). Only a flat two-column grid (<code>areas-step.tsx:75</code>).</p>")}
+    ${T("prop", `<ul><li>Search by name or PIN; sticky "N selected" chip.</li>
+    <li>Groups by city or zone with "Select all" per group, plus "Select all open".</li>
+    <li>Full areas inline with "Join waitlist".</li>
+    <li>Save in one batch on the server (today it saves one area at a time, <code>services/application.py:86-100</code>).</li>
+    <li>Needs <code>ServiceArea.city</code> or zones; the model has none today.</li></ul>`)}`,
+    frames:() => `<div class="phones">${phoneFig("caseE", PROTO_SPECS.E, "Try search and Select all")}</div>`},
+
+  {key:"caseF", group:"Partner", title:"Case F: mixed result summary", kicker:"Partner · case F", notes:() => `
+    ${T("prop", `<ul><li>Three groups: <b>Active when approved</b>, <b>Waitlist</b>, <b>Requested</b>.</li>
+    <li>Hours are asked only for active areas.</li>
+    <li>With zero active areas, Continue still works and the application goes in as "area pending" (case I).</li>
+    <li>Each item can be removed here.</li></ul>`)}`,
+    frames:() => `<div class="phones">${phoneFig("caseF", PROTO_SPECS.F, "Covered + waitlisted + requested")}</div>`},
+
+  {key:"caseGH", group:"Partner", title:"Cases G & H: changes mid-application, bad PIN, outside India", kicker:"Partner · edge cases", notes:() => `
+    ${T("today", `<ul><li>If an area stops accepting partners, any later save sending area IDs <b>fails completely</b> (<code>services/application.py:239-245</code>), while submit only checks <code>is_active</code> (<code>:110-123</code>).</li>
+    <li>Paused areas still show in onboarding (<code>pauses.py</code> is booking-only).</li></ul>`)}
+    ${T("prop", `<ul><li><b>Full now:</b> keep areas already held. Only block <i>new</i> additions.</li>
+    <li><b>Paused:</b> keep it, with an info note.</li>
+    <li><b>Deactivated:</b> named banner, "Remove to continue".</li>
+    <li><b>H:</b> bad format, PIN unknown to the geocoder, or a non-IN country → clear message, nothing saved.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("caseG", {scenario:"F", screen:"summary", preset:{selected:["kukatpally","gachibowli","miyapur","kondapur"], g:{full:["gachibowli"], closed:["miyapur"], paused:["kondapur"]}}}, "G · areas changed after picking")}
+      ${phoneFig("caseH1", {scenario:"D", screen:"manual", preset:{pinVal:"599999", pinErr:"We couldn't find PIN 599999 on the map. Check it, or search a place instead."}}, "H · fake or unknown PIN")}
+      ${phoneFig("caseH2", {scenario:"D", screen:"outside", preset:{last:{kind:"outside", place:PLACES[5]}}}, "H · outside India")}
+    </div>`},
+
+  {key:"hours", group:"Partner", title:"Step 4 hours: same hours or copy to all areas", kicker:"Partner · Step 4", notes:() => `
+    ${T("today", `<p>Hours per area. Presets already fill every area (<code>availability-editor.tsx:160-180</code>), but a hand-added shift defaults to the <b>first</b> area (<code>:102</code>). 50 areas × 7 days = 350 rows.</p>`)}
+    ${T("prop", `<ul><li><b>"Same hours in all N areas" on by default.</b></li>
+    <li>Turn it off to see per-area hours with <b>"Copy Kukatpally's hours to all N-1 areas"</b>.</li>
+    <li>Pending areas are listed: hours are confirmed when they open.</li>
+    <li>Server rule unchanged: hours needed for every <i>active</i> area.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("hours1", {scenario:"F", screen:"hours", preset:F_PRESET}, "Default: same hours everywhere")}
+      ${phoneFig("hours2", {scenario:"F", screen:"hours", preset:Object.assign({}, E_PRESET, {sameHours:false, waitlisted:F_PRESET.waitlisted})}, "Per area: tap Copy to all")}
+    </div>`},
+
+  {key:"submit", group:"Partner", title:"Case I: submit with pending areas", kicker:"Partner · Step 6", notes:() => `
+    ${T("today", "<p>Submit needs at least 1 active area with hours (<code>services/application.py:110-123</code>, <code>:419-426</code>).</p>")}
+    ${T("prop", `<ul><li>At least 1 covered area: normal submit. Pending areas ride along.</li>
+    <li>0 covered and at least 1 requested/waitlisted: submit as <b>"area pending"</b>. Admin can approve dormant.</li>
+    <li>The summary says plainly: <i>no jobs there until they open</i>.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("submit1", {scenario:"F", screen:"submit", preset:F_PRESET}, "Covered + pending")}
+      ${phoneFig("submit2", {scenario:"C", screen:"submit", preset:{requested:F_PRESET.requested.slice(0, 1)}}, "Only pending: \"area pending\"")}
+    </div>`},
+
+  {key:"opened", group:"Partner", title:"\"We opened your area\" → activate", kicker:"Partner · after approval", notes:() => `
+    ${T("today", "<p>No way to hear about it; areas can't be changed after approval (<code>models/onboarding.py:186-188</code>).</p>")}
+    ${T("prop", `<ul><li>Admin opens the area → requests become <b>PENDING_ACTIVATION</b> → push/SMS.</li>
+    <li>One tap: reuse usual hours, or set different ones.</li>
+    <li>Then <code>PartnerServiceArea.is_active = true</code> and dispatch sees it. The strict filter is unchanged.</li>
+    <li>No response in 14 days → one reminder, then EXPIRED.</li></ul>`)}`,
+    frames:() => `<div class="phones">
+      ${phoneFig("op1", {scenario:"F", screen:"notif", preset:F_PRESET}, "1 · Notification (tap it)")}
+      ${phoneFig("op2", {scenario:"F", screen:"activate", preset:F_PRESET}, "2 · Activate with usual hours")}
+      ${phoneFig("op3", {scenario:"F", screen:"activated", preset:F_PRESET}, "3 · Active")}
+    </div>`},
+
+  {key:"admin-areas", group:"Admin", title:"Areas management", kicker:"Admin console", full:true, html:() => `
+    <div class="box" style="margin-bottom:12px;font-size:13px"><span class="tag today">Today</span> Only basic Django admin registration (<code>locations/admin.py</code>). <span class="tag prop">Proposed</span> Improve Django admin first (inline PINs and services, filters), then this console screen. Click a row, toggle <i>Accepting</i>, add PIN <b>500032</b> to Kondapur to see the conflict, and Preview the bulk upload.</div>
+    <div data-admin="areas"></div>`},
+
+  {key:"admin-review", group:"Admin", title:"Application review: area names, flags, pending areas", kicker:"Admin console", full:true, html:() => `
+    <div class="box" style="margin-bottom:12px;font-size:13px"><span class="tag today">Today</span> A count only (<code>review-detail.tsx:437-444</code>). <span class="tag prop">Proposed</span> Names, trade/area mismatch flag, requested-but-unavailable list, and approval rules with pending areas. Try "Approve without Miyapur", then Approve.</div>
+    <div data-admin="review"></div>`},
+
+  {key:"admin-waitlist", group:"Admin", title:"Area requests: grouped by PIN and trade", kicker:"Admin console", full:true, html:() => `
+    <div class="box" style="margin-bottom:12px;font-size:13px"><span class="tag prop">Proposed</span> Built on the new <code>AreaRequest</code>. Filter by trade, expand a row, and run <b>Open area &amp; notify</b> on 509216, or <b>Re-open</b> on Gachibowli.</div>
+    <div data-admin="waitlist"></div>`},
+
+  {key:"admin-dash", group:"Admin", title:"Partner coverage dashboard", kicker:"Admin console", full:true, html:() => `
+    <div class="box" style="margin-bottom:12px;font-size:13px"><span class="tag prop">Proposed</span> Mostly from existing data: area links, application status, services, hours, quotes/units per area, offer outcomes. New: targets, area requests, turned-away customers, snapshots. Mock data: <b>500001 = 100</b>, <b>500002 = 50</b> partners. Change filters and click a row.</div>
+    <div data-admin="dash"></div>`},
+
+  {key:"states", group:"Model", title:"Partner–area link states", kicker:"State model", full:true, html:() => stateSvg()},
+
+  {key:"roadmap", group:"Model", title:"Roadmap & open questions", kicker:"Next steps", full:true, html:() => `
+    <div class="grid3 road">
+      <div class="box"><h4>Quick wins</h4><ul>
+        <li><span class="sz">S</span>Area names + mismatch flag on review</li>
+        <li><span class="sz">S</span>Phone Step 3 uses translations</li>
+        <li><span class="sz">S</span>Search + count chip on Step 3</li>
+        <li><span class="sz">S</span>"Same hours in all areas" default</li>
+        <li><span class="sz">S</span>Better Django admin for areas</li>
+        <li><span class="sz">S</span>PIN-overlap report</li>
+        <li><span class="sz">S</span>Keep held areas when one closes; deactivate hours on untick</li>
+      </ul></div>
+      <div class="box"><h4>Medium</h4><ul>
+        <li><span class="sz">M</span>PIN lookup endpoint + location/PIN/search UI <span class="dep">needs search</span></li>
+        <li><span class="sz">M</span><code>AreaRequest</code> + full/none screens + waitlist view <span class="dep">needs lookup</span></li>
+        <li><span class="sz">M</span>Submit as "area pending" + approve dormant <span class="dep">needs AreaRequest</span></li>
+        <li><span class="sz">S</span>Record turned-away customers</li>
+        <li><span class="sz">M</span>Console Areas screen + bulk PINs + one-PIN-one-area <span class="dep">needs overlap report</span></li>
+        <li><span class="sz">M</span>Coverage dashboard + targets</li>
+        <li><span class="sz">M</span>Open area &amp; notify + Activate <span class="dep">needs AreaRequest, Areas screen</span></li>
+        <li><span class="sz">M</span>Area change for approved partners</li>
+      </ul></div>
+      <div class="box"><h4>Long term</h4><ul>
+        <li><span class="sz">M</span>India Post PIN list with centre points</li>
+        <li><span class="sz">L</span>Home PIN + distance-aware ranking <span class="dep">needs PIN list</span></li>
+        <li><span class="sz">L</span>Snapshots, trends, heatmap, alerts <span class="dep">needs dashboard</span></li>
+        <li><span class="sz">S</span>City / zone grouping everywhere</li>
+      </ul></div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="box"><h4>Open questions</h4><ol style="font-size:13px;padding-left:18px;margin:4px 0">
+        <li>Run paid background checks for "area pending" partners before or after their area opens?</li>
+        <li>One PIN in exactly one area? Are current overlaps mistakes?</li>
+        <li>Targets per area, or per area × trade? Who owns them?</li>
+        <li>May approved partners add <i>open</i> areas themselves?</li>
+        <li>Notification channel: push, SMS, WhatsApp? Which provider?</li>
+        <li>Is the Google geocoding key live in production, and is the cost OK?</li>
+        <li>The unit above an area: city, district or zone?</li>
+        <li>How long before PENDING_ACTIVATION expires (14 days proposed)?</li>
+      </ol></div>
+      <div class="box"><h4>Assumptions</h4><ul style="font-size:13px;padding-left:18px;margin:4px 0">
+        <li>The brief was cut off at "PIN 500001 = 100 partners, PIN…"; 500002 = 50 is from the earlier brief, other PINs are invented.</li>
+        <li>Code was read, not production data.</li>
+        <li>Web and phone get the same design (phone frame shown for both).</li>
+        <li>Distance-aware ranking is out of scope for this flow.</li>
+        <li>All names, people and numbers here are mock data.</li>
+      </ul></div>
+    </div>`}
+];
+
+function stateSvg() {
+  const box = (x, y, w, h, label, sub, kind) => {
+    const st = {psa:"stroke:var(--navy);fill:var(--panel)", req:"stroke:#c27a0e;fill:var(--amber-bg);stroke-dasharray:6 4", active:"stroke:var(--teal);fill:var(--teal-bg)", end:"stroke:#9aa8bb;fill:var(--grey-bg);stroke-dasharray:3 3", pend:"stroke:var(--blue);fill:var(--blue-bg);stroke-dasharray:6 4"}[kind];
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" style="${st};stroke-width:2"/><text x="${x + w / 2}" y="${y + (sub ? 22 : h / 2 + 5)}" text-anchor="middle" font-size="13" font-weight="800" fill="var(--ink)">${label}</text>${sub ? `<text x="${x + w / 2}" y="${y + 40}" text-anchor="middle" font-size="11" fill="var(--ink2)">${sub}</text>` : ""}`;
+  };
+  const arr = (d, label, lx, ly, dashed) => `<path d="${d}" fill="none" stroke="var(--ink2)" stroke-width="1.6" ${dashed ? 'stroke-dasharray="4 3"' : ""} marker-end="url(#ah)"/>${label ? `<text x="${lx}" y="${ly}" font-size="11" fill="var(--ink2)" text-anchor="middle">${label}</text>` : ""}`;
+  return `<div class="svgwrap"><svg viewBox="0 0 1120 440" width="100%" style="min-width:820px" role="img" aria-label="State diagram of partner to area link statuses">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink2)"/></marker></defs>
+    <circle cx="26" cy="220" r="9" fill="var(--ink)"/>
+    ${arr("M35,215 C50,120 50,70 78,62", "", 0, 0)}
+    ${arr("M36,220 L78,220", "", 0, 0)}
+    ${arr("M35,225 C50,320 50,370 78,378", "", 0, 0)}
+    ${box(80, 30, 190, 60, "SELECTED", "ticked an open area (draft)", "psa")}
+    ${box(80, 190, 190, 60, "REQUESTED", "PIN has no area (case C)", "req")}
+    ${box(80, 350, 190, 60, "WAITLISTED", "area full (case B)", "req")}
+    ${box(390, 30, 170, 46, "REMOVED", "", "end")}
+    ${box(390, 140, 200, 46, "REJECTED / WITHDRAWN", "", "end")}
+    ${box(390, 260, 210, 60, "PENDING_ACTIVATION", "area opened, partner notified", "pend")}
+    ${box(700, 100, 190, 60, "ACTIVE", "dispatch can offer jobs", "active")}
+    ${box(700, 340, 170, 46, "EXPIRED", "", "end")}
+    ${box(950, 100, 150, 60, "INACTIVE", "removed / area off", "psa")}
+    ${arr("M270,53 L388,53", "unticked", 330, 45)}
+    ${arr("M270,72 C480,90 560,120 698,125", "approved + hours", 520, 98)}
+    ${arr("M270,212 C320,200 340,170 388,165", "spam / withdrawn", 330, 180, true)}
+    ${arr("M270,232 C320,250 340,275 388,285", "area opened / PIN linked", 320, 270)}
+    ${arr("M270,375 C330,370 350,320 388,305", "re-opened to partners", 320, 360)}
+    ${arr("M600,280 C640,250 660,170 698,145", "partner taps Activate", 655, 225)}
+    ${arr("M600,305 C640,330 660,360 698,362", "no reply in 14 days", 655, 350, true)}
+    ${arr("M890,120 L948,120", "", 0, 0)}<text x="919" y="112" font-size="11" fill="var(--ink2)" text-anchor="middle">remove</text>
+    ${arr("M948,145 L892,145", "", 0, 0)}<text x="919" y="160" font-size="11" fill="var(--ink2)" text-anchor="middle">re-add</text>
+    <text x="795" y="190" font-size="11.5" fill="var(--teal)" text-anchor="middle" font-weight="700">Only ACTIVE + approved application</text>
+    <text x="795" y="206" font-size="11.5" fill="var(--teal)" text-anchor="middle" font-weight="700">is visible to dispatch (unchanged rule)</text>
+    <text x="795" y="226" font-size="11" fill="var(--ink2)" text-anchor="middle">A paused area keeps links ACTIVE;</text>
+    <text x="795" y="241" font-size="11" fill="var(--ink2)" text-anchor="middle">the kill switch blocks offers separately.</text>
+  </svg>
+  <div class="legend">
+    <span><i style="border:2px solid var(--navy);background:var(--panel)"></i>Lives in <b>PartnerServiceArea</b> (today's model + <code>disabled_at</code>)</span>
+    <span><i style="border:2px dashed #c27a0e;background:var(--amber-bg)"></i>Lives in new <b>AreaRequest</b></span>
+    <span><i style="border:2px dashed var(--blue);background:var(--blue-bg)"></i>AreaRequest, waiting for the partner</span>
+    <span><i style="border:2px dashed #9aa8bb;background:var(--grey-bg)"></i>End state</span>
+  </div></div>`;
+}
+
+/* =====================================================================
+   DECK
+   ===================================================================== */
+let cur = 0;
+function build() {
+  initAdmin();
+  const deck = document.getElementById("deck");
+  deck.innerHTML = SLIDES.map((s, i) => `<section class="slide" id="s-${s.key}" aria-label="Slide ${i + 1}: ${esc(s.title)}">
+    <div class="s-head"><div><div class="kicker">${i + 1} · ${esc(s.kicker || s.group)}</div><h2>${esc(s.title)}</h2></div><span class="mock-badge">MOCK - not connected to real data</span></div>
+    ${s.full ? `<div class="s-body full">${s.html()}</div>` : `<div class="s-body"><aside class="notes">${s.notes()}</aside><div class="frames">${s.frames()}</div></div>`}
+  </section>`).join("");
+  Object.keys(PH).forEach(renderPhone);
+  Object.keys(ADMIN).forEach(renderAdmin);
+  PH.proto.onRender = st => {
+    const el = document.getElementById("proto-store");
+    if (!el) return;
+    el.textContent = JSON.stringify({
+      service_area_ids: st.selected.slice(0, 8).concat(st.selected.length > 8 ? ["…+" + (st.selected.length - 8)] : []),
+      area_requests: st.requested.map(r => ({postal_code:r.pin, city:r.city, state:r.state, source:r.source, skills:r.trades, status:"REQUESTED"}))
+        .concat(st.waitlisted.map(w => ({postal_code:w.pin, matched_area:w.id, skills:w.trades, status:"WAITLISTED"}))),
+      exact_coordinates_stored: false
+    }, null, 2);
+  };
+  renderPhone("proto");
+  let groups = "", last = "";
+  document.getElementById("idx-list").innerHTML = SLIDES.map((s, i) => {
+    groups = s.group !== last ? `<li class="grp-t">${s.group}</li>` : "";
+    last = s.group;
+    return `${groups}<li><button data-act="goto" data-arg="${i}"><span class="n">${i + 1}</span>${esc(s.title)}</button></li>`;
+  }).join("");
+  const h = parseInt((location.hash || "").replace("#", ""), 10);
+  show(isNaN(h) ? 0 : h - 1);
+}
+function show(i) {
+  cur = Math.max(0, Math.min(SLIDES.length - 1, i));
+  document.querySelectorAll(".slide").forEach((el, j) => el.classList.toggle("on", j === cur));
+  document.getElementById("count").textContent = `${cur + 1} / ${SLIDES.length}`;
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === SLIDES.length - 1;
+  document.querySelectorAll("#idx-list button").forEach(b => b.classList.toggle("cur", +b.dataset.arg === cur));
+  try { history.replaceState(null, "", "#" + (cur + 1)); } catch (e) { /* file:// may refuse; ignore */ }
+  window.scrollTo(0, 0);
+}
+let toastT = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 3600);
+}
+
+const GA = {
+  next() { show(cur + 1); },
+  prev() { show(cur - 1); },
+  goto(a) { document.getElementById("idx").classList.remove("on"); show(+a); },
+  gotoKey(a) { show(SLIDES.findIndex(s => s.key === a)); },
+  index() { document.getElementById("idx").classList.add("on"); },
+  closeIndex() { document.getElementById("idx").classList.remove("on"); },
+  exportCsv(a) { exportCsv(a); },
+  scn(a) {
+    PH.proto.spec = PROTO_SPECS[a];
+    PH.proto.st = newState(PROTO_SPECS[a]);
+    renderPhone("proto");
+    document.getElementById("scn-info").innerHTML = SCN_INFO[a];
+    document.querySelectorAll("#scn button").forEach(b => b.classList.toggle("on", b.dataset.arg === a));
+  }
+};
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-act]");
+  if (!t || t.disabled) return;
+  const act = t.dataset.act, arg = t.dataset.arg;
+  const ph = t.closest("[data-phone]");
+  if (ph && PA[act]) { const pid = ph.dataset.phone; PA[act](PH[pid].st, arg, pid, t); renderPhone(pid); return; }
+  const ad = t.closest("[data-admin]");
+  if (ad && AA[act]) { const aid = ad.dataset.admin; AA[act](AD[aid], arg, aid, t); renderAdmin(aid); return; }
+  if (GA[act]) GA[act](arg, t);
+});
+document.addEventListener("input", e => {
+  const t = e.target, k = t.dataset && t.dataset.key;
+  if (!k) return;
+  const ph = t.closest("[data-phone]");
+  if (ph) { PH[ph.dataset.phone].st[k] = t.value; if (t.dataset.live) renderPhone(ph.dataset.phone); return; }
+  const ad = t.closest("[data-admin]");
+  if (ad) AD[ad.dataset.admin][k] = t.value;
+});
+document.addEventListener("keydown", e => {
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") {
+    if (e.key === "Enter" && e.target.dataset.key === "pinVal") {
+      const ph = e.target.closest("[data-phone]");
+      if (ph) { PA.checkPin(PH[ph.dataset.phone].st); renderPhone(ph.dataset.phone); }
+    }
+    return;
+  }
+  if (e.key === "Escape") GA.closeIndex();
+  else if (e.key === "ArrowRight" || e.key === "PageDown") show(cur + 1);
+  else if (e.key === "ArrowLeft" || e.key === "PageUp") show(cur - 1);
+  else if (e.key === "Home") show(0);
+  else if (e.key === "End") show(SLIDES.length - 1);
+});
+document.getElementById("idx").addEventListener("click", e => { if (e.target.id === "idx") GA.closeIndex(); });
+build();
+</script>
+</body>
+</html>

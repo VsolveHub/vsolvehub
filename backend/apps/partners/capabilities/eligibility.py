@@ -34,6 +34,7 @@ from apps.partners.models import (
     PartnerServiceArea,
     commercial_mode_for_archetype,
 )
+from apps.partners.selectors import required_document_kinds
 
 from .base import WORKSPACE_ACTIONS, WorkspaceGrant
 from .registration import (
@@ -41,6 +42,14 @@ from .registration import (
     assert_kyc_complete,
     assert_payout_details_present,
 )
+
+
+def _required_kinds(partner: PartnerProfile) -> tuple[str, ...]:
+    """The kinds this Partner's own application requires; the platform list before they apply."""
+    application = getattr(partner, "application", None)
+    if application is None:
+        return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    return required_document_kinds(application)
 
 
 def expired_required_document_kinds(
@@ -58,7 +67,7 @@ def expired_required_document_kinds(
     treating it as staleness would refuse every M1 Partner on the day this shipped.
     """
     day = on_day or timezone.localdate()
-    kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    kinds = _required_kinds(partner)
     if not kinds:
         return []
     expired = (
@@ -81,7 +90,7 @@ def earliest_required_document_expiry(
 ) -> date | None:
     """The next required document to expire, or nothing. Advisory: the client warns from it."""
     day = on_day or timezone.localdate()
-    kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    kinds = _required_kinds(partner)
     if not kinds:
         return None
     row = (

@@ -5,12 +5,12 @@ import { View } from "react-native";
 import type { RequirementService } from "@/features/requirement/adapters";
 
 export function hasAboutContent(service: RequirementService): boolean {
-  return service.policies.some((policy) => policy.kind !== "PROCESS");
+  return service.policies.some((policy) => policy.kind !== "PROCESS" && !/(?:warranty|guarantee|workmanship)/i.test(policy.text));
 }
 
 function lines(service: RequirementService, kind: string): string[] {
   return service.policies
-    .filter((policy) => policy.kind === kind)
+    .filter((policy) => policy.kind === kind && !/(?:warranty|guarantee|workmanship)/i.test(policy.text))
     .sort((a, b) => a.display_order - b.display_order)
     .map((policy) => policy.text);
 }
@@ -24,7 +24,9 @@ function PolicyLines({ title, items, mark }: { title: string; items: string[]; m
         {items.map((text) => (
           <View key={text} className="flex-row items-start gap-2.5">
             <Text className={mark === "check" ? "text-success-text" : "text-text-muted"}>{mark === "check" ? "✓" : "✗"}</Text>
-            <Text className="flex-1 text-sm leading-6 text-text-secondary">{text}</Text>
+            <Text className="flex-1 text-sm leading-6 text-text-secondary">
+              {text}
+            </Text>
           </View>
         ))}
       </View>

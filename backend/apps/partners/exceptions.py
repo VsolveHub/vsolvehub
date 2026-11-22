@@ -1,6 +1,8 @@
 """Partner domain failures with stable API-facing codes."""
 
 import uuid
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 
 class PartnerDomainError(RuntimeError):
@@ -11,12 +13,68 @@ class PartnerDomainError(RuntimeError):
         message: str,
         status_code: int,
         retryable: bool = False,
+        api_details: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
         self.retryable = retryable
+        self.api_details = api_details
+
+
+class PartnerServiceAreasUnavailableError(PartnerDomainError):
+    def __init__(self, unavailable_area_ids: Sequence[uuid.UUID | str]) -> None:
+        super().__init__(
+            code="partner_service_areas_unavailable",
+            message="One or more selected service areas are unavailable.",
+            status_code=409,
+            api_details={
+                "unavailable_service_area_ids": [str(uid) for uid in unavailable_area_ids],
+            },
+        )
+
+
+class PostalCodeInOtherAreaError(PartnerDomainError):
+    def __init__(self, postal_code: str, area_id: uuid.UUID | str, area_name: str) -> None:
+        super().__init__(
+            code="postal_code_in_other_area",
+            message=f"PIN {postal_code} is already assigned to {area_name}.",
+            status_code=409,
+            api_details={
+                "postal_code": postal_code,
+                "area_id": str(area_id),
+                "area_name": area_name,
+            },
+        )
+
+
+class PostalCodeNotFoundError(PartnerDomainError):
+    def __init__(self, postal_code: str) -> None:
+        super().__init__(
+            code="postal_code_not_found",
+            message=f"PIN {postal_code} not found. City and state are required.",
+            status_code=400,
+            api_details={"postal_code": postal_code},
+        )
+
+
+class ServiceAreaNotFoundError(PartnerDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="service_area_not_found",
+            message="Service area not found.",
+            status_code=404,
+        )
+
+
+class PartnerNoScheduleToCopyError(PartnerDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="partner_no_schedule_to_copy",
+            message="Partner has no existing schedule rules to copy.",
+            status_code=400,
+        )
 
 
 class PartnerApplicationNotFoundError(PartnerDomainError):
@@ -56,12 +114,49 @@ class PartnerApplicationIncompleteError(PartnerDomainError):
         )
 
 
-class PartnerDocumentUploadError(PartnerDomainError):
-    def __init__(self, message: str, *, retryable: bool = False) -> None:
+class EmployerTrackRequiredError(PartnerDomainError):
+    def __init__(self) -> None:
         super().__init__(
-            code="partner_document_upload_unavailable"
-            if retryable
-            else "partner_document_upload_invalid",
+            code="employer_track_required",
+            message="Employer details can only be saved on a hire-staff application.",
+            status_code=409,
+        )
+
+
+class EmployerDetailError(PartnerDomainError):
+    """An employer detail that cannot be saved, naming the field it belongs to."""
+
+    def __init__(self, message: str, *, field: str, code: str) -> None:
+        super().__init__(code=code, message=message, status_code=400)
+        self.field = field
+
+
+class EmployerCheckError(PartnerDomainError):
+    def __init__(self, message: str, *, code: str) -> None:
+        super().__init__(code=code, message=message, status_code=400)
+
+
+class EmployerChecksIncompleteError(PartnerDomainError):
+    """Approval refused: an employer's review checklist is not fully passed."""
+
+    def __init__(self, missing_codes: Sequence[str]) -> None:
+        super().__init__(
+            code="employer_checks_incomplete",
+            message="Finish the checklist first.",
+            status_code=409,
+        )
+        self.api_details = {"missing_codes": list(missing_codes)}
+
+
+class PartnerDocumentUploadError(PartnerDomainError):
+    def __init__(self, message: str, *, retryable: bool = False, code: str = "") -> None:
+        super().__init__(
+            code=code
+            or (
+                "partner_document_upload_unavailable"
+                if retryable
+                else "partner_document_upload_invalid"
+            ),
             message=message,
             status_code=503 if retryable else 409,
             retryable=retryable,

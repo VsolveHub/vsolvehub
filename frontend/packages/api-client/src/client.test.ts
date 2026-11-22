@@ -715,6 +715,30 @@ describe("bearer mode", () => {
     expect(calls[0]?.headers.get("Authorization")).toBeNull();
   });
 
+  it("never sends a stored token on sign-in calls", async () => {
+    // Regression: a dead token from an earlier session made Django refuse the OTP request
+    // with `403 not_authenticated`, so the phone could not sign in at all.
+    const { fetchImpl, calls } = stubFetch((req) =>
+      req.url.includes("/auth/csrf/") ? jsonResponse({ csrf_token: "t" }) : jsonResponse({}),
+    );
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      fetch: fetchImpl,
+      auth: { mode: "bearer", getToken: () => "stale-key" },
+    });
+
+    await request(() =>
+      api.POST("/api/v1/auth/otp/request/", { body: { phone_number: "9876543210" } as never }),
+    );
+    await request(() =>
+      api.POST("/api/v1/auth/firebase/precheck/", { body: { phone_number: "+919876543210" } as never }),
+    );
+
+    const signIn = calls.filter((call) => !call.url.includes("/auth/csrf/"));
+    expect(signIn).toHaveLength(2);
+    for (const call of signIn) expect(call.headers.get("Authorization")).toBeNull();
+  });
+
   it("omits cookies", async () => {
     let observedCredentials: RequestCredentials | undefined;
     const api = createApiClient({

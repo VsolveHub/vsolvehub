@@ -11,21 +11,34 @@ management directory lives in `directory`; the M2 capability, insurance, gate an
 crew contracts live in `m2`.
 """
 
+import re
 from typing import Any
 
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.partners.gstin import GstinInvalidError
+from apps.partners.gstin import validate_gstin as parse_gstin
 from apps.partners.models import (
+    EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerApplicationTransition,
+    PartnerBusinessProfile,
     PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
     PartnerProfile,
     Skill,
 )
-from apps.partners.selectors import partner_has_required_consents, required_document_kinds
+from apps.partners.selectors import (
+    employer_checks_for,
+    employer_hints,
+    employer_missing_fields,
+    offered_document_kinds,
+    partner_has_required_consents,
+    required_document_kinds,
+)
 from apps.payouts.models import PartnerPayoutAccount
 
 #: Serializer context value for the applicant reading their own application. Without it the
@@ -55,6 +68,10 @@ class PartnerApplicationUpdateSerializer(serializers.Serializer[dict[str, object
     )
     service_area_ids = serializers.ListField(
         child=serializers.UUIDField(),
+        required=False,
+    )
+    requested_postal_codes = serializers.ListField(
+        child=serializers.CharField(max_length=6),
         required=False,
     )
     consents = PartnerConsentInputSerializer(many=True, required=False)
@@ -117,6 +134,12 @@ class ExpectedVersionSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(min_value=1)
 
 
+class OperationsRemoveAreaSerializer(serializers.Serializer[dict[str, object]]):
+    expected_version = serializers.IntegerField(min_value=1)
+    service_area_id = serializers.UUIDField()
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class OperationsTransitionSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(min_value=1)
     target_status = serializers.ChoiceField(
@@ -153,6 +176,8 @@ class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str,
     )
     assigned_to_me = serializers.BooleanField(required=False, default=False)
     unassigned = serializers.BooleanField(required=False, default=False)
+    track = serializers.ChoiceField(choices=PartnerApplication.Track.choices, required=False)
+    area_pending = serializers.BooleanField(required=False, default=False)
     cursor = serializers.CharField(required=False, write_only=True)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
@@ -241,6 +266,35 @@ class PartnerSkillOptionSerializer(serializers.ModelSerializer[Skill]):
         read_only_fields = fields
 
 
+class PartnerWorkVariantSerializer(serializers.Serializer[dict[str, object]]):
+    """One size or kind of a service ("2 burner"). The application stores these ids."""
+
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    required_skill_code = serializers.CharField(allow_blank=True)
+
+
+class PartnerWorkServiceSerializer(serializers.Serializer[dict[str, object]]):
+    """A service a Partner can offer ("Gas Stove Repair") with the variants under it."""
+
+    id = serializers.UUIDField()
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    variants = PartnerWorkVariantSerializer(many=True)
+
+
+class PartnerWorkCategorySerializer(serializers.Serializer[dict[str, object]]):
+    """A trade on "Your work" with every service a Partner can offer under it."""
+
+    id = serializers.UUIDField()
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    icon_key = serializers.CharField(allow_blank=True)
+    image_url = serializers.CharField(allow_blank=True)
+    services = PartnerWorkServiceSerializer(many=True)
+
+
 class PartnerDocumentSerializer(serializers.ModelSerializer[PartnerDocument]):
     file_name = serializers.CharField(read_only=True)
     can_replace = serializers.SerializerMethodField()
@@ -290,20 +344,60 @@ class OperationsApplicationQueueItemSerializer(
 ):
     display_name = serializers.CharField(source="partner.display_name", read_only=True)
     review_assigned_to_id = serializers.UUIDField(read_only=True, allow_null=True)
+    area_pending = serializers.SerializerMethodField()
+    area_tag = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerApplication
         fields = (
             "id",
             "status",
+            "track",
             "version",
             "display_name",
             "submitted_at",
             "review_assigned_to_id",
             "review_assigned_at",
             "updated_at",
+            "area_pending",
+            "area_tag",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_area_pending(application: PartnerApplication) -> bool:
+        has_linked_areas = application.partner.service_area_links.filter(is_active=True).exists()
+        has_open_requests = application.area_requests.filter(dismissed_at__isnull=True).exists()
+        return not has_linked_areas and has_open_requests
+
+    @staticmethod
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_area_tag(application: PartnerApplication) -> str | None:
+        from apps.partners.selectors import partner_area_request_rows  # noqa: PLC0415
+
+        requests = partner_area_request_rows(application)
+        active_areas_count = application.partner.service_area_links.filter(is_active=True).count()
+
+        if not requests:
+            return None
+
+        ready_req = next((r for r in requests if r["status"] == "READY"), None)
+        if ready_req:
+            area_name = ready_req.get("covering_area_name") or "open area"
+            return f"Ready · now in {area_name}"
+
+        if active_areas_count == 0:
+            pin = requests[0]["postal_code"]
+            return f"Area pending · {pin}"
+
+        open_requests = [r for r in requests if r["status"] in ("WAITING", "AREA_FULL")]
+        if open_requests:
+            plural_areas = "area" if active_areas_count == 1 else "areas"
+            plural_pins = "PIN" if len(open_requests) == 1 else "PINs"
+            return f"{active_areas_count} {plural_areas} · {len(open_requests)} {plural_pins} asked"
+
+        return None
 
 
 class OperationsApplicationQueuePageSerializer(serializers.Serializer[dict[str, object]]):
@@ -434,6 +528,186 @@ class PartnerProfileSerializer(serializers.ModelSerializer[PartnerProfile]):
         ).exists()
 
 
+class EmployerBusinessSerializer(serializers.ModelSerializer[PartnerBusinessProfile]):
+    """An employer's business as the applicant sees it. The logo is a public, absolute URL."""
+
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PartnerBusinessProfile
+        fields = (
+            "trade_name",
+            "legal_name",
+            "legal_structure",
+            "business_category",
+            "company_size",
+            "gst_registered",
+            "gstin",
+            "business_proof_type",
+            "address",
+            "area",
+            "city",
+            "state",
+            "pin_code",
+            "latitude",
+            "longitude",
+            "logo_url",
+            "website_url",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_logo_url(self, business: PartnerBusinessProfile) -> str:
+        if not business.logo:
+            return ""
+        url = business.logo.url
+        request = self.context.get("request")
+        return str(request.build_absolute_uri(url)) if request is not None else str(url)
+
+
+class EmployerDetailsSerializer(serializers.ModelSerializer[EmployerProfile]):
+    """Who is hiring. `business` is only present for someone hiring for a business."""
+
+    business = serializers.SerializerMethodField()
+    missing_fields = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmployerProfile
+        fields = (
+            "hiring_as",
+            "poster_role",
+            "id_document_type",
+            "email",
+            "area",
+            "city",
+            "pin_code",
+            "business",
+            "missing_fields",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(EmployerBusinessSerializer(allow_null=True))
+    def get_business(self, employer: EmployerProfile) -> dict[str, Any] | None:
+        business = getattr(employer.partner, "business_profile", None)
+        if employer.hiring_as != EmployerProfile.HiringAs.BUSINESS or business is None:
+            return None
+        return dict(EmployerBusinessSerializer(business, context=self.context).data)
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_missing_fields(employer: EmployerProfile) -> list[str]:
+        return employer_missing_fields(employer.partner)
+
+
+def _validate_pin_code(value: str) -> None:
+    if value and not re.fullmatch(r"[1-9][0-9]{5}", value):
+        raise serializers.ValidationError("Enter a 6-digit pin code.", code="pin_code_invalid")
+
+
+class EmployerBusinessInputSerializer(serializers.Serializer[dict[str, object]]):
+    trade_name = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    legal_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    legal_structure = serializers.ChoiceField(
+        choices=PartnerBusinessProfile.LegalStructure.choices, required=False, allow_blank=True
+    )
+    business_category = serializers.ChoiceField(
+        choices=PartnerBusinessProfile.BusinessCategory.choices, required=False, allow_blank=True
+    )
+    company_size = serializers.ChoiceField(
+        choices=PartnerBusinessProfile.CompanySize.choices, required=False, allow_blank=True
+    )
+    gst_registered = serializers.BooleanField(required=False)
+    gstin = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    business_proof_type = serializers.ChoiceField(
+        choices=PartnerBusinessProfile.BusinessProofType.choices, required=False, allow_blank=True
+    )
+    address = serializers.CharField(required=False, allow_blank=True, max_length=240)
+    area = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    city = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    state = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    pin_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=6, validators=[_validate_pin_code]
+    )
+    latitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        min_value=-90,
+        max_value=90,
+        required=False,
+        allow_null=True,
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        min_value=-180,
+        max_value=180,
+        required=False,
+        allow_null=True,
+    )
+    website_url = serializers.URLField(required=False, allow_blank=True, max_length=300)
+
+    def validate_gstin(self, value: str) -> str:
+        if not value.strip():
+            return ""
+        try:
+            return parse_gstin(value).gstin
+        except GstinInvalidError as exc:
+            raise serializers.ValidationError(exc.message, code=exc.code) from exc
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        has_latitude = attrs.get("latitude") is not None
+        has_longitude = attrs.get("longitude") is not None
+        if ("latitude" in attrs) != ("longitude" in attrs) or has_latitude != has_longitude:
+            raise serializers.ValidationError(
+                {"latitude": "Send the map pin's latitude and longitude together."},
+                code="pin_incomplete",
+            )
+        return attrs
+
+
+class EmployerDetailsUpdateSerializer(serializers.Serializer[dict[str, object]]):
+    """Save who is hiring. Business facts live in `business`, so a home pin code and a business
+    pin code can never be confused."""
+
+    expected_version = serializers.IntegerField(min_value=1)
+    display_name = serializers.CharField(required=False, max_length=120, trim_whitespace=True)
+    hiring_as = serializers.ChoiceField(choices=EmployerProfile.HiringAs.choices, required=False)
+    poster_role = serializers.ChoiceField(
+        choices=EmployerProfile.PosterRole.choices, required=False, allow_blank=True
+    )
+    id_document_type = serializers.ChoiceField(
+        choices=EmployerProfile.IdDocumentType.choices, required=False, allow_blank=True
+    )
+    email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
+    area = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    city = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    pin_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=6, validators=[_validate_pin_code]
+    )
+    business = EmployerBusinessInputSerializer(required=False)
+
+
+class PartnerApplicationAreaDetailSerializer(serializers.Serializer[dict[str, Any]]):
+    service_area_id = serializers.UUIDField()
+    name = serializers.CharField()
+    zone = serializers.CharField(allow_blank=True)
+    hours_set = serializers.BooleanField()
+    #: False when the area enables none of the partner's chosen services (the mismatch flag).
+    offers_partner_trades = serializers.BooleanField()
+
+
+class PartnerAreaRequestSerializer(serializers.Serializer[dict[str, object]]):
+    id = serializers.UUIDField()
+    postal_code = serializers.CharField()
+    place = serializers.CharField(allow_null=True)
+    status = serializers.CharField()
+    covering_area_id = serializers.UUIDField(allow_null=True)
+    covering_area_name = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    notified_at = serializers.DateTimeField(allow_null=True)
+    dismissed_at = serializers.DateTimeField(allow_null=True)
+
+
 class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplication]):
     partner_id = serializers.UUIDField(source="partner.id", read_only=True)
     review_assigned_to_id = serializers.UUIDField(read_only=True, allow_null=True)
@@ -446,12 +720,19 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     skill_codes = serializers.SerializerMethodField()
     service_variant_ids = serializers.SerializerMethodField()
     service_area_ids = serializers.SerializerMethodField()
+    requested_postal_codes = serializers.SerializerMethodField()
+    area_requests = serializers.SerializerMethodField()
+    area_details = serializers.SerializerMethodField()
+    services_not_offered = serializers.SerializerMethodField()
     consents = PartnerConsentSerializer(source="partner.consents", many=True, read_only=True)
     documents = PartnerDocumentSerializer(many=True, read_only=True)
     transitions = PartnerApplicationTransitionSerializer(many=True, read_only=True)
     can_edit = serializers.BooleanField(source="is_editable", read_only=True)
     required_document_kinds = serializers.SerializerMethodField()
+    offered_document_kinds = serializers.SerializerMethodField()
+    employer = serializers.SerializerMethodField()
     consents_complete = serializers.SerializerMethodField()
+    business_details_complete = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerApplication
@@ -467,6 +748,10 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "skill_codes",
             "service_variant_ids",
             "service_area_ids",
+            "requested_postal_codes",
+            "area_requests",
+            "area_details",
+            "services_not_offered",
             "change_request_message",
             "submitted_at",
             "review_assigned_to_id",
@@ -477,7 +762,10 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "transitions",
             "can_edit",
             "required_document_kinds",
+            "offered_document_kinds",
+            "employer",
             "consents_complete",
+            "business_details_complete",
             "created_at",
             "updated_at",
         )
@@ -489,13 +777,116 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
     )
     def get_required_document_kinds(application: PartnerApplication) -> list[str]:
         """The document kinds submission and approval require — the server's list, not a copy."""
-        return list(required_document_kinds(application.track))
+        return list(required_document_kinds(application))
+
+    @staticmethod
+    @extend_schema_field(
+        serializers.ListField(child=serializers.ChoiceField(choices=PartnerDocument.Kind.choices))
+    )
+    def get_offered_document_kinds(application: PartnerApplication) -> list[str]:
+        """The document slots to show: for an employer, exactly what its type must upload."""
+        return list(offered_document_kinds(application))
+
+    @extend_schema_field(EmployerDetailsSerializer(allow_null=True))
+    def get_employer(self, application: PartnerApplication) -> dict[str, Any] | None:
+        """Who is hiring and what is still missing. Null for every other track."""
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return None
+        profile = getattr(application.partner, "employer_profile", None) or EmployerProfile(
+            partner=application.partner
+        )
+        return dict(EmployerDetailsSerializer(profile, context=self.context).data)
 
     @staticmethod
     @extend_schema_field(serializers.BooleanField())
     def get_consents_complete(application: PartnerApplication) -> bool:
         """Every agreement currently required for submission is accepted, at its current version."""
         return partner_has_required_consents(application.partner)
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_business_details_complete(application: PartnerApplication) -> bool:
+        """An employer has given every detail its type needs (the server's own rule). Always
+        true for other tracks, which are not asked."""
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return True
+        return not employer_missing_fields(application.partner)
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_requested_postal_codes(application: PartnerApplication) -> list[str]:
+        return list(
+            application.area_requests.filter(dismissed_at__isnull=True)
+            .order_by("created_at", "id")
+            .values_list("postal_code", flat=True)
+        )
+
+    @staticmethod
+    @extend_schema_field(PartnerAreaRequestSerializer(many=True))
+    def get_area_requests(application: PartnerApplication) -> list[dict[str, Any]]:
+        from apps.partners.selectors import partner_area_request_rows  # noqa: PLC0415
+
+        return partner_area_request_rows(application)
+
+    @staticmethod
+    @extend_schema_field(PartnerApplicationAreaDetailSerializer(many=True))
+    def get_area_details(application: PartnerApplication) -> list[dict[str, Any]]:
+        """Each chosen area with its zone, whether hours are set, and whether it offers any of the
+        partner's services. For Operations; the applicant's view leaves it empty."""
+        from apps.partners.models import PartnerAvailabilityRule  # noqa: PLC0415
+
+        partner = application.partner
+        variant_ids = {link.variant_id for link in partner.service_links.all() if link.is_active}
+        hours_areas = set(
+            PartnerAvailabilityRule.objects.filter(partner=partner, is_active=True).values_list(
+                "service_area_id", flat=True
+            )
+        )
+        details: list[dict[str, Any]] = []
+        for link in partner.service_area_links.select_related("service_area").all():
+            if not link.is_active:
+                continue
+            area = link.service_area
+            offered = set(
+                area.service_links.filter(is_active=True).values_list("variant_id", flat=True)
+            )
+            details.append(
+                {
+                    "service_area_id": area.id,
+                    "name": area.name,
+                    "zone": area.zone,
+                    "hours_set": area.id in hours_areas,
+                    # A partner with no services chosen yet is not flagged.
+                    "offers_partner_trades": not variant_ids or bool(variant_ids & offered),
+                }
+            )
+        return sorted(details, key=lambda item: item["name"])
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_services_not_offered(application: PartnerApplication) -> list[str]:
+        """Chosen services no chosen area offers. Empty when every one is offered somewhere, or
+        when no area is chosen yet (the area-pending banner covers that)."""
+        partner = application.partner
+        area_ids = [
+            link.service_area_id for link in partner.service_area_links.all() if link.is_active
+        ]
+        if not area_ids:
+            return []
+        from apps.locations.models import ServiceAreaService  # noqa: PLC0415
+
+        offered = set(
+            ServiceAreaService.objects.filter(
+                service_area_id__in=area_ids, is_active=True
+            ).values_list("variant_id", flat=True)
+        )
+        return sorted(
+            {
+                link.variant.name
+                for link in partner.service_links.select_related("variant").all()
+                if link.is_active and link.variant_id not in offered
+            }
+        )
 
     def to_representation(self, instance: PartnerApplication) -> dict[str, Any]:
         """The applicant's own view drops what belongs to Operations.
@@ -508,6 +899,8 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
         if self.context.get("audience") != APPLICANT_AUDIENCE:
             return data
         data["review_assigned_to_id"] = None
+        data["area_details"] = []
+        data["services_not_offered"] = []
         data["transitions"] = [
             {
                 **transition,
@@ -536,3 +929,54 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             for link in application.partner.service_area_links.all()
             if link.is_active
         ]
+
+
+class EmployerHintSerializer(serializers.Serializer[dict[str, object]]):
+    code = serializers.CharField()
+    level = serializers.ChoiceField(choices=("OK", "WARN"))
+    message = serializers.CharField()
+
+
+class EmployerCheckSerializer(serializers.Serializer[dict[str, object]]):
+    code = serializers.ChoiceField(choices=EmployerReviewCheck.Code.choices)
+    label = serializers.CharField()  # type: ignore[assignment]
+    result = serializers.ChoiceField(choices=EmployerReviewCheck.Result.choices, allow_null=True)
+    note = serializers.CharField(allow_blank=True)
+    checked_by_name = serializers.CharField(allow_blank=True)
+    checked_at = serializers.DateTimeField(allow_null=True)
+
+
+class EmployerCheckInputSerializer(serializers.Serializer[dict[str, object]]):
+    result = serializers.ChoiceField(choices=EmployerReviewCheck.Result.choices)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=480, default="")
+
+
+class OperationsPartnerApplicationDetailSerializer(PartnerApplicationSerializer):
+    """The application as Operations reads it: the applicant's view plus what only a reviewer sees.
+
+    A separate class, not extra fields on `PartnerApplicationSerializer`, so the hints and checks
+    cannot reach an applicant whichever serializer context a view forgets to pass.
+    """
+
+    employer_hints = serializers.SerializerMethodField()
+    employer_checks = serializers.SerializerMethodField()
+
+    class Meta(PartnerApplicationSerializer.Meta):
+        fields = (  # type: ignore[assignment]
+            *PartnerApplicationSerializer.Meta.fields,
+            "employer_hints",
+            "employer_checks",
+        )
+        read_only_fields = fields  # type: ignore[assignment]
+
+    @extend_schema_field(EmployerHintSerializer(many=True))
+    def get_employer_hints(self, application: PartnerApplication) -> list[dict[str, Any]]:
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return []
+        return [dict(hint) for hint in employer_hints(application.partner)]
+
+    @extend_schema_field(EmployerCheckSerializer(many=True))
+    def get_employer_checks(self, application: PartnerApplication) -> list[dict[str, Any]]:
+        if application.track != PartnerApplication.Track.EMPLOYER:
+            return []
+        return [dict(row) for row in employer_checks_for(application)]

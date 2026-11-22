@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.99.0
+  version: 1.111.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -181,6 +181,123 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationReport'
+          description: ''
+  /api/v1/assistant/conversation/:
+    get:
+      operationId: assistant_conversation_retrieve
+      description: 'The conversation so far. Safe to poll: it also posts booking progress
+        as it happens.'
+      parameters:
+      - in: header
+        name: X-Assistant-Token
+        schema:
+          type: string
+        description: The conversation token returned when the conversation was started.
+        required: true
+      tags:
+      - Assistant
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantConversation'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/assistant/conversation/messages/:
+    post:
+      operationId: assistant_message_create
+      description: Send one message and receive the assistant's answer to it.
+      parameters:
+      - in: header
+        name: X-Assistant-Token
+        schema:
+          type: string
+        description: The conversation token returned when the conversation was started.
+        required: true
+      tags:
+      - Assistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantTurn'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/assistant/conversations/:
+    post:
+      operationId: assistant_conversation_create
+      description: Start a conversation. The token in the response is shown once.
+      tags:
+      - Assistant
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantConversationCreated'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/auth/csrf/:
     get:
@@ -722,6 +839,10 @@ paths:
           description: ''
     post:
       operationId: auth_privacy_requests_create
+      description: 'File an ACCESS or ERASURE request. ERASURE closes the account:
+        every other session is signed out at once and this one ends within minutes,
+        and the account is erased at `scheduled_for` unless the person signs in again
+        first. Repeating an ERASURE request returns the open one.'
       tags:
       - Privacy
       requestBody:
@@ -745,6 +866,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrivacyRequest'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'ERASURE only: the account cannot be deleted yet (`account_deletion_open_work`:
+            bookings still open).'
   /api/v1/auth/profile/:
     get:
       operationId: auth_profile_retrieve
@@ -6525,6 +6653,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/area-requests/:
+    get:
+      operationId: operations_area_requests_list
+      summary: List area requests grouped by PIN code
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: PIN or place search query
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Status filter: WAITING, AREA_FULL, READY, DONE, NOT_VALID, ALL'
+      - in: query
+        name: trade
+        schema:
+          type: string
+        description: Trade name filter
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsAreaRequestGroup'
+          description: ''
+  /api/v1/operations/area-requests/{postal_code}/dismiss/:
+    post:
+      operationId: operations_area_requests_dismiss_create
+      summary: Dismiss area request(s) ('Mark not valid')
+      parameters:
+      - in: path
+        name: postal_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaRequestDismissRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaRequestDismissRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaRequestDismissRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Requests dismissed
+  /api/v1/operations/area-requests/{postal_code}/notify/:
+    post:
+      operationId: operations_area_requests_notify_create
+      summary: Notify partners who asked for a postal code
+      parameters:
+      - in: path
+        name: postal_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAreaRequestNotifyResult'
+          description: ''
   /api/v1/operations/assisted-checkouts/:
     post:
       operationId: operations_assisted_checkouts_create
@@ -7975,6 +8185,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/coverage-lite/:
+    get:
+      operationId: operations_coverage_lite_retrieve
+      summary: Coverage lite report across areas, zones and trades
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+        description: 'Export format: json or csv'
+      - in: query
+        name: trade
+        schema:
+          type: string
+        description: Trade filter
+      - in: query
+        name: zone
+        schema:
+          type: string
+        description: Zone filter
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCoverageLite'
+            text/csv:
+              schema:
+                $ref: '#/components/schemas/OperationsCoverageLite'
+          description: ''
   /api/v1/operations/crew-documents/{document_id}/review/:
     post:
       operationId: m2_operations_crew_document_review
@@ -8932,6 +9176,11 @@ paths:
       operationId: operations_partner_application_queue_list
       parameters:
       - in: query
+        name: area_pending
+        schema:
+          type: boolean
+          default: false
+      - in: query
         name: assigned_to_me
         schema:
           type: boolean
@@ -8954,6 +9203,23 @@ paths:
           * `SUBMITTED` - SUBMITTED
           * `UNDER_REVIEW` - UNDER_REVIEW
           * `CHANGES_REQUIRED` - CHANGES_REQUIRED
+      - in: query
+        name: track
+        schema:
+          enum:
+          - SERVICES
+          - STAY_HOST
+          - RENTAL_OWNER
+          - EMPLOYER
+          - RIDE_CAPTAIN
+          type: string
+          minLength: 1
+        description: |-
+          * `SERVICES` - Offer services
+          * `STAY_HOST` - List my property
+          * `RENTAL_OWNER` - Rent out items
+          * `EMPLOYER` - Hire staff
+          * `RIDE_CAPTAIN` - Drive with VSolve Rides
       - in: query
         name: unassigned
         schema:
@@ -9001,7 +9267,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartnerApplication'
+                $ref: '#/components/schemas/OperationsPartnerApplicationDetail'
           description: ''
         '403':
           content:
@@ -9080,6 +9346,73 @@ paths:
                       request_id: req_example
                   summary: Partner application version conflict
           description: ''
+  /api/v1/operations/partner-applications/{application_id}/employer-checks/{code}/:
+    put:
+      operationId: operations_partner_application_employer_check_update
+      description: 'Pass or fail one manual check on an employer application. 400
+        codes: `employer_check_not_applicable`, `employer_check_note_required`. 409
+        `partner_review_ownership_conflict` unless you hold the application.'
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: code
+        schema:
+          type: string
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployerCheckInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmployerCheckInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmployerCheckInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmployerCheck'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/partner-applications/{application_id}/release/:
     post:
       operationId: operations_partner_applications_release_create
@@ -9146,6 +9479,63 @@ paths:
                       retryable: true
                       request_id: req_example
                   summary: Partner application version conflict
+          description: ''
+  /api/v1/operations/partner-applications/{application_id}/remove-area/:
+    post:
+      operationId: operations_partner_application_remove_area
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsRemoveAreaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsRemoveAreaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsRemoveAreaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/operations/partner-applications/{application_id}/transition/:
     post:
@@ -9426,6 +9816,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/partners/{partner_id}/add-area/:
+    post:
+      operationId: operations_partners_add_area_create
+      summary: Add an area to an approved partner and copy their usual hours
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerAddAreaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerAddAreaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerAddAreaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Area added and schedule copied
   /api/v1/operations/partners/{partner_id}/availability/:
     get:
       operationId: operations_partner_schedule_retrieve
@@ -10234,6 +10654,344 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/operations/privacy-requests/:
+    get:
+      operationId: operations_privacy_requests_list
+      description: Deletion and data-copy requests. `?state=open` (default) is the
+        working queue.
+      parameters:
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - ACCESS
+          - ERASURE
+      - in: query
+        name: state
+        schema:
+          type: string
+          enum:
+          - all
+          - closed
+          - open
+        description: '`open`: RECEIVED or IN_REVIEW, soonest deletion first.'
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/privacy-requests/{privacy_request_id}/cancel/:
+    post:
+      operationId: operations_privacy_request_cancel
+      description: The person asked support to keep their account.
+      parameters:
+      - in: path
+        name: privacy_request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/privacy-requests/{privacy_request_id}/complete/:
+    post:
+      operationId: operations_privacy_request_complete
+      description: Record that a data copy was sent. ACCESS requests only.
+      parameters:
+      - in: path
+        name: privacy_request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestNoteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestNoteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestNoteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/privacy-requests/{privacy_request_id}/erase/:
+    post:
+      operationId: operations_privacy_request_erase
+      description: Refused with 409 `account_deletion_held` while something is unsettled;
+        the message lists what. 403 without a recent Operations step-up.
+      parameters:
+      - in: path
+        name: privacy_request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/privacy-requests/{privacy_request_id}/hold/:
+    post:
+      operationId: operations_privacy_request_hold
+      description: Stop the clock on a deletion (a dispute, a legal request). Waits
+        for a release.
+      parameters:
+      - in: path
+        name: privacy_request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/privacy-requests/{privacy_request_id}/reject/:
+    post:
+      operationId: operations_privacy_request_reject
+      description: Refuse a request, with the reason the person will be told.
+      parameters:
+      - in: path
+        name: privacy_request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/privacy-requests/{privacy_request_id}/release/:
+    post:
+      operationId: operations_privacy_request_release
+      description: Put a held deletion back on its schedule. Past its date, the next
+        hourly run erases it.
+      parameters:
+      - in: path
+        name: privacy_request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/queues/:
     get:
       operationId: m2_operations_queues
@@ -10469,6 +11227,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/recruitment-push/:
+    get:
+      operationId: operations_recruitment_push_list
+      summary: Red and amber areas to recruit for, with a tagged apply link each
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+        description: 'Export format: json or csv'
+      - in: query
+        name: zone
+        schema:
+          type: string
+        description: Zone filter
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsRecruitmentNeed'
+            text/csv:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsRecruitmentNeed'
           description: ''
   /api/v1/operations/refunds/:
     get:
@@ -11371,6 +12162,293 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/service-areas/:
+    get:
+      operationId: operations_service_areas_list
+      summary: List all service areas for operations
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsServiceAreaList'
+          description: ''
+    post:
+      operationId: operations_service_areas_create
+      summary: Create a new service area
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsServiceAreaList'
+          description: ''
+  /api/v1/operations/service-areas/{area_id}/:
+    get:
+      operationId: operations_service_areas_retrieve
+      summary: Get service area detail including PINs and services
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsServiceAreaDetail'
+          description: ''
+    patch:
+      operationId: operations_service_areas_partial_update
+      summary: Update service area attributes
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationsServiceAreaUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationsServiceAreaUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOperationsServiceAreaUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsServiceAreaDetail'
+          description: ''
+  /api/v1/operations/service-areas/{area_id}/pins/:
+    post:
+      operationId: operations_service_areas_pins_create
+      summary: Add a postal code to a service area
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaAddPinRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaAddPinRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaAddPinRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          description: PIN linked successfully
+  /api/v1/operations/service-areas/{area_id}/pins/{postal_code}/:
+    delete:
+      operationId: operations_service_areas_pins_destroy
+      summary: Remove a postal code from a service area
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: postal_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: PIN unlinked successfully
+  /api/v1/operations/service-areas/{area_id}/services/:
+    post:
+      operationId: operations_service_areas_services_create
+      summary: Toggle active status of a service variant in a service area
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaToggleServiceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaToggleServiceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsServiceAreaToggleServiceRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Service variant status updated
+  /api/v1/operations/service-areas/{area_id}/targets/:
+    get:
+      operationId: operations_service_areas_targets_retrieve
+      summary: An area's supply targets and how many approved partners it has against
+        them
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAreaTargets'
+          description: ''
+    put:
+      operationId: operations_service_areas_targets_update
+      summary: Replace an area's supply targets (empty or zero removes one)
+      parameters:
+      - in: path
+        name: area_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaTargetsUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaTargetsUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsAreaTargetsUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsAreaTargets'
+          description: ''
+  /api/v1/operations/service-areas/bulk-pins/apply/:
+    post:
+      operationId: operations_service_areas_bulk_pins_apply_create
+      summary: Apply bulk PIN CSV upload with conflict resolutions
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBulkPinApplyResult'
+          description: ''
+  /api/v1/operations/service-areas/bulk-pins/preview/:
+    post:
+      operationId: operations_service_areas_bulk_pins_preview_create
+      summary: Preview bulk PIN CSV upload
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsBulkPinApplyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBulkPinPreviewResult'
+          description: ''
   /api/v1/operations/service-feedback/:
     get:
       operationId: operations_service_feedback
@@ -11499,6 +12577,68 @@ paths:
                 $ref: '#/components/schemas/UnpayablePartner'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/users/{user_id}/deletion-request/:
+    post:
+      operationId: operations_user_deletion_request
+      description: |-
+        File a deletion for somebody who asked support (they could not use the app or website).
+
+        Support checks it is them first; the reason records how. The person is signed out
+        everywhere and gets the same grace period as a request they filed themselves.
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestReasonRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPrivacyRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -14017,6 +15157,128 @@ paths:
                   summary: Partner application version conflict
           description: ''
         '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/application/employer/:
+    patch:
+      operationId: partner_application_employer_partial_update
+      description: 'The only write path for the employer screens. 400 codes: `pin_code_invalid`,
+        `pin_incomplete`, `gstin_format`, `gstin_state`, `gstin_pan`, `gstin_checksum`,
+        `gstin_needs_gst_registered`, `business_proof_mismatch`, `employer_field_not_for_type`.'
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployerDetailsUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployerDetailsUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEmployerDetailsUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
+          description: '`partner_application_version_conflict`, `employer_track_required`
+            (not a hire-staff application) or `partner_transition_not_allowed` (the
+            application can no longer be edited).'
+  /api/v1/partner/application/employer/logo/:
+    post:
+      operationId: partner_application_employer_logo_create
+      description: '400 codes: `employer_logo_type`, `employer_logo_empty`, `employer_logo_too_large`,
+        `employer_field_not_for_type` (not hiring for a business).'
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: partner_application_employer_logo_destroy
+      description: 'A business employer''s public logo: JPEG, PNG or WebP, up to 2
+        MB.'
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -19489,6 +20751,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/work-catalog/:
+    get:
+      operationId: partner_work_catalog
+      description: |-
+        What an applicant can offer on "Your work", in one read.
+
+        Public, like the catalog it reads, and cacheable for the same five minutes. It replaces a walk
+        of one request per category and one per service that the apps made on every visit to the step.
+      tags:
+      - Partner application
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerWorkCategory'
+          description: ''
   /api/v1/partner/workspaces/:
     get:
       operationId: m2_partner_workspace_list
@@ -19662,6 +20945,57 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/payout-webhooks/cashfree/:
+    post:
+      operationId: payout_webhook_cashfree
+      description: |-
+        Cashfree Payouts V2 transfer events, verified with the Payouts client secret.
+
+        Applied inline, like RazorpayX's. Cashfree sends no event id, so the body's hash names the
+        delivery: a redelivery is the same body, and `event_time` tells two real events apart.
+      parameters:
+      - in: header
+        name: x-webhook-signature
+        schema:
+          type: string
+        description: Base64 HMAC-SHA256 of the timestamp followed by the raw body,
+          keyed with the Cashfree Payouts client secret.
+        required: true
+      - in: header
+        name: x-webhook-timestamp
+        schema:
+          type: string
+        description: The timestamp Cashfree signed together with the body.
+        required: true
+      tags:
+      - Payout Webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutWebhookAccepted'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -23966,6 +25300,24 @@ components:
         reason:
           type: string
           maxLength: 480
+    ActionTypeEnum:
+      enum:
+      - QUICK_REPLY
+      - LOGIN
+      - ADD_ADDRESS
+      - OPEN_LINK
+      - QUOTE
+      - PAY
+      - VIEW_BOOKING
+      type: string
+      description: |-
+        * `QUICK_REPLY` - QUICK_REPLY
+        * `LOGIN` - LOGIN
+        * `ADD_ADDRESS` - ADD_ADDRESS
+        * `OPEN_LINK` - OPEN_LINK
+        * `QUOTE` - QUOTE
+        * `PAY` - PAY
+        * `VIEW_BOOKING` - VIEW_BOOKING
     ActiveRole:
       type: object
       properties:
@@ -24319,7 +25671,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusD32Enum'
+          - $ref: '#/components/schemas/Status8ebEnum'
           readOnly: true
         applicant_snapshot: {}
         applicant_name:
@@ -24491,7 +25843,7 @@ components:
       type: object
       properties:
         status:
-          $ref: '#/components/schemas/StatusD32Enum'
+          $ref: '#/components/schemas/Status8ebEnum'
       required:
       - status
     ArchetypeEnum:
@@ -24532,6 +25884,111 @@ components:
       - display_name
       - experience_years
       - headline
+    AssistantAction:
+      type: object
+      description: A card under a message. `message` is the text to send when a reply
+        chip is tapped.
+      properties:
+        action_type:
+          $ref: '#/components/schemas/ActionTypeEnum'
+        label:
+          type: string
+        href:
+          type: string
+        message:
+          type: string
+        amount:
+          type: string
+        lines:
+          type: array
+          items:
+            type: string
+      required:
+      - action_type
+      - label
+    AssistantConversation:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantMessage'
+        is_answering:
+          type: boolean
+        signed_in:
+          type: boolean
+        has_open_booking:
+          type: boolean
+      required:
+      - has_open_booking
+      - is_answering
+      - messages
+      - signed_in
+    AssistantConversationCreated:
+      type: object
+      properties:
+        conversation_token:
+          type: string
+          description: Send as the X-Assistant-Token header. Shown once; keep it on
+            the device.
+        conversation:
+          $ref: '#/components/schemas/AssistantConversation'
+      required:
+      - conversation
+      - conversation_token
+    AssistantMessage:
+      type: object
+      properties:
+        sequence:
+          type: integer
+          readOnly: true
+        sender:
+          allOf:
+          - $ref: '#/components/schemas/SenderEnum'
+          readOnly: true
+        text:
+          type: string
+          readOnly: true
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantAction'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actions
+      - created_at
+      - sender
+      - sequence
+      - text
+    AssistantMessageCreateRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        client_message_id:
+          type: string
+          minLength: 1
+          description: A client-generated id. Resending the same id replays the stored
+            answer.
+          pattern: ^[A-Za-z0-9_-]{8,64}$
+      required:
+      - client_message_id
+      - text
+    AssistantTurn:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantMessage'
+      required:
+      - messages
     AssistedCheckoutCreateRequest:
       type: object
       properties:
@@ -25192,6 +26649,54 @@ components:
           minLength: 1
       required:
       - address_id
+    BusinessCategoryEnum:
+      enum:
+      - SHOP
+      - RESTAURANT
+      - CLINIC
+      - OFFICE
+      - SCHOOL
+      - FACTORY
+      - CONSTRUCTION
+      - FACILITY
+      - LOGISTICS
+      - HOTEL
+      - SALON
+      - OTHER
+      type: string
+      description: |-
+        * `SHOP` - Shop / retail
+        * `RESTAURANT` - Restaurant / food
+        * `CLINIC` - Clinic / hospital
+        * `OFFICE` - Office / IT
+        * `SCHOOL` - School / coaching
+        * `FACTORY` - Factory / workshop
+        * `CONSTRUCTION` - Construction
+        * `FACILITY` - Security / facility services
+        * `LOGISTICS` - Delivery / logistics
+        * `HOTEL` - Hotel
+        * `SALON` - Salon / beauty
+        * `OTHER` - Other
+    BusinessProofTypeEnum:
+      enum:
+      - GST_CERTIFICATE
+      - INCORPORATION_CERTIFICATE
+      - COMPANY_PAN
+      - SHOP_ESTABLISHMENT
+      - TRADE_LICENCE
+      - FSSAI
+      - CLINIC_REGISTRATION
+      - UDYAM
+      type: string
+      description: |-
+        * `GST_CERTIFICATE` - GST certificate
+        * `INCORPORATION_CERTIFICATE` - Incorporation certificate
+        * `COMPANY_PAN` - Company PAN
+        * `SHOP_ESTABLISHMENT` - Shop & Establishment licence
+        * `TRADE_LICENCE` - Trade licence
+        * `FSSAI` - FSSAI licence
+        * `CLINIC_REGISTRATION` - Clinic registration
+        * `UDYAM` - Udyam registration
     BusinessTypeOption:
       type: object
       properties:
@@ -26487,11 +27992,13 @@ components:
       - SMS
       - EMAIL
       - PUSH
+      - WHATSAPP
       type: string
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
         * `PUSH` - Push
+        * `WHATSAPP` - WhatsApp
     ChargebackRequest:
       type: object
       description: |-
@@ -27149,6 +28656,18 @@ components:
       required:
       - channel
       - purpose
+    CompanySizeEnum:
+      enum:
+      - SIZE_1_10
+      - SIZE_11_50
+      - SIZE_51_200
+      - SIZE_200_PLUS
+      type: string
+      description: |-
+        * `SIZE_1_10` - 1-10
+        * `SIZE_11_50` - 11-50
+        * `SIZE_51_200` - 51-200
+        * `SIZE_200_PLUS` - 200+
     CompatibilityRule:
       type: object
       properties:
@@ -30044,6 +31563,302 @@ components:
       - period
       - rides
       - since
+    EmployerBusiness:
+      type: object
+      description: An employer's business as the applicant sees it. The logo is a
+        public, absolute URL.
+      properties:
+        trade_name:
+          type: string
+          readOnly: true
+        legal_name:
+          type: string
+          readOnly: true
+        legal_structure:
+          allOf:
+          - $ref: '#/components/schemas/LegalStructureEnum'
+          readOnly: true
+        business_category:
+          allOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          readOnly: true
+        company_size:
+          allOf:
+          - $ref: '#/components/schemas/CompanySizeEnum'
+          readOnly: true
+        gst_registered:
+          type: boolean
+          readOnly: true
+        gstin:
+          type: string
+          readOnly: true
+        business_proof_type:
+          allOf:
+          - $ref: '#/components/schemas/BusinessProofTypeEnum'
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        pin_code:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        logo_url:
+          type: string
+          readOnly: true
+        website_url:
+          type: string
+          format: uri
+          readOnly: true
+      required:
+      - address
+      - area
+      - business_category
+      - business_proof_type
+      - city
+      - company_size
+      - gst_registered
+      - gstin
+      - latitude
+      - legal_name
+      - legal_structure
+      - logo_url
+      - longitude
+      - pin_code
+      - state
+      - trade_name
+      - website_url
+    EmployerBusinessInputRequest:
+      type: object
+      properties:
+        trade_name:
+          type: string
+          maxLength: 120
+        legal_name:
+          type: string
+          maxLength: 200
+        legal_structure:
+          oneOf:
+          - $ref: '#/components/schemas/LegalStructureEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        business_category:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        company_size:
+          oneOf:
+          - $ref: '#/components/schemas/CompanySizeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        gst_registered:
+          type: boolean
+        gstin:
+          type: string
+          maxLength: 20
+        business_proof_type:
+          oneOf:
+          - $ref: '#/components/schemas/BusinessProofTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        address:
+          type: string
+          maxLength: 240
+        area:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 80
+        state:
+          type: string
+          maxLength: 40
+        pin_code:
+          type: string
+          maxLength: 6
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        website_url:
+          type: string
+          format: uri
+          maxLength: 300
+    EmployerCheck:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/EmployerCheckCodeEnum'
+        label:
+          type: string
+        result:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ResultEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        note:
+          type: string
+        checked_by_name:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - checked_at
+      - checked_by_name
+      - code
+      - label
+      - note
+      - result
+    EmployerCheckCodeEnum:
+      enum:
+      - NAME_MATCHES_ID
+      - SELFIE_MATCHES_ID
+      - GST_ACTIVE_ON_PORTAL
+      - PROOF_MATCHES_BUSINESS
+      - POSTER_ID_MATCHES
+      - AUTHORITY_CONFIRMED
+      type: string
+      description: |-
+        * `NAME_MATCHES_ID` - The name on the ID matches the name they gave
+        * `SELFIE_MATCHES_ID` - The selfie is the same person as the ID photo
+        * `GST_ACTIVE_ON_PORTAL` - GSTIN is Active on the GST portal and the legal name matches
+        * `PROOF_MATCHES_BUSINESS` - The business proof shows the same legal name and isn't edited
+        * `POSTER_ID_MATCHES` - The poster's ID matches the name they gave
+        * `AUTHORITY_CONFIRMED` - Owner: ID name matches the business owner. Others: the owner's letter is valid
+    EmployerCheckInputRequest:
+      type: object
+      properties:
+        result:
+          $ref: '#/components/schemas/ResultEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 480
+      required:
+      - result
+    EmployerDetails:
+      type: object
+      description: Who is hiring. `business` is only present for someone hiring for
+        a business.
+      properties:
+        hiring_as:
+          allOf:
+          - $ref: '#/components/schemas/HiringAsEnum'
+          readOnly: true
+        poster_role:
+          allOf:
+          - $ref: '#/components/schemas/PosterRoleEnum'
+          readOnly: true
+        id_document_type:
+          allOf:
+          - $ref: '#/components/schemas/IdDocumentTypeEnum'
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        pin_code:
+          type: string
+          readOnly: true
+        business:
+          allOf:
+          - $ref: '#/components/schemas/EmployerBusiness'
+          nullable: true
+          readOnly: true
+        missing_fields:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - area
+      - business
+      - city
+      - email
+      - hiring_as
+      - id_document_type
+      - missing_fields
+      - pin_code
+      - poster_role
+    EmployerHint:
+      type: object
+      properties:
+        code:
+          type: string
+        level:
+          $ref: '#/components/schemas/LevelEnum'
+        message:
+          type: string
+      required:
+      - code
+      - level
+      - message
+    EmployerIdentity:
+      type: object
+      description: Who a job is shown as hiring. An individual is a short name with
+        no street address.
+      properties:
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/EmployerIdentityKindEnum'
+        locality:
+          type: string
+        is_verified:
+          type: boolean
+        logo_url:
+          type: string
+        industry_label:
+          type: string
+        size_label:
+          type: string
+      required:
+      - industry_label
+      - is_verified
+      - kind
+      - locality
+      - logo_url
+      - name
+      - size_label
+    EmployerIdentityKindEnum:
+      enum:
+      - BUSINESS
+      - INDIVIDUAL
+      type: string
+      description: |-
+        * `BUSINESS` - Business
+        * `INDIVIDUAL` - Individual
     EngageKillSwitchRequestRequest:
       type: object
       properties:
@@ -31920,6 +33735,14 @@ components:
             $ref: '#/components/schemas/DeliverableInputRequest'
       required:
       - items
+    HiringAsEnum:
+      enum:
+      - INDIVIDUAL
+      - BUSINESS
+      type: string
+      description: |-
+        * `INDIVIDUAL` - For myself or my home
+        * `BUSINESS` - For my business
     HostStaySummary:
       type: object
       properties:
@@ -32071,6 +33894,20 @@ components:
         * `pet-photography` - Pet photography
         * `workforce` - Workforce
         * `custom-project` - Custom project
+    IdDocumentTypeEnum:
+      enum:
+      - AADHAAR_MASKED
+      - PAN
+      - DRIVING_LICENCE
+      - VOTER_ID
+      - PASSPORT
+      type: string
+      description: |-
+        * `AADHAAR_MASKED` - Masked Aadhaar
+        * `PAN` - PAN
+        * `DRIVING_LICENCE` - Driving licence
+        * `VOTER_ID` - Voter ID
+        * `PASSPORT` - Passport
     InstantAvailability:
       type: object
       properties:
@@ -32214,11 +34051,14 @@ components:
           type: integer
         connected:
           type: integer
+        hired:
+          type: integer
         matches:
           type: integer
       required:
       - applied
       - connected
+      - hired
       - interviews
       - matches
       - shortlisted
@@ -32753,6 +34593,28 @@ components:
         * `RESERVED` - Reserved in a batch
         * `PAID` - Paid
         * `RELEASED` - Released
+    LegalStructureEnum:
+      enum:
+      - PROPRIETORSHIP
+      - PARTNERSHIP_LLP
+      - COMPANY
+      - TRUST_SOCIETY_NGO
+      - GOVERNMENT
+      type: string
+      description: |-
+        * `PROPRIETORSHIP` - Proprietorship
+        * `PARTNERSHIP_LLP` - Partnership / LLP
+        * `COMPANY` - Company
+        * `TRUST_SOCIETY_NGO` - Trust / society / NGO
+        * `GOVERNMENT` - Government
+    LevelEnum:
+      enum:
+      - OK
+      - WARN
+      type: string
+      description: |-
+        * `OK` - OK
+        * `WARN` - WARN
     LifecycleStatusEnum:
       enum:
       - DRAFT
@@ -32803,6 +34665,10 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
         poster_name:
           type: string
+          readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerIdentity'
           readOnly: true
         service_name:
           type: string
@@ -32935,6 +34801,7 @@ components:
       - city
       - contact_masked
       - description
+      - employer
       - experience_band
       - id
       - job_category
@@ -33088,6 +34955,10 @@ components:
         poster_name:
           type: string
           readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerIdentity'
+          readOnly: true
         service_name:
           type: string
           readOnly: true
@@ -33203,6 +35074,7 @@ components:
       - area
       - benefits
       - city
+      - employer
       - experience_band
       - id
       - job_category
@@ -33958,6 +35830,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
           readOnly: true
+        track:
+          allOf:
+          - $ref: '#/components/schemas/TrackEnum'
+          readOnly: true
         version:
           type: integer
           readOnly: true
@@ -33983,13 +35859,23 @@ components:
           type: string
           format: date-time
           readOnly: true
+        area_pending:
+          type: boolean
+          readOnly: true
+        area_tag:
+          type: string
+          nullable: true
+          readOnly: true
       required:
+      - area_pending
+      - area_tag
       - display_name
       - id
       - review_assigned_at
       - review_assigned_to_id
       - status
       - submitted_at
+      - track
       - updated_at
       - version
     OperationsApplicationQueuePage:
@@ -34014,6 +35900,157 @@ components:
       - next
       - previous
       - results
+    OperationsAreaOverallSupply:
+      type: object
+      properties:
+        target_partners:
+          type: integer
+          nullable: true
+        alert_below:
+          type: integer
+          nullable: true
+        approved_partners:
+          type: integer
+        flag:
+          type: string
+      required:
+      - alert_below
+      - approved_partners
+      - flag
+      - target_partners
+    OperationsAreaRequestDismissRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+        postal_code:
+          type: string
+          default: ''
+        application_id:
+          type: string
+          format: uuid
+          nullable: true
+    OperationsAreaRequestGroup:
+      type: object
+      properties:
+        postal_code:
+          type: string
+        place:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        in_pin_list:
+          type: boolean
+        status:
+          type: string
+        covering_area_id:
+          type: string
+          format: uuid
+          nullable: true
+        covering_area_name:
+          type: string
+          nullable: true
+        request_count:
+          type: integer
+        trades:
+          type: array
+          items:
+            type: string
+        trade_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsAreaRequestTradeCount'
+        first_requested_at:
+          type: string
+          format: date-time
+        latest_requested_at:
+          type: string
+          format: date-time
+        notified_at:
+          type: string
+          format: date-time
+          nullable: true
+        customer_lookups_28d:
+          type: integer
+      required:
+      - covering_area_id
+      - covering_area_name
+      - customer_lookups_28d
+      - first_requested_at
+      - in_pin_list
+      - latest_requested_at
+      - notified_at
+      - place
+      - postal_code
+      - request_count
+      - state
+      - status
+      - trade_counts
+      - trades
+    OperationsAreaRequestNotifyResult:
+      type: object
+      properties:
+        postal_code:
+          type: string
+        notified_count:
+          type: integer
+        notified_applications:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        skipped_applications:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - notified_applications
+      - notified_count
+      - postal_code
+    OperationsAreaRequestTradeCount:
+      type: object
+      properties:
+        trade_name:
+          type: string
+        skill_code:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - skill_code
+      - trade_name
+    OperationsAreaTargets:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        overall:
+          $ref: '#/components/schemas/OperationsAreaOverallSupply'
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTradeSupply'
+      required:
+      - overall
+      - service_area_id
+      - trades
+    OperationsAreaTargetsUpdateRequest:
+      type: object
+      properties:
+        overall:
+          allOf:
+          - $ref: '#/components/schemas/OperationsSupplyTargetInputRequest'
+          nullable: true
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTradeSupplyTargetInputRequest'
     OperationsBooking:
       type: object
       description: |-
@@ -34260,6 +36297,130 @@ components:
       - services
       - status
       - total_paise
+    OperationsBulkPinApplyRequest:
+      type: object
+      properties:
+        csv_content:
+          type: string
+          default: ''
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBulkPinRowRequest'
+        conflict_resolutions:
+          type: object
+          additionalProperties:
+            enum:
+            - MOVE
+            - SKIP
+            type: string
+            description: |-
+              * `MOVE` - MOVE
+              * `SKIP` - SKIP
+    OperationsBulkPinApplyResult:
+      type: object
+      properties:
+        added:
+          type: integer
+        moved:
+          type: integer
+        skipped:
+          type: integer
+        created_postal_codes:
+          type: integer
+        row_errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - added
+      - created_postal_codes
+      - moved
+      - row_errors
+      - skipped
+    OperationsBulkPinConflict:
+      type: object
+      properties:
+        pin:
+          type: string
+        target_area_slug:
+          type: string
+        target_area_id:
+          type: string
+          format: uuid
+        current_area_slug:
+          type: string
+        current_area_id:
+          type: string
+          format: uuid
+        current_area_name:
+          type: string
+      required:
+      - current_area_id
+      - current_area_name
+      - current_area_slug
+      - pin
+      - target_area_id
+      - target_area_slug
+    OperationsBulkPinPreviewResult:
+      type: object
+      properties:
+        total:
+          type: integer
+        add:
+          type: integer
+        same:
+          type: integer
+        conflict:
+          type: integer
+        invalid:
+          type: integer
+        unknown_area:
+          type: integer
+        unknown_pin:
+          type: integer
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsBulkPinConflict'
+        row_errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - add
+      - conflict
+      - conflicts
+      - invalid
+      - row_errors
+      - same
+      - total
+      - unknown_area
+      - unknown_pin
+    OperationsBulkPinRowRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          minLength: 1
+          pattern: ^\d{6}$
+        area_slug:
+          type: string
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+        city:
+          type: string
+          default: ''
+          maxLength: 120
+        state:
+          type: string
+          default: ''
+          maxLength: 120
+      required:
+      - area_slug
+      - pin
     OperationsCancelRequest:
       type: object
       properties:
@@ -34839,6 +37000,142 @@ components:
         * `QUALITY_SUPPORT` - Quality support
         * `SAFETY` - Restricted safety team
         * `FINANCE` - Finance Operations
+    OperationsCoverageLite:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/OperationsCoverageLiteSummary'
+        areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCoverageLiteArea'
+      required:
+      - areas
+      - summary
+    OperationsCoverageLiteArea:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        zone:
+          type: string
+        is_active:
+          type: boolean
+        is_accepting_partners:
+          type: boolean
+        postal_codes:
+          type: array
+          items:
+            type: string
+        partner_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        partner_trades:
+          type: object
+          additionalProperties:
+            type: integer
+        open_asked_pins_count:
+          type: integer
+        bookings_28d_count:
+          type: integer
+        offer_expiries_28d_count:
+          type: integer
+        approved_partners:
+          type: integer
+        target_partners:
+          type: integer
+          nullable: true
+        alert_below:
+          type: integer
+          nullable: true
+        flag:
+          type: string
+        trade_targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTradeSupply'
+        turned_away_28d_count:
+          type: integer
+        trend:
+          type: array
+          items:
+            type: integer
+            nullable: true
+      required:
+      - alert_below
+      - approved_partners
+      - bookings_28d_count
+      - flag
+      - id
+      - is_accepting_partners
+      - is_active
+      - name
+      - offer_expiries_28d_count
+      - open_asked_pins_count
+      - partner_counts
+      - partner_trades
+      - postal_codes
+      - slug
+      - target_partners
+      - trade_targets
+      - trend
+      - turned_away_28d_count
+      - zone
+    OperationsCoverageLiteSummary:
+      type: object
+      properties:
+        total_areas:
+          type: integer
+        total_zones:
+          type: integer
+        total_pins:
+          type: integer
+        total_partners:
+          type: integer
+        total_open_asked_pins:
+          type: integer
+        total_bookings_28d:
+          type: integer
+        total_offer_expiries_28d:
+          type: integer
+        total_turned_away_28d:
+          type: integer
+        red_areas:
+          type: integer
+        amber_areas:
+          type: integer
+        green_areas:
+          type: integer
+        trend_weeks:
+          type: array
+          items:
+            type: string
+            format: date
+        trend:
+          type: array
+          items:
+            type: integer
+            nullable: true
+      required:
+      - amber_areas
+      - green_areas
+      - red_areas
+      - total_areas
+      - total_bookings_28d
+      - total_offer_expiries_28d
+      - total_open_asked_pins
+      - total_partners
+      - total_pins
+      - total_turned_away_28d
+      - total_zones
+      - trend
+      - trend_weeks
     OperationsCustomerBlock:
       type: object
       properties:
@@ -35107,6 +37404,202 @@ components:
       required:
       - balance
       - bookings
+    OperationsPartnerAddAreaRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          default: Area opened
+      required:
+      - service_area_id
+    OperationsPartnerApplicationDetail:
+      type: object
+      description: |-
+        The application as Operations reads it: the applicant's view plus what only a reviewer sees.
+
+        A separate class, not extra fields on `PartnerApplicationSerializer`, so the hints and checks
+        cannot reach an applicant whichever serializer context a view forgets to pass.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
+          readOnly: true
+        track:
+          allOf:
+          - $ref: '#/components/schemas/TrackEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        biography:
+          type: string
+          readOnly: true
+        experience_years:
+          type: integer
+          readOnly: true
+        skill_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_variant_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_area_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAreaRequest'
+          readOnly: true
+        area_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationAreaDetail'
+          readOnly: true
+        services_not_offered:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        change_request_message:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        review_assigned_to_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerConsent'
+          readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocument'
+          readOnly: true
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationTransition'
+          readOnly: true
+        can_edit:
+          type: boolean
+          readOnly: true
+        required_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        offered_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerDetails'
+          nullable: true
+          readOnly: true
+        consents_complete:
+          type: boolean
+          readOnly: true
+        business_details_complete:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        employer_hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmployerHint'
+          readOnly: true
+        employer_checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmployerCheck'
+          readOnly: true
+      required:
+      - area_details
+      - area_requests
+      - biography
+      - business_details_complete
+      - can_edit
+      - change_request_message
+      - consents
+      - consents_complete
+      - created_at
+      - display_name
+      - documents
+      - employer
+      - employer_checks
+      - employer_hints
+      - experience_years
+      - id
+      - offered_document_kinds
+      - partner_id
+      - requested_postal_codes
+      - required_document_kinds
+      - review_assigned_at
+      - review_assigned_to_id
+      - reviewed_at
+      - service_area_ids
+      - service_variant_ids
+      - services_not_offered
+      - skill_codes
+      - status
+      - submitted_at
+      - track
+      - transitions
+      - updated_at
+      - version
     OperationsPartnerBalance:
       type: object
       properties:
@@ -35499,6 +37992,63 @@ components:
       - next
       - previous
       - results
+    OperationsPrivacyRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/PrivacyRequestKindEnum'
+        status:
+          $ref: '#/components/schemas/PrivacyStatusEnum'
+        requested_at:
+          type: string
+          format: date-time
+        scheduled_for:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+        handled_by_name:
+          type: string
+          nullable: true
+          description: The operator who last decided something about it.
+        held_by_operations:
+          type: boolean
+          description: IN_REVIEW only. True when an operator placed the hold, so only
+            a release restarts it; false when the scheduled sweep did, which re-checks
+            it every run.
+        person:
+          $ref: '#/components/schemas/PrivacyRequestPerson'
+        holds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrivacyRequestHold'
+          description: Open ERASURE requests only, worked out now. Empty means it
+            can be erased.
+      required:
+      - cancelled_at
+      - completed_at
+      - handled_by_name
+      - held_by_operations
+      - holds
+      - id
+      - kind
+      - notes
+      - person
+      - requested_at
+      - scheduled_for
+      - status
     OperationsReasonRequest:
       type: object
       description: Every safe Operations action takes a reason. `M2-AC-804` requires
@@ -35524,6 +38074,72 @@ components:
       required:
       - reason
       - to_archetype
+    OperationsRecruitmentNeed:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        zone:
+          type: string
+        flag:
+          type: string
+        approved_partners:
+          type: integer
+        target_partners:
+          type: integer
+          nullable: true
+        shortfall:
+          type: integer
+        trade_gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsRecruitmentTradeGap'
+        open_asked_pins_count:
+          type: integer
+        turned_away_28d_count:
+          type: integer
+        apply_link:
+          type: string
+      required:
+      - apply_link
+      - approved_partners
+      - flag
+      - name
+      - open_asked_pins_count
+      - service_area_id
+      - shortfall
+      - slug
+      - target_partners
+      - trade_gaps
+      - turned_away_28d_count
+      - zone
+    OperationsRecruitmentTradeGap:
+      type: object
+      properties:
+        skill_code:
+          type: string
+        skill_name:
+          type: string
+        approved_partners:
+          type: integer
+        target_partners:
+          type: integer
+        shortfall:
+          type: integer
+        flag:
+          type: string
+      required:
+      - approved_partners
+      - flag
+      - shortfall
+      - skill_code
+      - skill_name
+      - target_partners
     OperationsRefundReviewDecisionEnum:
       enum:
       - APPROVED
@@ -35546,6 +38162,21 @@ components:
       required:
       - decision
       - reason
+    OperationsRemoveAreaRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        service_area_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          default: ''
+      required:
+      - expected_version
+      - service_area_id
     OperationsRequestPage:
       type: object
       properties:
@@ -35675,6 +38306,234 @@ components:
       - accepted_at
       - document_version
       - purpose
+    OperationsServiceAreaAddPinRequest:
+      type: object
+      properties:
+        postal_code:
+          type: string
+          minLength: 1
+          pattern: ^\d{6}$
+        city:
+          type: string
+          maxLength: 120
+        state:
+          type: string
+          maxLength: 120
+      required:
+      - postal_code
+    OperationsServiceAreaCreateRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        zone:
+          type: string
+          default: ''
+          maxLength: 64
+        state_code:
+          type: string
+          default: ''
+          maxLength: 8
+        timezone:
+          type: string
+          minLength: 1
+          default: Asia/Kolkata
+          maxLength: 64
+        is_accepting_partners:
+          type: boolean
+          default: true
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - name
+      - slug
+    OperationsServiceAreaDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        zone:
+          type: string
+          readOnly: true
+        state_code:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        is_accepting_partners:
+          type: boolean
+          readOnly: true
+        postal_code_count:
+          type: integer
+          readOnly: true
+        postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        services_active_count:
+          type: integer
+          readOnly: true
+        services_total_count:
+          type: integer
+          readOnly: true
+        partner_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        postal_code_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostalCodeItem'
+          readOnly: true
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAreaServiceItem'
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_accepting_partners
+      - is_active
+      - name
+      - partner_count
+      - postal_code_count
+      - postal_code_items
+      - postal_codes
+      - services
+      - services_active_count
+      - services_total_count
+      - slug
+      - state_code
+      - timezone
+      - updated_at
+      - zone
+    OperationsServiceAreaList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        zone:
+          type: string
+          readOnly: true
+        state_code:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        is_accepting_partners:
+          type: boolean
+          readOnly: true
+        postal_code_count:
+          type: integer
+          readOnly: true
+        postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        services_active_count:
+          type: integer
+          readOnly: true
+        services_total_count:
+          type: integer
+          readOnly: true
+        partner_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - is_accepting_partners
+      - is_active
+      - name
+      - partner_count
+      - postal_code_count
+      - postal_codes
+      - services_active_count
+      - services_total_count
+      - slug
+      - state_code
+      - timezone
+      - updated_at
+      - zone
+    OperationsServiceAreaToggleServiceRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+          nullable: true
+        variant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        is_active:
+          type: boolean
+      required:
+      - is_active
+    OperationsSupplyTargetInputRequest:
+      type: object
+      properties:
+        target_partners:
+          type: integer
+          minimum: 0
+          nullable: true
+        alert_below:
+          type: integer
+          minimum: 0
+          nullable: true
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -35701,6 +38560,46 @@ components:
       - id
       - occurred_at
       - reason
+    OperationsTradeSupply:
+      type: object
+      properties:
+        skill_code:
+          type: string
+        skill_name:
+          type: string
+        target_partners:
+          type: integer
+          nullable: true
+        alert_below:
+          type: integer
+          nullable: true
+        approved_partners:
+          type: integer
+        flag:
+          type: string
+      required:
+      - alert_below
+      - approved_partners
+      - flag
+      - skill_code
+      - skill_name
+      - target_partners
+    OperationsTradeSupplyTargetInputRequest:
+      type: object
+      properties:
+        target_partners:
+          type: integer
+          minimum: 0
+          nullable: true
+        alert_below:
+          type: integer
+          minimum: 0
+          nullable: true
+        skill_code:
+          type: string
+          minLength: 1
+      required:
+      - skill_code
     OperationsTransitionRequest:
       type: object
       properties:
@@ -37570,6 +40469,26 @@ components:
           items:
             type: string
           readOnly: true
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        area_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAreaRequest'
+          readOnly: true
+        area_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationAreaDetail'
+          readOnly: true
+        services_not_offered:
+          type: array
+          items:
+            type: string
+          readOnly: true
         change_request_message:
           type: string
           readOnly: true
@@ -37616,7 +40535,20 @@ components:
           items:
             $ref: '#/components/schemas/PartnerDocumentKindEnum'
           readOnly: true
+        offered_document_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerDetails'
+          nullable: true
+          readOnly: true
         consents_complete:
+          type: boolean
+          readOnly: true
+        business_details_complete:
           type: boolean
           readOnly: true
         created_at:
@@ -37628,7 +40560,10 @@ components:
           format: date-time
           readOnly: true
       required:
+      - area_details
+      - area_requests
       - biography
+      - business_details_complete
       - can_edit
       - change_request_message
       - consents
@@ -37636,15 +40571,19 @@ components:
       - created_at
       - display_name
       - documents
+      - employer
       - experience_years
       - id
+      - offered_document_kinds
       - partner_id
+      - requested_postal_codes
       - required_document_kinds
       - review_assigned_at
       - review_assigned_to_id
       - reviewed_at
       - service_area_ids
       - service_variant_ids
+      - services_not_offered
       - skill_codes
       - status
       - submitted_at
@@ -37652,6 +40591,26 @@ components:
       - transitions
       - updated_at
       - version
+    PartnerApplicationAreaDetail:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        zone:
+          type: string
+        hours_set:
+          type: boolean
+        offers_partner_trades:
+          type: boolean
+      required:
+      - hours_set
+      - name
+      - offers_partner_trades
+      - service_area_id
+      - zone
     PartnerApplicationPage:
       type: object
       properties:
@@ -37726,6 +40685,47 @@ components:
       - reason
       - reason_code
       - to_status
+    PartnerAreaRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        postal_code:
+          type: string
+        place:
+          type: string
+          nullable: true
+        status:
+          type: string
+        covering_area_id:
+          type: string
+          format: uuid
+          nullable: true
+        covering_area_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        notified_at:
+          type: string
+          format: date-time
+          nullable: true
+        dismissed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - covering_area_id
+      - covering_area_name
+      - created_at
+      - dismissed_at
+      - id
+      - notified_at
+      - place
+      - postal_code
+      - status
     PartnerAvailabilityException:
       type: object
       properties:
@@ -38243,12 +41243,25 @@ components:
         upi_vpa:
           type: string
           readOnly: true
+        business_category:
+          allOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          readOnly: true
         updated_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - address
+      - business_category
       - business_type
+      - city
       - gst_registered
       - gstin
       - gstin_verified_at
@@ -38290,6 +41303,19 @@ components:
           type: string
           default: ''
           maxLength: 120
+        business_category:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/BusinessCategoryEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        city:
+          type: string
+          default: ''
+          maxLength: 80
+        address:
+          type: string
+          default: ''
+          maxLength: 240
       required:
       - business_type
     PartnerBusinessTypeEnum:
@@ -38673,6 +41699,9 @@ components:
       - TAX
       - BANK
       - BACKGROUND_CHECK
+      - SELFIE
+      - BUSINESS_PROOF
+      - AUTHORIZATION_LETTER
       - OTHER
       - DRIVING_LICENCE
       - VEHICLE_RC
@@ -38684,6 +41713,9 @@ components:
         * `TAX` - Tax document
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
+        * `SELFIE` - Selfie
+        * `BUSINESS_PROOF` - Business proof
+        * `AUTHORIZATION_LETTER` - Authorization letter
         * `OTHER` - Other
         * `DRIVING_LICENCE` - Driving licence
         * `VEHICLE_RC` - Vehicle registration certificate
@@ -39134,6 +42166,10 @@ components:
         poster_name:
           type: string
           readOnly: true
+        employer:
+          allOf:
+          - $ref: '#/components/schemas/EmployerIdentity'
+          readOnly: true
         service_name:
           type: string
           readOnly: true
@@ -39308,6 +42344,7 @@ components:
       - counts
       - created_at
       - description
+      - employer
       - experience_band
       - id
       - job_category
@@ -40097,18 +43134,28 @@ components:
         name:
           type: string
           readOnly: true
+        zone:
+          type: string
+          readOnly: true
         timezone:
           type: string
           readOnly: true
         is_accepting_partners:
           type: boolean
           readOnly: true
+        postal_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
       required:
       - id
       - is_accepting_partners
       - name
+      - postal_codes
       - slug
       - timezone
+      - zone
     PartnerSiteAddress:
       type: object
       description: |-
@@ -40710,6 +43757,73 @@ components:
         * `SENT` - SENT
         * `PAID` - PAID
         * `FAILED` - FAILED
+    PartnerWorkCategory:
+      type: object
+      description: A trade on "Your work" with every service a Partner can offer under
+        it.
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        icon_key:
+          type: string
+        image_url:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerWorkService'
+      required:
+      - icon_key
+      - id
+      - image_url
+      - name
+      - services
+      - slug
+    PartnerWorkService:
+      type: object
+      description: A service a Partner can offer ("Gas Stove Repair") with the variants
+        under it.
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerWorkVariant'
+      required:
+      - id
+      - name
+      - slug
+      - variants
+    PartnerWorkVariant:
+      type: object
+      description: One size or kind of a service ("2 burner"). The application stores
+        these ids.
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        required_skill_code:
+          type: string
+      required:
+      - code
+      - id
+      - name
+      - required_skill_code
     PartyCase:
       type: object
       description: |-
@@ -40960,6 +44074,44 @@ components:
         user_agent:
           type: string
           maxLength: 500
+    PatchedEmployerDetailsUpdateRequest:
+      type: object
+      description: |-
+        Save who is hiring. Business facts live in `business`, so a home pin code and a business
+        pin code can never be confused.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        hiring_as:
+          $ref: '#/components/schemas/HiringAsEnum'
+        poster_role:
+          oneOf:
+          - $ref: '#/components/schemas/PosterRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        id_document_type:
+          oneOf:
+          - $ref: '#/components/schemas/IdDocumentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        area:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 80
+        pin_code:
+          type: string
+          maxLength: 6
+        business:
+          $ref: '#/components/schemas/EmployerBusinessInputRequest'
     PatchedJobUpdateRequest:
       type: object
       description: |-
@@ -41084,6 +44236,27 @@ components:
           type: integer
           maximum: 2147483647
           minimum: 0
+    PatchedOperationsServiceAreaUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        zone:
+          type: string
+          maxLength: 64
+        state_code:
+          type: string
+          maxLength: 8
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        is_accepting_partners:
+          type: boolean
+        is_active:
+          type: boolean
     PatchedOpsDashboardPreferenceRequest:
       type: object
       properties:
@@ -41213,6 +44386,12 @@ components:
           items:
             type: string
             format: uuid
+        requested_postal_codes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 6
         consents:
           type: array
           items:
@@ -42435,6 +45614,38 @@ components:
       - code
       - is_exclusive
       - label
+    PostalCodeItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - city
+      - code
+      - id
+      - is_active
+      - state
+    PosterRoleEnum:
+      enum:
+      - OWNER
+      - HR
+      - MANAGER
+      - OTHER
+      type: string
+      description: |-
+        * `OWNER` - Owner / Partner / Director
+        * `HR` - HR / Recruiter
+        * `MANAGER` - Manager
+        * `OTHER` - Other
     PreferredStartRequest:
       type: object
       description: One visit's chosen start, keyed by the scheduling group it belongs
@@ -42519,16 +45730,30 @@ components:
           type: string
           format: date-time
           readOnly: true
+        scheduled_for:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: 'ERASURE only: when the account is erased unless the person
+            signs in again first. Null for ACCESS.'
         completed_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
+      - cancelled_at
       - completed_at
       - id
       - kind
       - requested_at
+      - scheduled_for
       - status
     PrivacyRequestCreateRequest:
       type: object
@@ -42537,6 +45762,34 @@ components:
           $ref: '#/components/schemas/PrivacyRequestKindEnum'
       required:
       - kind
+    PrivacyRequestHold:
+      type: object
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PrivacyRequestHoldKindEnum'
+          description: |-
+            What must be settled before the account can be erased.
+
+            * `open_work` - open_work
+            * `money_owed` - money_owed
+            * `wallet_balance` - wallet_balance
+        detail:
+          type: string
+          description: Plain words an operator can act on or relay.
+      required:
+      - detail
+      - kind
+    PrivacyRequestHoldKindEnum:
+      enum:
+      - open_work
+      - money_owed
+      - wallet_balance
+      type: string
+      description: |-
+        * `open_work` - open_work
+        * `money_owed` - money_owed
+        * `wallet_balance` - wallet_balance
     PrivacyRequestKindEnum:
       enum:
       - ACCESS
@@ -42545,18 +45798,66 @@ components:
       description: |-
         * `ACCESS` - Access
         * `ERASURE` - Erasure
+    PrivacyRequestNoteRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 1
+          description: How the copy was sent, kept in the request's history.
+          maxLength: 480
+      required:
+      - note
+    PrivacyRequestPerson:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Empty once erased.
+        phone_number:
+          type: string
+          description: An `erased-…` placeholder once erased.
+        roles:
+          type: array
+          items:
+            type: string
+        partner_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - name
+      - partner_id
+      - phone_number
+      - roles
+      - user_id
+    PrivacyRequestReasonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Kept in the request's history.
+          maxLength: 480
+      required:
+      - reason
     PrivacyStatusEnum:
       enum:
       - RECEIVED
       - IN_REVIEW
       - COMPLETED
       - REJECTED
+      - CANCELLED
       type: string
       description: |-
         * `RECEIVED` - Received
         * `IN_REVIEW` - In review
         * `COMPLETED` - Completed
         * `REJECTED` - Rejected
+        * `CANCELLED` - Cancelled
     ProbableDuplicate:
       type: object
       properties:
@@ -48197,6 +51498,14 @@ components:
         decline:
           type: boolean
           default: false
+    ResultEnum:
+      enum:
+      - PASS
+      - FAIL
+      type: string
+      description: |-
+        * `PASS` - Pass
+        * `FAIL` - Fail
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -49313,6 +52622,14 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
       required:
       - reason_code
+    SenderEnum:
+      enum:
+      - customer
+      - assistant
+      type: string
+      description: |-
+        * `customer` - customer
+        * `assistant` - assistant
     ServiceArea:
       type: object
       properties:
@@ -49327,6 +52644,9 @@ components:
         name:
           type: string
           readOnly: true
+        zone:
+          type: string
+          readOnly: true
         timezone:
           type: string
           readOnly: true
@@ -49335,6 +52655,27 @@ components:
       - name
       - slug
       - timezone
+      - zone
+    ServiceAreaServiceItem:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        variant_name:
+          type: string
+        trade_name:
+          type: string
+        skill_code:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - skill_code
+      - trade_name
+      - variant_id
+      - variant_name
     ServiceCard:
       type: object
       properties:
@@ -50919,6 +54260,30 @@ components:
         * `RESERVED` - Reserved
         * `CAPTURED` - Captured
         * `RELEASED` - Released
+    Status8ebEnum:
+      enum:
+      - SUBMITTED
+      - UNDER_REVIEW
+      - SHORTLISTED
+      - INTERVIEW
+      - CONNECTED
+      - CONTACTED
+      - HIRED
+      - REJECTED
+      - WITHDRAWN
+      - EXPIRED
+      type: string
+      description: |-
+        * `SUBMITTED` - Submitted
+        * `UNDER_REVIEW` - Under review
+        * `SHORTLISTED` - Shortlisted
+        * `INTERVIEW` - Interview
+        * `CONNECTED` - Connected
+        * `CONTACTED` - Contacted
+        * `HIRED` - Hired
+        * `REJECTED` - Rejected
+        * `WITHDRAWN` - Withdrawn
+        * `EXPIRED` - Expired
     Status9f9Enum:
       enum:
       - PENDING
@@ -50959,28 +54324,6 @@ components:
       description: |-
         * `OPEN` - Open
         * `RESOLVED` - Resolved
-    StatusD32Enum:
-      enum:
-      - SUBMITTED
-      - UNDER_REVIEW
-      - SHORTLISTED
-      - INTERVIEW
-      - CONNECTED
-      - CONTACTED
-      - REJECTED
-      - WITHDRAWN
-      - EXPIRED
-      type: string
-      description: |-
-        * `SUBMITTED` - Submitted
-        * `UNDER_REVIEW` - Under review
-        * `SHORTLISTED` - Shortlisted
-        * `INTERVIEW` - Interview
-        * `CONNECTED` - Connected
-        * `CONTACTED` - Contacted
-        * `REJECTED` - Rejected
-        * `WITHDRAWN` - Withdrawn
-        * `EXPIRED` - Expired
     StayAmenity:
       type: object
       properties:

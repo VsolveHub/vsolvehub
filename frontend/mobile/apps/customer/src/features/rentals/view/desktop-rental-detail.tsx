@@ -75,8 +75,6 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
   const [error, setError] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const pickupDateRef = useRef<any>(null);
-  const returnDateRef = useRef<any>(null);
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
   const [returnPickerOpen, setReturnPickerOpen] = useState(false);
 
@@ -449,58 +447,15 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
                     <Calendar size={14} color="#6B7280" />
                     <Text className="text-xs font-bold text-navy-950">Pickup Date</Text>
                   </View>
-                  {Platform.OS === "web" ? (
-                    <div
-                      onClick={() => {
-                        try {
-                          pickupDateRef.current?.showPicker?.();
-                        } catch {
-                          pickupDateRef.current?.focus?.();
-                        }
-                      }}
-                      className="relative flex items-center justify-between rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 cursor-pointer hover:border-slate-400 transition"
-                    >
-                      <span className="text-base font-semibold text-navy-950 select-none">
-                        {formatDmy(startDate)}
-                      </span>
-                      <Calendar size={18} color="#6B7280" className="pointer-events-none" />
-                      <input
-                        ref={pickupDateRef}
-                        type="date"
-                        value={startDate}
-                        min={minStart}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) {
-                            setStartDate(val);
-                            if (endDate <= val) {
-                              setEndDate(addDaysIso(val, 2));
-                            }
-                            setError(null);
-                          }
-                        }}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          height: "100%",
-                          opacity: 0,
-                          cursor: "pointer",
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <Pressable
-                      onPress={() => setPickupPickerOpen(true)}
-                      className="flex-row items-center justify-between rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 active:bg-slate-50"
-                    >
-                      <Text className="text-base font-semibold text-navy-950">
-                        {formatDmy(startDate)}
-                      </Text>
-                      <Calendar size={18} color="#6B7280" />
-                    </Pressable>
-                  )}
+                  <Pressable
+                    onPress={() => setPickupPickerOpen(true)}
+                    className="flex-row items-center justify-between rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 active:bg-slate-50"
+                  >
+                    <Text className="text-base font-semibold text-navy-950">
+                      {formatDmy(startDate)}
+                    </Text>
+                    <Calendar size={18} color="#6B7280" />
+                  </Pressable>
                 </View>
 
                 {/* Return Date */}
@@ -509,55 +464,15 @@ export function DesktopRentalDetail({ asset }: { asset: RentalAsset }) {
                     <Calendar size={14} color="#6B7280" />
                     <Text className="text-xs font-bold text-navy-950">Return Date</Text>
                   </View>
-                  {Platform.OS === "web" ? (
-                    <div
-                      onClick={() => {
-                        try {
-                          returnDateRef.current?.showPicker?.();
-                        } catch {
-                          returnDateRef.current?.focus?.();
-                        }
-                      }}
-                      className="relative flex items-center justify-between rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 cursor-pointer hover:border-slate-400 transition"
-                    >
-                      <span className="text-base font-semibold text-navy-950 select-none">
-                        {formatDmy(endDate)}
-                      </span>
-                      <Calendar size={18} color="#6B7280" className="pointer-events-none" />
-                      <input
-                        ref={returnDateRef}
-                        type="date"
-                        value={endDate}
-                        min={startDate || minStart}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) {
-                            setEndDate(val);
-                            setError(null);
-                          }
-                        }}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          height: "100%",
-                          opacity: 0,
-                          cursor: "pointer",
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <Pressable
-                      onPress={() => setReturnPickerOpen(true)}
-                      className="flex-row items-center justify-between rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 active:bg-slate-50"
-                    >
-                      <Text className="text-base font-semibold text-navy-950">
-                        {formatDmy(endDate)}
-                      </Text>
-                      <Calendar size={18} color="#6B7280" />
-                    </Pressable>
-                  )}
+                  <Pressable
+                    onPress={() => setReturnPickerOpen(true)}
+                    className="flex-row items-center justify-between rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 active:bg-slate-50"
+                  >
+                    <Text className="text-base font-semibold text-navy-950">
+                      {formatDmy(endDate)}
+                    </Text>
+                    <Calendar size={18} color="#6B7280" />
+                  </Pressable>
                 </View>
               </View>
 

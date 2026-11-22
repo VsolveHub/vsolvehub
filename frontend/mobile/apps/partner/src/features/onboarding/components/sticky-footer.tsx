@@ -45,7 +45,7 @@ export function StickyFooter({
 
         <View style={styles.actionRow}>
           {/* Left: Need help? with optional icon */}
-          <Pressable
+          <Pressable cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel={helpLabel}
             onPress={onHelpPress}
@@ -62,7 +62,7 @@ export function StickyFooter({
 
           {/* Right: Primary action button if not showOnlyHelp */}
           {!showOnlyHelp && primaryLabel ? (
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel={primaryLabel}
               disabled={primaryDisabled || primaryLoading}

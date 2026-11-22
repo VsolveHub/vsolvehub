@@ -42,7 +42,7 @@ export function NavyHeaderLayout({
           {/* Top Bar: Back Chevron + Logo */}
           <View style={styles.topNavRow}>
             {onBack ? (
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 onPress={onBack}

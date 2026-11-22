@@ -10,6 +10,8 @@ The story the data tells (all in Hyderabad):
    same job seekers as "Matching candidates" without them applying, and can invite them.
 3. One job seeker unticked "Let other employers find my profile": they appear only where they
    applied, never in anyone's matches.
+4. Priya Sharma hires for her own home, as an individual: one House Help job, shown on its card
+   as "Priya S." with her area. The other two are businesses, shown by name, industry and size.
 
 Usage (after migrate and seed_listing_catalog):
 
@@ -43,6 +45,12 @@ from apps.listings.models import (
 )
 from apps.listings.seekers import invitable_matches, profile_snapshot
 from apps.listings.services import CANDIDATE_MATCHING, ListingStateError, post_job, publish_job_now
+from apps.partners.demo import (
+    APEX_STAFFING,
+    SRI_LAKSHMI_JEWELLERS,
+    seed_business_employer,
+    seed_individual_employer,
+)
 from apps.partners.models import PartnerApplication, PartnerProfile
 
 PAID_PHONE = "+919900000088"
@@ -50,6 +58,8 @@ PAID_NAME = "Apex Staffing Solutions"
 FREE_PHONE = "+919900000099"
 FREE_NAME = "Sri Lakshmi Jewellers"
 PAID_PLAN_CODE = "enterprise"
+HOME_PHONE = "+919900000022"
+HOME_NAME = "Priya Sharma"
 
 
 @dataclass(frozen=True)
@@ -82,6 +92,17 @@ FREE_JOBS = (
         (15000, 20000),
         ("Billing", "Cash handling", "Customer handling"),
         ("POS",),
+    ),
+)
+HOME_JOBS = (
+    Job(
+        "House Help / Maid",
+        "House Help / Maid",
+        "Kondapur",
+        "0_1",
+        (8000, 15000),
+        ("Cleaning", "Washing utensils"),
+        ("Cooking",),
     ),
 )
 PAID_JOBS = (
@@ -397,12 +418,17 @@ class Command(BaseCommand):
 
         paid = _employer(PAID_PHONE, PAID_NAME)
         free = _employer(FREE_PHONE, FREE_NAME)
+        home = _employer(HOME_PHONE, HOME_NAME)
+        seed_business_employer(paid, APEX_STAFFING)
+        seed_business_employer(free, SRI_LAKSHMI_JEWELLERS)
+        seed_individual_employer(home, area="Kondapur", city="Hyderabad", pin_code="500084")
         _paid_plan(paid)
         _make_free(free)
 
         try:
             free_jobs = {spec.title: _job(free, spec) for spec in FREE_JOBS}
             paid_jobs = [_job(paid, spec) for spec in PAID_JOBS]
+            home_jobs = [_job(home, spec) for spec in HOME_JOBS]
         except ListingStateError as exc:
             raise CommandError(f"{exc} Run `python manage.py seed_listing_catalog` first.") from exc
 
@@ -424,6 +450,9 @@ class Command(BaseCommand):
         for job in paid_jobs:
             names = ", ".join(p.full_name for p, _m in invitable_matches(job)) or "none"
             out.write(f"   - {job.title}: matching without applying -> {names}")
+        out.write(f"\nINDIVIDUAL employer: {HOME_NAME}  login {HOME_PHONE}")
+        for job in home_jobs:
+            out.write(f"   - {job.title}: shown as 'Priya S.', Kondapur")
         out.write(
             "\nJob seekers log in with their own numbers (+9198002000xx). "
             "Anjali Verma unticked 'let other employers find me', so she never appears in matches."

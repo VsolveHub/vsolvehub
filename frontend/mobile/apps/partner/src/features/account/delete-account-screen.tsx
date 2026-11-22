@@ -1,3 +1,4 @@
+import { ApiRequestError } from "@vsolve/api-client";
 import { Text } from "@vsolve/mobile-ui";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { useRouter } from "expo-router";
@@ -21,6 +22,23 @@ import { useCreatePrivacyRequest } from "./privacy-queries";
 
 export type DeleteStep = "STEP_1_WARN" | "STEP_2_CONFIRM" | "STEP_3_DONE";
 
+/** "18 Dec 2026", in India's time zone: the day the account is erased. */
+function deletionDate(value: string): string {
+  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+    new Date(value),
+  );
+}
+
+/**
+ * Delete account, in three steps: what happens, type DELETE, and the date it goes.
+ *
+ * Every sentence is a rule in `backend/apps/identity/account_deletion.py` and on the public page
+ * (`partner.vsolvehub.com/delete-account`): the account closes at once, it is erased 30 days
+ * later unless the person signs in again, open jobs refuse the request, money owed is paid first,
+ * and payout and tax records are kept. Filing it is a request with a date, so the last step says
+ * "closed" and gives the date, never "deleted" — nothing has been erased yet.
+ */
+
 export function DeleteAccountScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -34,6 +52,7 @@ export function DeleteAccountScreen() {
   const [step, setStep] = useState<DeleteStep>("STEP_1_WARN");
   const [confirmInput, setConfirmInput] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletesOn, setDeletesOn] = useState<string | null>(null);
 
   const isConfirmed = confirmInput.trim() === "DELETE";
 
@@ -50,8 +69,9 @@ export function DeleteAccountScreen() {
     setIsDeleting(true);
 
     createRequest.mutate("ERASURE", {
-      onSuccess: () => {
+      onSuccess: (created) => {
         setIsDeleting(false);
+        setDeletesOn(created.scheduled_for ?? null);
         setStep("STEP_3_DONE");
       },
       // Never say "requested" when it was not: stay here and let them try again.
@@ -96,7 +116,7 @@ export function DeleteAccountScreen() {
             {/* Title & Description */}
             <Text style={styles.title}>Delete your account?</Text>
             <Text style={styles.subtitle}>
-              This will permanently delete your account and all associated data.
+              Your account closes now and is deleted after 30 days.
             </Text>
 
             {/* 3 Red Bullet Points matching Screen 15 */}
@@ -104,18 +124,24 @@ export function DeleteAccountScreen() {
               <View style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
                 <Text style={styles.bulletText}>
-                  Your profile and documents will be removed.
+                  You are signed out everywhere and stop getting job offers.
                 </Text>
               </View>
 
               <View style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
-                <Text style={styles.bulletText}>You can't undo this.</Text>
+                <Text style={styles.bulletText}>
+                  After 30 days we delete your profile, photo, documents and bank details. Sign in
+                  again before then to keep your account.
+                </Text>
               </View>
 
               <View style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
-                <Text style={styles.bulletText}>You'll lose your application progress.</Text>
+                <Text style={styles.bulletText}>
+                  Finish any open jobs first. Earnings we owe you are paid before deletion, and we
+                  keep job and payout records without your name, as tax law requires.
+                </Text>
               </View>
             </View>
           </View>
@@ -124,7 +150,10 @@ export function DeleteAccountScreen() {
         {/* Screen 16: Delete account - Step 2 (Type DELETE) */}
         {createRequest.isError ? (
           <Text accessibilityRole="alert" style={{ color: "#b91c1c", fontWeight: "600", marginBottom: 12 }}>
-            We could not send your request. Nothing has changed. Check your connection and try again.
+            {createRequest.error instanceof ApiRequestError &&
+            createRequest.error.code === "account_deletion_open_work"
+              ? "You have jobs that are still open. Finish them, or call support to pass them to another partner, then delete your account."
+              : "We could not send your request. Nothing has changed. Check your connection and try again."}
           </Text>
         ) : null}
         {step === "STEP_2_CONFIRM" ? (
@@ -137,8 +166,7 @@ export function DeleteAccountScreen() {
             {/* Title & Description */}
             <Text style={styles.title}>Type DELETE to confirm</Text>
             <Text style={styles.subtitle}>
-              This action is permanent and cannot be undone. To continue, type DELETE in the box
-              below.
+              This closes your account now. To continue, type DELETE in the box below.
             </Text>
 
             {/* Type DELETE Input Box */}
@@ -175,8 +203,12 @@ export function DeleteAccountScreen() {
               </View>
             </View>
 
-            <Text style={styles.title}>Account deleted</Text>
-            <Text style={styles.subtitle}>Your data has been removed.</Text>
+            <Text style={styles.title}>Your account is closed</Text>
+            <Text style={styles.subtitle}>
+              {deletesOn
+                ? `We'll delete it on ${deletionDate(deletesOn)}. Changed your mind? Sign in again before then and your account stays.`
+                : "We'll delete it in 30 days. Changed your mind? Sign in again before then and your account stays."}
+            </Text>
           </View>
         ) : null}
       </ScrollView>
@@ -186,7 +218,7 @@ export function DeleteAccountScreen() {
         <View style={[styles.dockInner, { maxWidth: isDesktop ? 540 : "100%" }]}>
           {step === "STEP_1_WARN" ? (
             <View style={styles.buttonStack}>
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Delete my account"
                 onPress={() => setStep("STEP_2_CONFIRM")}
@@ -198,7 +230,7 @@ export function DeleteAccountScreen() {
                 <Text style={styles.solidRedButtonText}>Delete my account</Text>
               </Pressable>
 
-              <Pressable
+              <Pressable cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel="Keep my account"
                 onPress={() => router.back()}
@@ -213,7 +245,7 @@ export function DeleteAccountScreen() {
           ) : null}
 
           {step === "STEP_2_CONFIRM" ? (
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Delete my account"
               disabled={!isConfirmed || isDeleting}
@@ -233,7 +265,7 @@ export function DeleteAccountScreen() {
           ) : null}
 
           {step === "STEP_3_DONE" ? (
-            <Pressable
+            <Pressable cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel="Done"
               onPress={handleDone}

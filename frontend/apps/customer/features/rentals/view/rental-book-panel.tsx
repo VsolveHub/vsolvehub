@@ -28,9 +28,25 @@ import { PickupLocation } from "./pickup-location";
 const BUSINESS_NAME = "Vsolve Hub";
 const PINCODE = /^[1-9][0-9]{5}$/;
 
+export interface RentalSubmitState {
+  showSubmit: boolean;
+  label: string;
+  disabled: boolean;
+  loading: boolean;
+  loadingLabel: string;
+}
+
 interface RentalBookPanelProps {
   /** The item page passes the detail payload, which adds the owner's pickup hours. */
   asset: RentalAsset & { pickup_hours?: PickupHours };
+  /** Optional HTML form id so an external sticky footer button can submit the form. */
+  formId?: string;
+  /** Hides the inline submit button when rendered inside a drawer with a sticky footer CTA. */
+  hideSubmitButton?: boolean;
+  /** Reports submit button state to the parent drawer footer. */
+  onSubmitStateChange?: (state: RentalSubmitState) => void;
+  /** When embedded inside a drawer, omits the duplicate outer card frame and header. */
+  embedded?: boolean;
 }
 
 /**
@@ -89,7 +105,13 @@ function addDaysIso(baseIso: string, days: number): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function RentalBookPanel({ asset }: RentalBookPanelProps) {
+export function RentalBookPanel({
+  asset,
+  formId,
+  hideSubmitButton = false,
+  onSubmitStateChange,
+  embedded = false,
+}: RentalBookPanelProps) {
   const router = useRouter();
   const toast = useToast();
 
@@ -306,13 +328,48 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   /** Signed in when the page opened, but the server says the session has since ended. */
   const sessionEnded = isSignInError(mutation.error) || isSignInError(createAddress.error);
   const blockBooking = permanentlyOutOfStock || dateAwareUnavailable;
+  const submitLabel = permanentlyOutOfStock
+    ? "Out of stock"
+    : dateAwareUnavailable
+      ? "Unavailable for these dates"
+      : isDelivery
+        ? "Send delivery request"
+        : "Confirm booking";
+  const submitLoading = mutation.isPending || isHandingOff;
+  const submitDisabled = submitLoading || blockBooking;
+  const submitLoadingLabel = isHandingOff
+    ? "Opening payment…"
+    : isDelivery
+      ? "Sending delivery request…"
+      : "Creating rental booking…";
+  const showSubmit = !signedOut && !sessionEnded && !unpaidAttemptId;
+
+  useEffect(() => {
+    onSubmitStateChange?.({
+      showSubmit,
+      label: submitLabel,
+      disabled: submitDisabled,
+      loading: submitLoading,
+      loadingLabel: submitLoadingLabel,
+    });
+  }, [onSubmitStateChange, showSubmit, submitLabel, submitDisabled, submitLoading, submitLoadingLabel]);
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised">
-      <h2 className="text-xl font-bold text-text">Book This Rental</h2>
-      <p className="mt-1 text-xs text-text-secondary">
-        Select your rental dates (DD/MM/YYYY). Zero hidden charges.
-      </p>
+    <div
+      className={
+        embedded
+          ? "space-y-4"
+          : "rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised"
+      }
+    >
+      {embedded ? null : (
+        <>
+          <h2 className="text-xl font-bold text-text">Book This Rental</h2>
+          <p className="mt-1 text-xs text-text-secondary">
+            Select your rental dates (DD/MM/YYYY). Zero hidden charges.
+          </p>
+        </>
+      )}
       {permanentlyOutOfStock ? (
         <div className="mt-4 flex items-center gap-2 rounded-control border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
           <AlertCircle className="size-4 shrink-0" />
@@ -320,7 +377,12 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
+      <form
+        id={formId}
+        onSubmit={handleSubmit}
+        noValidate
+        className={embedded ? "flex flex-col gap-4" : "mt-6 flex flex-col gap-5"}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-bold text-text flex items-center gap-1.5">
@@ -643,29 +705,17 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
               Pay later from My Rentals
             </Button>
           </div>
-        ) : (
+        ) : !hideSubmitButton ? (
         <Button
           type="submit"
-          disabled={mutation.isPending || isHandingOff || blockBooking}
-          loading={mutation.isPending || isHandingOff}
-          loadingLabel={
-            isHandingOff
-              ? "Opening payment…"
-              : isDelivery
-                ? "Sending delivery request…"
-                : "Creating rental booking…"
-          }
+          disabled={submitDisabled}
+          loading={submitLoading}
+          loadingLabel={submitLoadingLabel}
           className="w-full py-3 text-sm font-bold"
         >
-          {permanentlyOutOfStock
-            ? "Out of stock"
-            : dateAwareUnavailable
-              ? "Unavailable for these dates"
-              : isDelivery
-                ? "Send delivery request"
-                : "Confirm Rental Booking"}
+          {submitLabel}
         </Button>
-        )}
+        ) : null}
       </form>
 
       {/* Address Stage Dialog (opened via addressOpenSignal) */}

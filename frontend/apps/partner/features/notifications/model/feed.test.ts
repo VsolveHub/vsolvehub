@@ -117,6 +117,12 @@ describe("where a notice leads", () => {
     );
   });
 
+  it("opens a rental notice on the bookings list with that booking's panel", () => {
+    expect(targetHref({ kind: "RENTAL_BOOKING", id: "rb-1" } as never)).toBe(
+      "/rentals/bookings?booking=rb-1",
+    );
+  });
+
   it("never composes a Partner path from a requirement id", () => {
     // The Partner's door into a customer request is the *invitation*, and an
     // invitation id is not a requirement id. Building

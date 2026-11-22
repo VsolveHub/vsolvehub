@@ -128,6 +128,71 @@ export function useUpdateApplication() {
   });
 }
 
+export type EmployerDetailsPatch = Omit<
+  Schemas["PatchedEmployerDetailsUpdateRequest"],
+  "expected_version"
+>;
+
+/**
+ * Saves who is hiring and what is known about them. Like every application write it carries the
+ * version, is never retried, and refetches on a conflict. A switch of type clears what the other
+ * type carried on the server, so the response, not this patch, is the truth.
+ */
+export function useUpdateEmployerDetails() {
+  const queryClient = useQueryClient();
+  const currentVersion = useCurrentVersion();
+  const applyResult = useApplyResult();
+
+  return useMutation({
+    mutationFn: (patch: EmployerDetailsPatch) =>
+      request(() =>
+        getApiClient().PATCH("/api/v1/partner/application/employer/", {
+          body: { ...patch, expected_version: currentVersion() },
+        }),
+      ),
+    onSuccess: applyResult,
+    onError: (error) => {
+      if (isVersionConflict(error)) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.partner.application() });
+      }
+    },
+    retry: false,
+  });
+}
+
+/** A business's public logo. The server checks the file's own bytes, not its name. */
+export function useUploadEmployerLogo() {
+  const applyResult = useApplyResult();
+
+  return useMutation({
+    mutationFn: (file: File) =>
+      request(() =>
+        getApiClient().POST("/api/v1/partner/application/employer/logo/", {
+          // The generated type calls a binary field a string; the serializer sends the file.
+          body: { file: file as unknown as string },
+          bodySerializer() {
+            const form = new FormData();
+            form.append("file", file, file.name);
+            return form;
+          },
+        }),
+      ),
+    onSuccess: applyResult,
+    retry: false,
+  });
+}
+
+export function useRemoveEmployerLogo() {
+  const applyResult = useApplyResult();
+
+  return useMutation({
+    mutationFn: () =>
+      request(() => getApiClient().DELETE("/api/v1/partner/application/employer/logo/")),
+    onSuccess: applyResult,
+    retry: false,
+  });
+}
+
 // Document upload lives in `upload-queries.ts`: request, PUT to storage, finalize.
 
 export function useSubmitApplication() {

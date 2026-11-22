@@ -9,6 +9,7 @@ from django.urls import path
 
 from apps.payouts.exports import PayoutBatchBankExportView
 from apps.payouts.views import (
+    CashfreePayoutWebhookView,
     LedgerAdjustmentView,
     OperationsPayoutAccountListView,
     OperationsPayoutAccountRejectView,
@@ -118,6 +119,11 @@ urlpatterns = [
         "payout-webhooks/razorpayx/",
         RazorpayXPayoutWebhookView.as_view(),
         name="payout-webhook-razorpayx",
+    ),
+    path(
+        "payout-webhooks/cashfree/",
+        CashfreePayoutWebhookView.as_view(),
+        name="payout-webhook-cashfree",
     ),
     path(
         "operations/ledger-adjustments/",

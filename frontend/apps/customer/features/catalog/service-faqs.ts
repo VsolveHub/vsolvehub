@@ -1,7 +1,7 @@
 import { formatMoney } from "@vsolve/ui";
 
 import type { ServiceDetail } from "./queries";
-import { durationLabel, policyTexts, variantDuration, formatDuration, warrantyText } from "./service-facts";
+import { durationLabel, policyTexts, variantDuration, formatDuration } from "./service-facts";
 
 export interface ServiceFaq {
   question: string;
@@ -83,11 +83,6 @@ export function buildServiceFaqs(service: ServiceDetail): ServiceFaq[] {
       question: "What is not covered?",
       answer: `${excluded.join(". ")}.`.replace(/\.\./g, "."),
     });
-  }
-
-  const warranty = warrantyText(service.policies);
-  if (warranty) {
-    faqs.push({ question: "Is the work covered by a warranty?", answer: `Yes. ${warranty}.`.replace(/\.\./g, ".") });
   }
 
   faqs.push({

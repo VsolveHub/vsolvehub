@@ -55,6 +55,16 @@ describe("file validation", () => {
     const problem = rejectFile({ size: 1_000, type: "image/heic" }, t);
     expect(problem?.message).toMatch(/JPEG|PNG|PDF/);
   });
+
+  it("accepts only a JPEG or PNG photo for a selfie, never a PDF", () => {
+    for (const type of ["image/jpeg", "image/png"]) {
+      expect(rejectFile({ size: 1_000, type }, t, { imageOnly: true })).toBeNull();
+    }
+    const pdf = rejectFile({ size: 1_000, type: "application/pdf" }, t, { imageOnly: true });
+    expect(pdf).toEqual({ code: "unsupported_type", message: "apply.upload.rejection.imageOnly" });
+    // The same PDF is fine for any other document.
+    expect(rejectFile({ size: 1_000, type: "application/pdf" }, t)).toBeNull();
+  });
 });
 
 describe("signed URL expiry", () => {

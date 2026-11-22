@@ -29,6 +29,10 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
     skill_codes: ["electrician"],
     service_variant_ids: ["v-1"],
     service_area_ids: ["area-1"],
+    requested_postal_codes: [],
+    area_requests: [],
+    area_details: [],
+    services_not_offered: [],
     consents: [
       {
         id: "c-1",
@@ -66,7 +70,10 @@ const mockApplication: { data: Schemas["PartnerApplication"] } = {
     transitions: [],
     can_edit: true,
     required_document_kinds: ["GOVERNMENT_ID"],
+    offered_document_kinds: ["GOVERNMENT_ID", "ADDRESS_PROOF"],
+    employer: null,
     consents_complete: true,
+    business_details_complete: true,
     change_request_message: "",
     submitted_at: null,
     review_assigned_to_id: null,

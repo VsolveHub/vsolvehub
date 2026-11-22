@@ -1,5 +1,6 @@
 // Ported from frontend/apps/partner/features/proposal/model/onsite-draft.ts
 import type { Schemas } from "@vsolve/api-client";
+import { storageAdapter } from "@vsolve/mobile-core";
 
 import type { AnswerMap } from "@/features/enquiry/model/requirement-facts";
 import { readDurationDays } from "@/features/enquiry/model/requirement-facts";
@@ -436,20 +437,18 @@ function storageKey(invitationId: string): string {
   return `${DRAFT_PREFIX}${invitationId}`;
 }
 
-export function saveOnsiteDraft(invitationId: string, draft: OnsiteDraft): void {
-  if (typeof window === "undefined") return;
+export async function saveOnsiteDraft(invitationId: string, draft: OnsiteDraft): Promise<void> {
   try {
-    window.localStorage.setItem(storageKey(invitationId), JSON.stringify(draft));
+    await storageAdapter.setItem(storageKey(invitationId), JSON.stringify(draft));
   } catch {
     // Private mode, or a full quota. Losing the autosave is survivable; the form
     // in front of the vendor still holds everything they typed.
   }
 }
 
-export function loadOnsiteDraft(invitationId: string): OnsiteDraft | null {
-  if (typeof window === "undefined") return null;
+export async function loadOnsiteDraft(invitationId: string): Promise<OnsiteDraft | null> {
   try {
-    const raw = window.localStorage.getItem(storageKey(invitationId));
+    const raw = await storageAdapter.getItem(storageKey(invitationId));
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
     return isOnsiteDraft(parsed) ? withMaterialDefaults(parsed) : null;
@@ -458,10 +457,9 @@ export function loadOnsiteDraft(invitationId: string): OnsiteDraft | null {
   }
 }
 
-export function clearOnsiteDraft(invitationId: string): void {
-  if (typeof window === "undefined") return;
+export async function clearOnsiteDraft(invitationId: string): Promise<void> {
   try {
-    window.localStorage.removeItem(storageKey(invitationId));
+    await storageAdapter.removeItem(storageKey(invitationId));
   } catch {
     /* nothing to clean up if storage is unavailable */
   }

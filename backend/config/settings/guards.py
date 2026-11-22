@@ -102,6 +102,20 @@ def guard_razorpayx_test_keys(key_id: str) -> None:
         )
 
 
+#: Cashfree's live Payouts host. Anything else is its sandbox, which moves only dummy money.
+CASHFREE_PAYOUT_LIVE_HOST = "api.cashfree.com"
+
+
+def guard_cashfree_sandbox(base_url: str) -> None:
+    """Outside production, Cashfree Payouts must point at its sandbox, for RazorpayX's reason."""
+
+    if CASHFREE_PAYOUT_LIVE_HOST in base_url:
+        raise ImproperlyConfigured(
+            "CASHFREE_PAYOUT_API_BASE_URL is Cashfree's live host. Only production may use it; "
+            "use https://sandbox.cashfree.com/payout here."
+        )
+
+
 def guard_per_host_sessions(session_domain: str | None, csrf_domain: str | None) -> None:
     """Sessions stay scoped to the host that issued them.
 

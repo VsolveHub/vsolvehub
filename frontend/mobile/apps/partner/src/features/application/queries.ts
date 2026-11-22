@@ -60,8 +60,21 @@ export function isVersionConflict(error: unknown): boolean {
 
 export function describeRefusal(
   error: unknown,
+  t?: (key: string, params?: Record<string, string | number>) => string,
+  removedAreaNames: readonly string[] = [],
 ): { title: string; message: string } | null {
   if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "partner_service_areas_unavailable") {
+    // Case G (FLOW.md): the screen removes only the closed areas, and says which.
+    const title = t ? t("apply.editor.refusal.areasUnavailable.title") : "Some areas are no longer available";
+    const message =
+      t && removedAreaNames.length > 0
+        ? t("apply.editor.refusal.areasUnavailable.named", { areas: removedAreaNames.join(", ") })
+        : t
+          ? t("apply.editor.refusal.areasUnavailable.message")
+          : "One or more selected areas stopped taking new partners. We've removed them so you can continue.";
+    return { title, message };
+  }
   if (error.code === "partner_application_incomplete") {
     return {
       title: "Incomplete selection",
@@ -145,6 +158,79 @@ export function useUpdateApplication() {
     },
     // Never retried automatically. A retry would either conflict again or, worse,
     // succeed against a version the Partner never saw.
+    retry: false,
+  });
+}
+
+export type EmployerDetailsPatch = Omit<
+  Schemas["PatchedEmployerDetailsUpdateRequest"],
+  "expected_version"
+>;
+
+/**
+ * Saves who is hiring and what is known about them. Like every application write it carries the
+ * version, is never retried, and refetches on a conflict. A switch of type clears what the other
+ * type carried on the server, so the response, not this patch, is the truth.
+ */
+export function useUpdateEmployerDetails() {
+  const queryClient = useQueryClient();
+  const currentVersion = useCurrentVersion();
+  const applyResult = useApplyResult();
+
+  return useMutation({
+    mutationFn: (patch: EmployerDetailsPatch) =>
+      request(() =>
+        getApiClient().PATCH("/api/v1/partner/application/employer/", {
+          body: { ...patch, expected_version: currentVersion() },
+        }),
+      ),
+    onSuccess: applyResult,
+    onError: (error) => {
+      if (isVersionConflict(error)) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.partner.application() });
+      }
+    },
+    retry: false,
+  });
+}
+
+/** A photo chosen on the phone: what the camera roll picker returns. */
+export interface LocalLogoFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+/** A business's public logo. The server checks the file's own bytes, not its name. */
+export function useUploadEmployerLogo() {
+  const applyResult = useApplyResult();
+
+  return useMutation({
+    mutationFn: (file: LocalLogoFile) =>
+      request(() =>
+        getApiClient().POST("/api/v1/partner/application/employer/logo/", {
+          // The generated type calls a binary field a string; the serializer sends the file.
+          body: { file: file as unknown as string },
+          bodySerializer() {
+            const form = new FormData();
+            // React Native's FormData takes the picked file as { uri, name, type }.
+            form.append("file", file as unknown as Blob, file.name);
+            return form;
+          },
+        }),
+      ),
+    onSuccess: applyResult,
+    retry: false,
+  });
+}
+
+export function useRemoveEmployerLogo() {
+  const applyResult = useApplyResult();
+
+  return useMutation({
+    mutationFn: () =>
+      request(() => getApiClient().DELETE("/api/v1/partner/application/employer/logo/")),
+    onSuccess: applyResult,
     retry: false,
   });
 }

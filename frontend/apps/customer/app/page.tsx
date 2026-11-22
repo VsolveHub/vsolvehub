@@ -15,6 +15,8 @@ import { HomepageClientSections } from "@/features/catalog/components/homepage-c
 import { JsonLd, organizationJsonLd, websiteJsonLd } from "@/features/seo/json-ld";
 import { getActiveSafetyStories } from "@/features/stories/queries";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
+import { getActiveHeroSlides } from "@/features/home/hero-slides";
+import { HeroCarousel } from "@/features/home/hero-carousel";
 import { catalogCategoryHref } from "@/lib/routes";
 import { DEFAULT_DESCRIPTION, HOME_TITLE } from "@/lib/site";
 
@@ -27,17 +29,6 @@ export const metadata: Metadata = {
 };
 
 export const revalidate = 300;
-
-/**
- * The hero photograph, desktop and mobile.
- *
- * Drawn with `RemoteImage`, not as a CSS background: a background is found only
- * once the stylesheet has loaded, and always arrives at the full 2070 px. JPEG
- * at the source (no `auto=format`) so the optimizer gets a format it decodes;
- * the phone still receives AVIF or WebP from it.
- */
-const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&fit=crop";
 
 const APPROACH = [
   {
@@ -110,108 +101,57 @@ async function CategoryGrid() {
     );
   }
 
-  const firstRow = categories.slice(0, 5);
-  const secondRow = categories.slice(5, 9);
-
   return (
     <>
-      {/* Desktop: 2 rows (5 in first row, 4 in second row) as clean icons with text below */}
-      <div className="hidden md:flex flex-col gap-6 lg:gap-8">
-        {/* Row 1: 5 categories */}
-        <div className="grid grid-cols-5 gap-5 lg:gap-7">
-          {firstRow.map((category) => (
-            <IntentLink
-              key={category.id}
-              href={catalogCategoryHref(category.slug)}
-              className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+      {/* Desktop: clean responsive grid showing all published categories (6 columns on lg, 4 on md) */}
+      <div className="hidden md:grid grid-cols-4 lg:grid-cols-6 gap-5 lg:gap-7">
+        {categories.map((category) => (
+          <IntentLink
+            key={category.id}
+            href={catalogCategoryHref(category.slug)}
+            className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            <div
+              className={`relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3] ${
+                category.image_url !== "" ? "" : "p-3.5 lg:p-4"
+              }`}
             >
-              <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
-                {category.image_url !== "" ? (
-                  <span className="relative size-full">
-                    <RemoteImage
-                      src={category.image_url}
-                      alt=""
-                      fill
-                      sizes="(min-width: 1280px) 200px, 16vw"
-                      className="object-contain transition-transform duration-300 group-hover:scale-110"
-                    />
-                  </span>
-                ) : (
-                  <span
-                    aria-hidden
-                    className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+              {category.image_url !== "" ? (
+                <span className="relative size-full">
+                  <RemoteImage
+                    src={category.image_url}
+                    alt=""
+                    fill
+                    sizes="(min-width: 1280px) 200px, 16vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </span>
+              ) : (
+                <span
+                  aria-hidden
+                  className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="size-6"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="size-6"
-                    >
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-              <div className="w-full px-1">
-                <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
-                  {category.name}
-                </h3>
-              </div>
-            </IntentLink>
-          ))}
-        </div>
-
-        {/* Row 2: 4 categories */}
-        {secondRow.length > 0 ? (
-          <div className="grid grid-cols-4 gap-5 lg:gap-7 max-w-[80%] mx-auto w-full">
-            {secondRow.map((category) => (
-              <IntentLink
-                key={category.id}
-                href={catalogCategoryHref(category.slug)}
-                className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-              >
-                <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
-                  {category.image_url !== "" ? (
-                    <span className="relative size-full">
-                      <RemoteImage
-                        src={category.image_url}
-                        alt=""
-                        fill
-                        sizes="(min-width: 1280px) 200px, 16vw"
-                        className="object-contain transition-transform duration-300 group-hover:scale-110"
-                      />
-                    </span>
-                  ) : (
-                    <span
-                      aria-hidden
-                      className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="size-6"
-                      >
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                      </svg>
-                    </span>
-                  )}
-                </div>
-                <div className="w-full px-1">
-                  <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
-                    {category.name}
-                  </h3>
-                </div>
-              </IntentLink>
-            ))}
-          </div>
-        ) : null}
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                </span>
+              )}
+            </div>
+            <div className="w-full px-1">
+              <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
+                {category.name}
+              </h3>
+            </div>
+          </IntentLink>
+        ))}
       </div>
 
       {/* Mobile: the whole catalogue as photo tiles, three across. */}
@@ -268,6 +208,7 @@ export default async function HomePage() {
     getCategories(),
     getActiveSafetyStories(),
   ]);
+  const heroSlides = getActiveHeroSlides();
 
   return (
     <main className="bg-[#FAF9F7] md:bg-transparent min-h-screen pb-20 md:pb-0 overflow-x-hidden">
@@ -279,59 +220,7 @@ export default async function HomePage() {
         {/* ---------------------------------------------------- */}
         <div className="hidden md:block">
           {/* Hero Section */}
-          <section className="relative min-h-[90vh] md:min-h-[500px] w-full -mt-[4.5rem] md:mt-4 flex items-center md:block">
-            {/* Floating Vetted Badge */}
-            <div className="absolute -top-4 right-[10%] z-10 hidden md:flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-bold text-navy-900 shadow-sm">
-              <span className="flex size-5 items-center justify-center rounded-full bg-[#fdf3ec] text-action">
-                <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
-                  <path fillRule="evenodd" d="M16.403 12.652a3 3 0 0 0 0-5.304 3 3 0 0 0-3.75-3.751 3 3 0 0 0-5.305 0 3 3 0 0 0-3.751 3.75 3 3 0 0 0 0 5.305 3 3 0 0 0 3.75 3.751 3 3 0 0 0 5.305 0 3 3 0 0 0 3.751-3.75Zm-2.546-4.46a.75.75 0 0 0-1.214-.883l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
-                </svg>
-              </span>
-              ID-verified pros
-            </div>
-
-            {/* Main Hero Container */}
-            <div className="w-full relative h-full flex flex-col md:block">
-              
-              {/* Left Content */}
-              <div className="md:absolute md:left-0 md:top-[10%] md:w-[480px] z-10 relative mt-0 mx-4 md:mx-0 flex flex-col justify-center h-full pt-[4.5rem] md:pt-0">
-                <div className="rounded-none md:rounded-card bg-transparent md:bg-navy-900 p-0 md:p-10 shadow-none md:shadow-2xl relative">
-                  <h1 className="text-[2.75rem] md:text-[2.75rem] md:font-sans font-extrabold leading-[1.1] text-white tracking-tight">
-                    Your Home,<br /><span className="text-[#FFAE7B] md:text-action italic md:not-italic">Masterfully</span><br className="md:hidden"/> Handled.
-                  </h1>
-                  <p className="mt-4 md:mt-6 text-[0.95rem] md:text-[1.05rem] leading-relaxed text-white/80 font-light md:font-normal">
-                    Bespoke professional services for the modern homeowner. Elite, vetted specialists for every domestic need.
-                  </p>
-                  <div className="mt-6 md:mt-8 pb-4 md:pb-0 hidden md:block">
-                    <Link
-                      href="/catalog"
-                      className="inline-flex min-h-12 items-center gap-2 rounded-full bg-action px-6 md:px-8 text-[0.95rem] font-bold text-white shadow-sm transition-transform hover:scale-105"
-                    >
-                      Explore Services
-                      <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden="true">
-                        <path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </Link>
-                  </div>
-
-
-                </div>
-              </div>
-
-              {/* Right Image */}
-              <div className="absolute inset-0 md:relative md:h-[550px] w-full md:w-3/4 md:ml-auto md:rounded-card overflow-hidden bg-navy-100 md:shadow-inner">
-                {/* Lazy on purpose: this tree is `display: none` on phones, and an
-                    eager image downloads even when hidden. */}
-                <RemoteImage
-                  src={HERO_IMAGE}
-                  alt=""
-                  fill
-                  sizes="(min-width: 1280px) 912px, 75vw"
-                  className="object-cover object-center md:object-top"
-                />
-              </div>
-            </div>
-          </section>
+          <HeroCarousel slides={heroSlides} variant="desktop" />
 
           {/* Safety Stories Section (Instagram-style 24h updates) */}
           <div className="mt-12 mb-2">
@@ -422,31 +311,8 @@ export default async function HomePage() {
             />
           </Form>
 
-          {/* Hero Banner Card */}
-          <div className="relative min-h-[190px] rounded-[1.5rem] overflow-hidden shadow-md">
-            {/* The largest thing on a phone's first screen, so it is fetched first. */}
-            <RemoteImage
-              src={HERO_IMAGE}
-              alt=""
-              fill
-              sizes="100vw"
-              loading="eager"
-              fetchPriority="high"
-              className="object-cover object-center"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-navy-900/90 via-navy-900/50 to-transparent" />
-            
-            <div className="relative z-10 flex flex-col justify-between p-5 h-full min-h-[190px] max-w-[85%]">
-              <div className="self-start bg-[#f87000] text-white text-[9px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
-                Premium Quality
-              </div>
-              <div className="mt-auto">
-                <h2 className="text-white font-extrabold text-[1.5rem] sm:text-[1.65rem] leading-tight tracking-tight">
-                  Elite Home Services, at Your Doorstep
-                </h2>
-              </div>
-            </div>
-          </div>
+          {/* Hero Banner Carousel */}
+          <HeroCarousel slides={heroSlides} variant="mobile" />
 
           {/* Safety Stories Tray */}
           <SafetyStoriesTray initialStories={safetyStories} />

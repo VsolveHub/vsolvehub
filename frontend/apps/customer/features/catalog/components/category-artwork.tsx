@@ -169,11 +169,15 @@ export function ServicePhoto({
     "relative grid place-items-center overflow-hidden rounded-card shadow-xs";
 
   if (imageUrl !== "") {
-    const isServiceCover = imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/") || imageUrl.includes("/catalog/tiles/");
+    const isServiceCover =
+      (imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/")) &&
+      !imageUrl.includes("/catalog/tiles/") &&
+      !imageUrl.includes("_2K") &&
+      !imageUrl.endsWith(".jpg");
     return (
       <span
         className={`${CONTAINER} aspect-square w-full ${
-          isServiceCover ? "bg-[#F4F1EC]" : "bg-surface-sunken"
+          isServiceCover || imageUrl.includes("/catalog/tiles/") ? "bg-[#F4F1EC]" : "bg-surface-sunken"
         } ${className ?? ""}`}
       >
         {isServiceCover ? (

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { CommunicationPreferences } from "@/features/account/view/communication-preferences";
 import { CustomerPushPreferencesSection } from "@/features/account/view/push-preferences";
 import { AccountSection } from "@/features/account/view/chrome";
+import { WhatsAppUpdatesPrompt } from "@/features/account/view/whatsapp-updates-prompt";
 
 export const metadata: Metadata = {
   title: "Message settings",
@@ -15,6 +16,7 @@ export default function AccountMessagesPage() {
       title="Messages"
       description="Choose what we send you, and where it goes."
     >
+      <WhatsAppUpdatesPrompt className="mb-4" />
       <CommunicationPreferences />
       <CustomerPushPreferencesSection />
     </AccountSection>

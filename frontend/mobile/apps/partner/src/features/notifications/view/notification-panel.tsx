@@ -14,6 +14,9 @@ import {
   type NotificationPage,
 } from "../queries";
 
+/** At most this share of the screen for the list, leaving the sheet's title and buttons in view. */
+export const LIST_SHARE_OF_SCREEN = 0.5;
+
 export function NotificationPanel({
   open,
   onOpenChange,
@@ -53,15 +56,15 @@ function NotificationPanelBody({
 }) {
   const feed = useNotificationFeed(open);
   const markRead = useMarkNotificationRead();
-  // The sheet is as tall as its content, up to a limit, so the list cannot be "fill the space"
-  // (that is zero height here, and every notice stayed invisible). It is as tall as its notices,
-  // up to half the screen, and scrolls beyond that.
-  const { height: windowHeight } = useWindowDimensions();
-  const listMaxHeight = Math.floor(windowHeight * 0.5);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [dismissedAll, setDismissedAll] = useState(false);
   const state = asyncStateFrom<NotificationPage, NotificationPage>(feed, (page) => page);
   const hasUnread = unreadCount !== null && unreadCount > 0;
+  // The sheet only has a maximum height and grows to fit what is in it. A list told to fill the
+  // remaining space (`flex-1`) inside it works out to 0 pixels on a phone, which hid every notice
+  // behind a badge that said there were some. The list sizes to its rows and scrolls past this.
+  const { height: windowHeight } = useWindowDimensions();
+  const listMaxHeight = Math.floor(windowHeight * LIST_SHARE_OF_SCREEN);
 
   return (
     <Sheet
@@ -125,6 +128,7 @@ function NotificationPanelBody({
             const visible = dismissedAll ? [] : page.results.filter((item) => !dismissedIds.has(item.id));
             return (
               <ScrollView
+                testID="notification-list"
                 style={{ maxHeight: listMaxHeight }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ gap: 10, paddingBottom: 12 }}

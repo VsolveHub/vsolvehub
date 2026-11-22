@@ -81,14 +81,12 @@ describe("buildServiceFaqs", () => {
     );
   });
 
-  it("lists exclusions and warranty only from policies", () => {
+  it("lists exclusions from policies and does not include fake guarantee claims", () => {
     const faqs = buildServiceFaqs(fixedPrice);
     expect(faqs.find((faq) => faq.question === "What is not covered?")?.answer).toBe(
       "Spare parts, quoted separately.",
     );
-    expect(faqs.find((faq) => faq.question.includes("warranty"))?.answer).toBe(
-      "Yes. 30-day warranty on the workmanship.",
-    );
+    expect(faqs.find((faq) => faq.question.includes("guarantee"))).toBeUndefined();
   });
 
   it("offers booking questions only for a fixed-price service", () => {

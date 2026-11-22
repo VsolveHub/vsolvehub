@@ -345,16 +345,6 @@ function comparisonRows(cards: readonly QuoteCardView[]): readonly MatrixRow[] {
       }),
     },
     {
-      label: "Warranty",
-      values: cards.map((card) =>
-        card.warrantyTerms === null ? (
-          <span key={card.proposalId} className="font-semibold text-warning-text">Not stated</span>
-        ) : (
-          card.warrantyTerms
-        ),
-      ),
-    },
-    {
       label: "Priced",
       values: cards.map((card) =>
         card.itemLines.length > 0

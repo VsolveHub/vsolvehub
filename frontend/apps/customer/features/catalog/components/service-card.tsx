@@ -166,7 +166,7 @@ export function ServiceCard({
 
     return (
       <span
-        className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-action px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-[#d65f1a] cursor-pointer relative z-20`}
+        className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-action px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-[#d65f1a] cursor-pointer pointer-events-none relative z-20`}
       >
         Add
         <svg viewBox="0 0 20 20" fill="none" className="size-4 ml-1.5" aria-hidden="true" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -183,7 +183,15 @@ export function ServiceCard({
 
   if (isLarge) {
     return (
-      <div className={cn("group md:col-span-2 flex flex-col md:flex-row overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300", className)}>
+      <div className={cn("group relative md:col-span-2 flex flex-col md:flex-row overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300", className)}>
+        {/* Stretched link: a click anywhere on the card (incl. the price row) opens the service.
+            Cart controls are relative z-20 so they stay on top. Mouse-only; the links below keep keyboard access. */}
+        <IntentLink
+          href={serviceHref(service, categorySlug)}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="absolute inset-0 z-[1] rounded-card"
+        />
         <IntentLink
           href={serviceHref(service, categorySlug)}
           className="relative md:w-5/12 aspect-[16/10] md:aspect-auto overflow-hidden bg-[#F4F1EC] shrink-0 block cursor-pointer"
@@ -247,7 +255,15 @@ export function ServiceCard({
   }
 
   return (
-    <div className={cn("group md:col-span-1 flex flex-col overflow-hidden rounded-card border border-transparent bg-white shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised", className)}>
+    <div className={cn("group relative md:col-span-1 flex flex-col overflow-hidden rounded-card border border-transparent bg-white shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised", className)}>
+      {/* Stretched link: a click anywhere on the card (incl. the price row) opens the service.
+          Cart controls are relative z-20 so they stay on top. Mouse-only; the links below keep keyboard access. */}
+      <IntentLink
+        href={serviceHref(service, categorySlug)}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="absolute inset-0 z-[1] rounded-card"
+      />
       <IntentLink
         href={serviceHref(service, categorySlug)}
         className="flex flex-col cursor-pointer"

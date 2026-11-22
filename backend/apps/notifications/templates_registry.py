@@ -460,8 +460,8 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     ),
     "rental_claim_raised": (
         "The owner reported damage",
-        "The owner of {asset_title} reported damage and is asking ₹{amount_asked}. "
-        "You can reply with your own photos and note. Admin will make the final decision.",
+        "The owner of {asset_title} reported damage and is asking ₹{amount_asked} from your "
+        "deposit. Our team will review it and let you know the decision.",
     ),
     "rental_claim_decided_customer": (
         "Damage claim resolved",
@@ -470,8 +470,8 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     ),
     "rental_overdue_return_customer": (
         "Return overdue",
-        "Your rental of {asset_title} was due back on {end_date}. If the return is not "
-        "confirmed soon, your deposit will be refunded automatically.",
+        "Your rental of {asset_title} was due back on {end_date}. Please return it to the "
+        "owner as soon as you can.",
     ),
     #: Admin notifications
     "rental_new_claim": (
@@ -481,6 +481,76 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     "rental_overdue_for_admin": (
         "Overdue rental return",
         "{asset_title} was due back on {end_date} and the owner has not confirmed the return.",
+    ),
+    #: Booking lifecycle (customer)
+    "rental_payment_expired": (
+        "Booking not completed",
+        "Payment for {asset_title} was not completed in time, so the dates were released. "
+        "You can book again whenever you're ready.",
+    ),
+    "rental_handed_over_customer": (
+        "Your rental has started",
+        "{asset_title} has been handed over to you. Please return it by {end_date}.",
+    ),
+    "rental_returned_customer": (
+        "Return recorded",
+        "The owner marked {asset_title} as returned. Thanks for renting with V Solve Hub.",
+    ),
+    "rental_booking_cancelled_customer": (
+        "Rental booking cancelled",
+        "Your booking for {asset_title} ({start_date} to {end_date}) was cancelled. "
+        "Anything you paid will be refunded.",
+    ),
+    "rental_claim_rejected_customer": (
+        "Damage claim turned down",
+        "Our team reviewed the owner's claim on {asset_title} and turned it down. Your full "
+        "deposit of ₹{deposit_amount} is being refunded.",
+    ),
+    #: Booking lifecycle (owner)
+    "rental_booking_cancelled_owner": (
+        "Booking cancelled: {asset_title}",
+        "The booking for {asset_title} from {start_date} to {end_date} was cancelled. "
+        "Those dates are free again.",
+    ),
+    "rental_claim_rejected_owner": (
+        "Damage claim turned down",
+        "Our team reviewed your damage claim on {asset_title} and turned it down. The full "
+        "deposit goes back to the customer.",
+    ),
+    #: Delivery (transport) requests
+    "rental_delivery_requested": (
+        "Delivery requested: {asset_title}",
+        "A customer wants {asset_title} delivered. Send your transport price before the "
+        "request expires.",
+    ),
+    "rental_delivery_quote_rejected": (
+        "Delivery price turned down",
+        "The customer turned down your delivery price for {asset_title}. Open the booking to "
+        "see whether you can send a new one.",
+    ),
+    "rental_delivery_quote_accepted": (
+        "Delivery price accepted",
+        "The customer accepted ₹{quote_amount} to deliver {asset_title}. You'll hear from us "
+        "as soon as they've paid.",
+    ),
+    "rental_delivery_quoted": (
+        "Delivery price received",
+        "The owner quoted ₹{quote_amount} to deliver {asset_title}. Accept it to pay and "
+        "confirm, or turn it down.",
+    ),
+    "rental_delivery_declined": (
+        "Delivery not available",
+        "The owner can't deliver {asset_title}. You can switch to self pickup or cancel. "
+        "Nothing has been charged.",
+    ),
+    "rental_out_for_delivery": (
+        "Out for delivery",
+        "{asset_title} is on its way. Keep your handover PIN ready for the person delivering it.",
+    ),
+    "rental_delivery_expired": (
+        "Delivery request expired",
+        "The delivery for {asset_title} wasn't settled in time, so the dates were released. "
+        "You can switch to self pickup or cancel. Nothing has been charged.",
     ),
     # ---- Partner application decisions -------------------------------------------------
     #: One notice per Operations decision on a Partner's application. The decline and
@@ -512,6 +582,34 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "We cannot approve your partner application. If you think this is a mistake, contact "
         "support.",
     ),
+    "area-opened-draft": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Open your application to tick it and set your hours.",
+    ),
+    "area_opened_draft": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Open your application to tick it and set your hours.",
+    ),
+    "area-ready-in-review": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Tell your reviewer to add it to your application.",
+    ),
+    "area_ready_in_review": (
+        "We now work in {postal_code}",
+        "We now work in {postal_code} ({area_name}). "
+        "Tell your reviewer to add it to your application.",
+    ),
+    "area-added-approved": (
+        "New area added: {area_name}",
+        "We now work in {postal_code} ({area_name}). We added it to your coverage.",
+    ),
+    "area_added_approved": (
+        "New area added: {area_name}",
+        "We now work in {postal_code} ({area_name}). We added it to your coverage.",
+    ),
     "partner_account_suspended": (
         "Your partner account is paused",
         "You will not get new work, and your listings are hidden, until it is reinstated. "
@@ -531,6 +629,10 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Booking confirmed: {service}",
         "{when}. The customer has paid. Open the job for the details.",
     ),
+    "customer_booking_confirmed": (
+        "Booking confirmed: {service}",
+        "Payment received. {partner_name} will visit on {when}. Open the booking for details.",
+    ),
     "partner_visit_time_to_leave": (
         "Time to leave for {service}",
         "The visit starts at {time}. Open the job for the address and the route.",
@@ -538,6 +640,10 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     "partner_went_offline": (
         "You are offline now",
         "{reason} Open the app and go online to get jobs again.",
+    ),
+    "account_deletion_cancelled": (
+        "Your account is staying",
+        "You signed in again, so we cancelled your account deletion. Nothing was removed.",
     ),
     "customer_visit_en_route": (
         "{partner_name} is on the way",

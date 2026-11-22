@@ -54,7 +54,9 @@ function Mark({ kind }: { kind: (typeof GROUPS)[number]["kind"] }) {
 export function PolicyList({ policies }: { policies: ServiceDetail["policies"] }) {
   const groups = GROUPS.map((group) => ({
     ...group,
-    items: policies.filter((policy) => policy.kind === group.kind),
+    items: policies.filter(
+      (policy) => policy.kind === group.kind && !/(?:warranty|guarantee|workmanship)/i.test(policy.text),
+    ),
   })).filter((group) => group.items.length > 0);
 
   if (groups.length === 0) return null;

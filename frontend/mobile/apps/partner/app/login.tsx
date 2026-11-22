@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MarketingHeader } from "@/components/marketing-header";
 import { usePartnerApplication } from "@/features/application/queries";
 import { destinationAfterSignIn } from "@/features/session/model/redirect";
+import { MobileLogin } from "@/features/session/view/mobile-login";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -61,14 +62,21 @@ export default function LoginScreen() {
     }
   }, [params.switch, signedIn]);
 
+  // The flow signs in before it finishes refreshing data and marks itself "authenticated", so a
+  // sign-in still verifying counts too. Otherwise the "Already Signed In" card flashes in between.
+  const justSignedIn = flow.phase === "authenticated" || (signedIn && flow.isVerifying);
+  // On the phone, keep the sign-in screen with the Verify button spinning until the next page
+  // opens, instead of swapping to a separate "Taking you to…" screen in between.
+  const holdOnForm = justSignedIn && Platform.OS !== "web";
+
   // Handle redirect after sign in (with brief delay if already signed in so user can switch)
   useEffect(() => {
     if (!signedIn || !knowsWhereToGo || params.switch === "true") return;
     const timer = setTimeout(() => {
       router.replace(destination as never);
-    }, 1200);
+    }, justSignedIn ? 0 : 1200);
     return () => clearTimeout(timer);
-  }, [destination, knowsWhereToGo, params.switch, router, signedIn]);
+  }, [destination, justSignedIn, knowsWhereToGo, params.switch, router, signedIn]);
 
   if (status === "loading") {
     return (
@@ -78,7 +86,17 @@ export default function LoginScreen() {
     );
   }
 
-  if (signedIn && params.switch !== "true") {
+  if (signedIn && params.switch !== "true" && justSignedIn && !holdOnForm) {
+    return (
+      <View className="flex-1 items-center justify-center bg-canvas">
+        <Text className="text-text-secondary">
+          {goingToApplication ? "Taking you to your application…" : "Taking you to your workspace…"}
+        </Text>
+      </View>
+    );
+  }
+
+  if (signedIn && params.switch !== "true" && !holdOnForm) {
     return (
       <View className="flex-1 items-center justify-center bg-canvas px-4">
         <View
@@ -141,6 +159,53 @@ export default function LoginScreen() {
           </View>
         </View>
       </View>
+    );
+  }
+
+  const newPartnerFooter = (
+    <View className="mt-4 rounded-2xl border border-line bg-surface-sunken p-4 gap-1">
+      <Text className="text-sm font-bold text-navy-900">New to V Solve Hub?</Text>
+      <Text className="text-xs text-text-muted leading-relaxed">
+        Takes only 5 minutes. Free to join with weekly payouts.
+      </Text>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() => router.push("/apply")}
+        className="mt-1.5 self-start"
+      >
+        <Text
+          className="text-xs font-bold text-signal-700 underline"
+          style={{ textDecorationLine: "underline" }}
+        >
+          Register as a new Partner
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  if (Platform.OS !== "web") {
+    return (
+      <MobileLogin
+        flow={holdOnForm ? { ...flow, phase: "code", isVerifying: true } : flow}
+        footer={
+          <View className="mt-3 flex-row flex-wrap items-center justify-center gap-x-1">
+            <Text className="text-sm text-text-secondary">New to V Solve Hub?</Text>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push("/apply")}
+              className="min-h-11 justify-center"
+            >
+              <Text
+                className="text-sm font-bold text-signal-700 underline"
+                style={{ textDecorationLine: "underline" }}
+              >
+                Register as a new Partner
+              </Text>
+            </Pressable>
+          </View>
+        }
+        onHelp={() => router.push("/contact")}
+      />
     );
   }
 
@@ -363,26 +428,7 @@ export default function LoginScreen() {
                   {...flow}
                   heading={flow.phase === "code" ? "Enter verification code" : "Your mobile number"}
                   verifyLabel={flow.phase === "code" ? "Verify & Continue" : "Send code"}
-                  footer={
-                    <View className="mt-4 rounded-2xl border border-line bg-surface-sunken p-4 gap-1">
-                      <Text className="text-sm font-bold text-navy-900">New to V Solve Hub?</Text>
-                      <Text className="text-xs text-text-muted leading-relaxed">
-                        Takes only 5 minutes. Free to join with weekly payouts.
-                      </Text>
-                      <Pressable
-                        accessibilityRole="link"
-                        onPress={() => router.push("/apply")}
-                        className="mt-1.5 self-start"
-                      >
-                        <Text
-                          className="text-xs font-bold text-signal-700 underline"
-                          style={{ textDecorationLine: "underline" }}
-                        >
-                          Register as a new Partner
-                        </Text>
-                      </Pressable>
-                    </View>
-                  }
+                  footer={newPartnerFooter}
                 />
               </View>
             </Card>

@@ -351,7 +351,24 @@ class PrivacyRequestCreateSerializer(serializers.Serializer[dict[str, object]]):
 
 
 class PrivacyRequestSerializer(serializers.ModelSerializer[PrivacyRequest]):
+    scheduled_for = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text=(
+            "ERASURE only: when the account is erased unless the person signs in again first. "
+            "Null for ACCESS."
+        ),
+    )
+
     class Meta:
         model = PrivacyRequest
-        fields = ("id", "kind", "status", "requested_at", "completed_at")
+        fields = (
+            "id",
+            "kind",
+            "status",
+            "requested_at",
+            "scheduled_for",
+            "completed_at",
+            "cancelled_at",
+        )
         read_only_fields = fields

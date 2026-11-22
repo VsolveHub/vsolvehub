@@ -18,6 +18,7 @@ from apps.listings.models import (
     VendorSubscription,
     VendorSubscriptionPlan,
 )
+from apps.listings.selectors import employer_name, employer_public_identity
 
 
 class PhoneNumberField(serializers.CharField):
@@ -89,8 +90,22 @@ class ListingMediaSerializer(serializers.ModelSerializer[ListingMedia]):
         fields = ("id", "kind", "url", "alt_text", "display_order")
 
 
+class EmployerIdentitySerializer(serializers.Serializer[dict[str, Any]]):
+    """Who a job is shown as hiring. An individual is a short name with no street address."""
+
+    name = serializers.CharField()
+    kind = serializers.ChoiceField(choices=(("BUSINESS", "Business"), ("INDIVIDUAL", "Individual")))
+    locality = serializers.CharField()
+    is_verified = serializers.BooleanField()
+    logo_url = serializers.CharField()
+    industry_label = serializers.CharField()
+    size_label = serializers.CharField()
+
+
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
-    poster_name = serializers.CharField(source="poster.display_name", read_only=True)
+    #: The employer's public name (see `employer`), kept for clients that read only a name.
+    poster_name = serializers.SerializerMethodField()
+    employer = serializers.SerializerMethodField()
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
     variant_name = serializers.CharField(source="variant.name", read_only=True)
     #: Live applications (withdrawn and expired ones excluded). Uses the queryset annotation when
@@ -100,12 +115,26 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     salary_display = serializers.SerializerMethodField()
     media = ListingMediaSerializer(many=True, read_only=True)
 
+    @extend_schema_field(serializers.CharField())
+    def get_poster_name(self, obj: Listing) -> str:
+        return employer_name(obj.poster)
+
+    @extend_schema_field(EmployerIdentitySerializer())
+    def get_employer(self, obj: Listing) -> dict[str, Any]:
+        identity = employer_public_identity(obj.poster)
+        request = self.context.get("request")
+        logo = identity["logo_url"]
+        if logo and request is not None:
+            identity["logo_url"] = request.build_absolute_uri(logo)
+        return identity
+
     class Meta:
         model = Listing
         fields: tuple[str, ...] = (
             "id",
             "slug",
             "poster_name",
+            "employer",
             "service_name",
             "variant_name",
             "title",
@@ -182,6 +211,8 @@ class JobCountsSerializer(serializers.Serializer[dict[str, Any]]):
     shortlisted = serializers.IntegerField()
     interviews = serializers.IntegerField()
     connected = serializers.IntegerField()
+    #: People taken on; compared with the job's `vacancies` to offer "close as filled".
+    hired = serializers.IntegerField()
     #: Strong and good matches who have not applied yet: people the employer can invite.
     matches = serializers.IntegerField()
 
@@ -252,6 +283,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "shortlisted": live.filter(status=Application.Status.SHORTLISTED).count(),
             "interviews": live.filter(status=Application.Status.INTERVIEW).count(),
             "connected": live.filter(status=Application.Status.CONNECTED).count(),
+            "hired": live.filter(status=Application.Status.HIRED).count(),
             "matches": invitable_match_count(obj),
         }
 
@@ -416,7 +448,8 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
     status_events = ApplicationStatusEventSerializer(many=True, read_only=True)
     #: The latest interview, if any.
     interview = serializers.SerializerMethodField()
-    employer_name = serializers.CharField(source="listing.poster.display_name", read_only=True)
+    #: The business name when the employer gave one, else the person's name.
+    employer_name = serializers.SerializerMethodField()
     #: Shown to the candidate once an interview is accepted or they are connected.
     employer_phone = serializers.SerializerMethodField()
 
@@ -453,6 +486,10 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
             "created_at",
             "updated_at",
         )
+
+    @extend_schema_field(serializers.CharField())
+    def get_employer_name(self, obj: Application) -> str:
+        return employer_name(obj.listing.poster)
 
     @extend_schema_field(InterviewSerializer(allow_null=True))
     def get_interview(self, obj: Application) -> dict[str, Any] | None:

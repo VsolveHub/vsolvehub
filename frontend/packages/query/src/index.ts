@@ -616,3 +616,65 @@ export type {
   TouchRollup,
   TouchVerdict,
 } from "./m2-ops";
+
+export {
+  fetchWorkCatalog,
+  findSkillForCategory,
+  groupByService,
+  isListingTrack,
+  isServiceGroupSelected,
+  isTradeCategorySelected,
+  selectedTradeCategories,
+  syncRequiredSkills,
+  tickableCategories,
+  toggleServiceGroup,
+  toggleTradeCategorySelection,
+  variantIdsForCategory,
+  workCatalogFrom,
+} from "./partner-work";
+export type {
+  ApplicationTrack,
+  CategoryRef,
+  MainCategory,
+  OfferableService,
+  ServiceGroup,
+  WorkCatalog,
+} from "./partner-work";
+
+export {
+  areasWithoutHours,
+  collapseToWeeklySet,
+  expandExceptions,
+  expandWeeklySet,
+  presetPeriods,
+} from "./partner-hours";
+export type {
+  AreaException,
+  AreaRule,
+  HoursPreset,
+  PresetPeriod,
+  WeeklyShift,
+} from "./partner-hours";
+
+export {
+  canContinueStep3,
+  isValidPin,
+  matchPin,
+  MAX_REQUESTED_PINS,
+  normalisePin,
+} from "./partner-areas";
+export type {
+  AreaWithPostalCodes,
+  MatchPinResult,
+} from "./partner-areas";
+
+export {
+  isServiceAreaRequirementMet,
+  isWorkingHoursRequirementMet,
+  shouldSkipHoursStep,
+} from "./partner-readiness";
+export type {
+  ServiceAreaReadinessInput,
+  WorkingHoursReadinessInput,
+} from "./partner-readiness";
+

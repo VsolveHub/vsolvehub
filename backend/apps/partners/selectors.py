@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -14,10 +15,14 @@ from django.utils import timezone
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
+from apps.partners.gstin import PAN_HOLDER_STRUCTURE, GstinInvalidError, validate_gstin
 from apps.partners.models import (
+    EmployerProfile,
+    EmployerReviewCheck,
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
+    PartnerBusinessProfile,
     PartnerConsent,
     PartnerConsentDocument,
     PartnerDocument,
@@ -48,10 +53,156 @@ class InstantMatchingPresence:
 
 
 def applicant_service_areas() -> QuerySet[ServiceArea]:
-    return ServiceArea.objects.filter(
-        is_active=True,
-        is_accepting_partners=True,
-    ).only("id", "slug", "name", "timezone", "is_accepting_partners")
+    return (
+        ServiceArea.objects.filter(
+            is_active=True,
+            is_accepting_partners=True,
+        )
+        .prefetch_related("postal_code_links__postal_code")
+        .only("id", "slug", "name", "zone", "timezone", "is_accepting_partners")
+    )
+
+
+def partner_area_request_rows(application: PartnerApplication) -> list[dict[str, Any]]:
+    """Evaluates live status for an application's requested postal codes per FLOW.md §4."""
+    requests = list(
+        application.area_requests.all().select_related("dismissed_by").order_by("created_at", "id")
+    )
+    if not requests:
+        return []
+
+    pins = {req.postal_code for req in requests}
+    from apps.locations.models import (  # noqa: PLC0415
+        PostalCode,
+        ServiceArea,
+        ServiceAreaPostalCode,
+    )
+    from apps.partners.models import PartnerServiceArea  # noqa: PLC0415
+
+    postal_codes_map = {pc.code: pc.city for pc in PostalCode.objects.filter(code__in=pins)}
+
+    links = list(
+        ServiceAreaPostalCode.objects.filter(
+            postal_code__code__in=pins,
+            service_area__is_active=True,
+        ).select_related("service_area", "postal_code")
+    )
+
+    partner_area_ids = set(
+        PartnerServiceArea.objects.filter(
+            partner=application.partner,
+            is_active=True,
+        ).values_list("service_area_id", flat=True)
+    )
+
+    links_by_pin: dict[str, list[ServiceArea]] = {}
+    for link in links:
+        pin = link.postal_code.code
+        links_by_pin.setdefault(pin, []).append(link.service_area)
+
+    rows: list[dict[str, Any]] = []
+    for req in requests:
+        pin = req.postal_code
+        place = postal_codes_map.get(pin)
+        covering_areas = links_by_pin.get(pin, [])
+
+        covering_area = None
+        if req.dismissed_at is not None:
+            status = "NOT_VALID"
+        else:
+            held = [a for a in covering_areas if a.id in partner_area_ids]
+            if held:
+                status = "DONE"
+                covering_area = held[0]
+            else:
+                ready = [a for a in covering_areas if a.is_accepting_partners]
+                if ready:
+                    status = "READY"
+                    covering_area = ready[0]
+                elif covering_areas:
+                    status = "AREA_FULL"
+                    covering_area = covering_areas[0]
+                else:
+                    status = "WAITING"
+
+        rows.append(
+            {
+                "id": req.id,
+                "postal_code": pin,
+                "place": place,
+                "status": status,
+                "covering_area_id": covering_area.id if covering_area else None,
+                "covering_area_name": covering_area.name if covering_area else None,
+                "created_at": req.created_at,
+                "notified_at": req.notified_at,
+                "dismissed_at": req.dismissed_at,
+            }
+        )
+    return rows
+
+
+#: Catalog categories that are not trades on the "Your work" step. Stays, rentals, hiring and crew
+#: or project work are their own ways to join, chosen on the first screen or added after approval.
+WORK_CATALOG_EXCLUDED_CATEGORY_SLUGS: tuple[str, ...] = (
+    "rooms-pg-hostel",
+    "rooms-pg-hostel-hotels",
+    "rental-services",
+    "workforce-and-projects",
+    "career-jobs",
+)
+
+
+def partner_work_catalog() -> list[dict[str, object]]:
+    """Trade categories, each with its services and their variants, for the "Your work" step."""
+    from apps.catalog.models import Category  # noqa: PLC0415
+    from apps.catalog.selectors import work_catalog_services  # noqa: PLC0415
+
+    # Every active trade is listed, including one with nothing to offer yet (Events today): the
+    # step tells the applicant "no job types are open for this category yet" rather than hiding it.
+    categories: dict[object, dict[str, object]] = {
+        category.id: {
+            "id": category.id,
+            "slug": category.slug,
+            "name": category.name,
+            "icon_key": category.icon_key,
+            "image_url": category.image_url,
+            "services": [],
+        }
+        for category in Category.objects.filter(is_active=True)
+        .exclude(slug__in=WORK_CATALOG_EXCLUDED_CATEGORY_SLUGS)
+        .order_by("display_order", "name")
+    }
+    for service in work_catalog_services(
+        excluded_category_slugs=WORK_CATALOG_EXCLUDED_CATEGORY_SLUGS,
+    ):
+        variants = [
+            *getattr(service, "public_variants", []),
+            *getattr(service, "listing_variants", []),
+        ]
+        if not variants:
+            continue
+        entry = categories.get(service.subcategory.category_id)
+        if entry is None:
+            continue
+        services = entry["services"]
+        assert isinstance(services, list)  # noqa: S101 - narrows the type for mypy
+        services.append(
+            {
+                "id": service.id,
+                "slug": service.slug,
+                "name": service.name,
+                "variants": [
+                    {
+                        "id": variant.id,
+                        "code": variant.code,
+                        "name": variant.name,
+                        "required_skill_code": variant.required_skill_code,
+                    }
+                    for variant in variants
+                ],
+            },
+        )
+    return list(categories.values())
 
 
 def applicant_skills() -> QuerySet[Skill]:
@@ -74,6 +225,8 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
     )
 
 
+MIN_EMPLOYER_NAME_LENGTH = 2
+
 #: Documents a ride captain uploads on top of the identity documents every partner provides.
 RIDE_CAPTAIN_DOCUMENT_KINDS = (
     PartnerDocument.Kind.DRIVING_LICENCE,
@@ -82,16 +235,207 @@ RIDE_CAPTAIN_DOCUMENT_KINDS = (
 )
 
 
-def required_document_kinds(track: str) -> tuple[str, ...]:
-    """The document kinds submission and approval require for an application on this track.
+def required_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
+    """The document kinds this application must hold to be submitted and approved.
 
-    Every track needs the identity documents in `settings.PARTNER_REQUIRED_DOCUMENT_KINDS`. A ride
-    captain also needs a driving licence, the vehicle RC and insurance.
+    A ride captain also needs a driving licence, the vehicle RC and insurance.
     """
-    kinds = tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
-    if track == PartnerApplication.Track.RIDE_CAPTAIN:
-        kinds += tuple(str(kind) for kind in RIDE_CAPTAIN_DOCUMENT_KINDS)
-    return kinds
+    if application.track == PartnerApplication.Track.RIDE_CAPTAIN:
+        return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS) + tuple(
+            str(kind) for kind in RIDE_CAPTAIN_DOCUMENT_KINDS
+        )
+    if application.track != PartnerApplication.Track.EMPLOYER:
+        return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
+    kind = PartnerDocument.Kind
+    employer = getattr(application.partner, "employer_profile", None)
+    if employer is None:
+        return (kind.GOVERNMENT_ID,)
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return (kind.GOVERNMENT_ID, kind.SELFIE)
+    if employer.hiring_as == EmployerProfile.HiringAs.BUSINESS:
+        kinds: tuple[str, ...] = (kind.GOVERNMENT_ID, kind.BUSINESS_PROOF)
+        if employer.poster_role != EmployerProfile.PosterRole.OWNER:
+            kinds += (kind.AUTHORIZATION_LETTER,)
+        return kinds
+    return (kind.GOVERNMENT_ID,)
+
+
+def offered_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
+    """The document slots the apps show. An employer is offered exactly what it must upload.
+
+    A ride captain is offered the usual identity slots plus the three driving documents.
+    """
+    if application.track == PartnerApplication.Track.EMPLOYER:
+        return required_document_kinds(application)
+    offered = (PartnerDocument.Kind.GOVERNMENT_ID, PartnerDocument.Kind.ADDRESS_PROOF)
+    if application.track == PartnerApplication.Track.RIDE_CAPTAIN:
+        return offered + RIDE_CAPTAIN_DOCUMENT_KINDS
+    return offered
+
+
+def employer_missing_fields(partner: PartnerProfile) -> list[str]:
+    """What an employer still has to give before submitting, in screen order.
+
+    The one rule for submitting an employer application and for the apps' "details complete"
+    step. `trade_name`, `email`, `logo` and `website_url` are optional.
+    """
+    employer = getattr(partner, "employer_profile", None)
+    if employer is None or not employer.hiring_as:
+        return ["hiring_as"]
+    missing: list[str] = []
+    if len(partner.display_name.strip()) < MIN_EMPLOYER_NAME_LENGTH:
+        missing.append("display_name")
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return missing + _blank_fields(employer, ("area", "city", "pin_code", "id_document_type"))
+
+    business = getattr(partner, "business_profile", None)
+    missing += _blank_fields(
+        business,
+        ("legal_name", "legal_structure", "business_category", "company_size"),
+    )
+    missing += _blank_fields(business, ("business_proof_type",))
+    if business is not None and business.gst_registered and not _gstin_is_valid(business.gstin):
+        missing.append("gstin")
+    missing += _blank_fields(business, ("address", "area", "city", "state", "pin_code"))
+    if business is None or business.latitude is None or business.longitude is None:
+        missing += ["latitude", "longitude"]
+    return missing + _blank_fields(employer, ("poster_role", "id_document_type"))
+
+
+def required_check_codes(partner: PartnerProfile) -> list[str]:
+    """The manual checks Operations must pass before approving this employer, in review order."""
+    employer = getattr(partner, "employer_profile", None)
+    if employer is None:
+        return []
+    code = EmployerReviewCheck.Code
+    if employer.hiring_as == EmployerProfile.HiringAs.INDIVIDUAL:
+        return [code.NAME_MATCHES_ID, code.SELFIE_MATCHES_ID]
+    if employer.hiring_as != EmployerProfile.HiringAs.BUSINESS:
+        return []
+    business = getattr(partner, "business_profile", None)
+    has_gst = business is not None and business.gst_registered
+    return [
+        *([code.GST_ACTIVE_ON_PORTAL] if has_gst else []),
+        code.PROOF_MATCHES_BUSINESS,
+        code.POSTER_ID_MATCHES,
+        code.AUTHORITY_CONFIRMED,
+    ]
+
+
+def _hint(code: str, *, warn: bool, ok: str, warning: str) -> dict[str, str]:
+    return {"code": code, "level": "WARN" if warn else "OK", "message": warning if warn else ok}
+
+
+def _gstin_hints(partner: PartnerProfile, business: PartnerBusinessProfile) -> list[dict[str, str]]:
+    try:
+        facts = validate_gstin(business.gstin)
+    except GstinInvalidError:
+        return []
+    others = (
+        PartnerBusinessProfile.objects.filter(gstin=facts.gstin)
+        .exclude(partner=partner)
+        .select_related("partner")
+    )
+    names = sorted({other.legal_name or other.partner.display_name for other in others})
+    structure = business.get_legal_structure_display() or "not given"
+    return [
+        _hint(
+            "GSTIN_STATE_MISMATCH",
+            warn=facts.state_name.casefold() != business.state.strip().casefold(),
+            ok="The GSTIN's state matches the business state.",
+            warning=(
+                f"The GSTIN is for {facts.state_name}, but the state given is {business.state}."
+            ),
+        ),
+        _hint(
+            "PAN_TYPE_MISMATCH",
+            warn=PAN_HOLDER_STRUCTURE.get(facts.pan_holder_letter) != business.legal_structure,
+            ok="The PAN's holder type fits the legal structure.",
+            warning=(
+                f"The PAN's 4th letter ({facts.pan_holder_letter}) does not fit the legal "
+                f"structure ({structure})."
+            ),
+        ),
+        _hint(
+            "DUPLICATE_GSTIN",
+            warn=bool(names),
+            ok="No other business uses this GSTIN.",
+            warning=f"Another business already uses this GSTIN: {', '.join(names)}.",
+        ),
+    ]
+
+
+def employer_hints(partner: PartnerProfile) -> list[dict[str, str]]:
+    """Read-only pointers for the reviewer; they never block anything.
+
+    Each applicable check gives one hint, OK or WARN. Business only: an individual has no GSTIN
+    or proof to compare.
+    """
+    employer = getattr(partner, "employer_profile", None)
+    business = getattr(partner, "business_profile", None)
+    if employer is None or employer.hiring_as != EmployerProfile.HiringAs.BUSINESS:
+        return []
+    if business is None:
+        return []
+    hints: list[dict[str, str]] = []
+    if business.gst_registered:
+        hints += _gstin_hints(partner, business)
+    else:
+        hints.append(
+            _hint(
+                "NO_GST",
+                warn=True,
+                ok="",
+                warning="Check the business proof carefully.",
+            )
+        )
+    if business.business_proof_type == PartnerBusinessProfile.BusinessProofType.UDYAM:
+        hints.append(
+            _hint(
+                "UDYAM_PROOF",
+                warn=True,
+                ok="",
+                warning="Udyam is self-declared. Look for other signs the business is real.",
+            )
+        )
+    return hints
+
+
+def employer_checks_for(application: PartnerApplication) -> list[dict[str, Any]]:
+    """Every check this employer needs, each with its result so far (`result` is null if unset)."""
+    recorded = {
+        check.code: check
+        for check in EmployerReviewCheck.objects.filter(application=application).select_related(
+            "checked_by"
+        )
+    }
+    rows: list[dict[str, Any]] = []
+    for code in required_check_codes(application.partner):
+        check = recorded.get(code)
+        rows.append(
+            {
+                "code": code,
+                "label": EmployerReviewCheck.Code(code).label,
+                "result": check.result if check else None,
+                "note": check.note if check else "",
+                "checked_by_name": check.checked_by.full_name if check else "",
+                "checked_at": check.checked_at if check else None,
+            }
+        )
+    return rows
+
+
+def _blank_fields(source: object | None, names: Sequence[str]) -> list[str]:
+    """The names whose value is missing or blank on `source` (all of them when it is missing)."""
+    return [name for name in names if source is None or not str(getattr(source, name)).strip()]
+
+
+def _gstin_is_valid(raw: str) -> bool:
+    try:
+        validate_gstin(raw)
+    except GstinInvalidError:
+        return False
+    return True
 
 
 def partner_has_required_consents(partner: PartnerProfile) -> bool:
@@ -143,12 +487,30 @@ def operations_partner_application_queue(
     status: str | None,
     assigned_to_me: bool,
     unassigned: bool,
+    track: str | None = None,
+    area_pending: bool = False,
 ) -> QuerySet[PartnerApplication]:
     queryset = PartnerApplication.objects.select_related(
         "partner",
         "review_assigned_to",
     )
-    if status is None:
+    if track is not None:
+        queryset = queryset.filter(track=track)
+    if area_pending:
+        queryset = (
+            queryset.filter(
+                status__in=(
+                    PartnerApplication.Status.SUBMITTED,
+                    PartnerApplication.Status.UNDER_REVIEW,
+                ),
+                area_requests__dismissed_at__isnull=True,
+            )
+            .exclude(
+                partner__service_area_links__is_active=True,
+            )
+            .distinct()
+        )
+    elif status is None:
         queryset = queryset.filter(
             status__in=(
                 PartnerApplication.Status.SUBMITTED,

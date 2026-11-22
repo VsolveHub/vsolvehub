@@ -2,7 +2,15 @@
 
 from celery import shared_task
 
+from apps.identity.account_deletion import process_due_account_deletions
 from apps.identity.retention import run_retention_sweep
+
+
+@shared_task(name="apps.identity.tasks.process_due_account_deletions")
+def process_due_account_deletions_task() -> dict[str, int]:
+    """Erase accounts whose deletion date has passed; hold the ones that cannot be yet."""
+
+    return process_due_account_deletions()
 
 
 @shared_task(name="apps.identity.tasks.run_retention_sweep")

@@ -14,6 +14,7 @@ import { useAuthStore } from "./auth-store";
 import { deviceLabel } from "./device-label";
 import { phoneAuthProvider } from "./firebase-module";
 import { installationId } from "./installation-id";
+import { logAuthFailure } from "./log-auth-failure";
 import { useMobileFirebaseFlow } from "./use-mobile-firebase-flow";
 
 export interface MobileOtpFlowOptions {
@@ -55,8 +56,8 @@ function digitsIn(value: string): number {
 
 /**
  * Phone sign-in for both apps, switched like the web's `usePhoneAuthFlow`: Firebase when the
- * build sets `EXPO_PUBLIC_PHONE_AUTH_PROVIDER=firebase` (store and test builds), otherwise the
- * server-sent code. The setting is fixed for the life of a build, so the hook order never
+ * build sets `EXPO_PUBLIC_PHONE_AUTH_PROVIDER=firebase`, otherwise the server-sent code (MSG91),
+ * which store and test builds use since 2026-11-21. The setting is fixed for the life of a build, so the hook order never
  * changes between renders.
  */
 export function useMobileOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
@@ -143,7 +144,8 @@ function useServerOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
       setExpiresUntil(stamped + issued.expires_in_seconds * 1000);
       setPhase("code");
     } catch (error) {
-      setFailure(describeOtpFailure(error));
+      logAuthFailure("otp request", error);
+      setFailure(describeOtpFailure(error, options?.intendedRole ?? "partner"));
     } finally {
       setRequesting(false);
     }
@@ -185,6 +187,7 @@ function useServerOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
           setChallengeId(null);
           setDevelopmentCode(null);
         } catch (error) {
+          logAuthFailure("otp verify", error);
           const codeFieldError =
             error instanceof ApiRequestError ? (error.fieldErrors.code?.[0] ?? null) : null;
           if (codeFieldError) {

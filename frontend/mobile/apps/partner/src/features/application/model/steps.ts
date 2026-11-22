@@ -1,3 +1,4 @@
+import { isListingTrack } from "@vsolve/query/native";
 // Ported from frontend/apps/partner/features/application/model/steps.ts
 /**
  * The same steps, in the same order, as the website: the agreements are accepted on the last
@@ -37,13 +38,46 @@ export const SERVICE_APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
-/** Tracks on the short form. Ride captains too: the server asks them no trades, areas or hours. */
-export function isListingTrack(track?: string | null): boolean {
-  return track === "STAY_HOST" || track === "RENTAL_OWNER" || track === "RIDE_CAPTAIN";
-}
+/** Who an employer hires for. Empty until they choose. */
+export type HiringAs = "INDIVIDUAL" | "BUSINESS";
+
+const HIRING_AS: ApplicationStep = { href: "/apply/hiring-as", label: "Who is hiring" };
+const DOCUMENTS: ApplicationStep = { href: "/apply/documents", label: "Documents" };
+const REVIEW: ApplicationStep = { href: "/apply/review", label: "Agree & send" };
+
+/**
+ * An employer first says who is hiring, and what they are asked next follows from it. Each is its
+ * own list, so `APPLICATION_STEPS` stays exactly the short path. Before a choice, only the choice
+ * shows: what comes after depends on it. The same lists as the website's, without its overview.
+ */
+const EMPLOYER_UNCHOSEN_STEPS: readonly ApplicationStep[] = [HIRING_AS];
+const EMPLOYER_INDIVIDUAL_STEPS: readonly ApplicationStep[] = [
+  HIRING_AS,
+  { href: "/apply/employer/about", label: "About you" },
+  DOCUMENTS,
+  REVIEW,
+];
+const EMPLOYER_BUSINESS_STEPS: readonly ApplicationStep[] = [
+  HIRING_AS,
+  { href: "/apply/employer/business", label: "Business details" },
+  { href: "/apply/employer/contact", label: "You and your role" },
+  DOCUMENTS,
+  REVIEW,
+];
+
+/** Stays, rentals, hiring and ride captains share the short application. Services walk the full list. */
+export { isListingTrack };
 
 /** The step sequence for this partner. Services is the server's default track, as on the web. */
-export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
+export function applicationSteps(
+  track?: string | null,
+  hiringAs?: string | null,
+): readonly ApplicationStep[] {
+  if (track === "EMPLOYER") {
+    if (hiringAs === "INDIVIDUAL") return EMPLOYER_INDIVIDUAL_STEPS;
+    if (hiringAs === "BUSINESS") return EMPLOYER_BUSINESS_STEPS;
+    return EMPLOYER_UNCHOSEN_STEPS;
+  }
   if (track === "RIDE_CAPTAIN") return CAPTAIN_APPLICATION_STEPS;
   return isListingTrack(track) ? APPLICATION_STEPS : SERVICE_APPLICATION_STEPS;
 }
@@ -59,8 +93,16 @@ export function isUnchosenDraft(
   return application?.status === "DRAFT" && application.version === 1;
 }
 
-/** The four ways to join offered on the first screen. */
-export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "RIDE_CAPTAIN";
+/**
+ * Where a partner goes first once they have chosen how to join. An employer starts by saying who
+ * is hiring; everyone else starts with who they are.
+ */
+export function firstStepHref(track: string): string {
+  return track === "EMPLOYER" ? "/apply/hiring-as" : "/apply/about";
+}
+
+/** The ways to join offered on the first screen. */
+export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER" | "RIDE_CAPTAIN";
 
 /**
  * Whether this device offers a way of joining. Captains are Android only in V1 (Rides brief,
@@ -74,6 +116,7 @@ const AFTER_APPROVAL: Record<StartTrack, string> = {
   SERVICES: "After approval, job offers come to you in the V Solve Hub partner app.",
   STAY_HOST: "After approval, you add your property and rooms, and guests can book.",
   RENTAL_OWNER: "After approval, you add your items, and customers can rent them.",
+  EMPLOYER: "After approval, you post your jobs and people can apply.",
   RIDE_CAPTAIN: "After approval, you go on duty and ride requests come to you.",
 };
 
@@ -84,7 +127,12 @@ export function trackPreview(track: StartTrack): {
   after: string;
 } {
   return {
-    steps: applicationSteps(track),
+    steps:
+      track === "EMPLOYER"
+        ? // Who is hiring comes first and decides the rest, so the preview names the one
+          // "your details" stage that follows rather than either path.
+          [HIRING_AS, { href: "/apply/employer", label: "Your details" }, DOCUMENTS, REVIEW]
+        : applicationSteps(track),
     time: isListingTrack(track) ? "About 3 minutes" : "About 5 minutes",
     after: AFTER_APPROVAL[track],
   };
@@ -103,8 +151,12 @@ export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
 /**
  * Which step a path is on, or -1.
  */
-export function stepIndexOf(pathname: string, track?: string | null): number {
-  return applicationSteps(track).findIndex((step) => step.href === normalise(pathname));
+export function stepIndexOf(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): number {
+  return applicationSteps(track, hiringAs).findIndex((step) => step.href === normalise(pathname));
 }
 
 function normalise(pathname: string): string {
@@ -117,13 +169,21 @@ export function capabilityStepIndexOf(pathname: string): number {
 }
 
 /** The step after `pathname`, or null at the end of the sequence or off it. */
-export function nextStep(pathname: string, track?: string | null): ApplicationStep | null {
-  const index = stepIndexOf(pathname, track);
+export function nextStep(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): ApplicationStep | null {
+  const index = stepIndexOf(pathname, track, hiringAs);
   if (index === -1) return null;
-  return applicationSteps(track)[index + 1] ?? null;
+  return applicationSteps(track, hiringAs)[index + 1] ?? null;
 }
 
-export function isLastStep(pathname: string, track?: string | null): boolean {
-  const steps = applicationSteps(track);
-  return stepIndexOf(pathname, track) === steps.length - 1;
+export function isLastStep(
+  pathname: string,
+  track?: string | null,
+  hiringAs?: string | null,
+): boolean {
+  const steps = applicationSteps(track, hiringAs);
+  return stepIndexOf(pathname, track, hiringAs) === steps.length - 1;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { presetPeriods } from "@vsolve/query/partner-hours";
 import { Badge, Button, useT } from "@vsolve/ui";
 import { Plus, Trash2, X, Clock, Edit2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,6 +32,8 @@ export interface AvailabilityEditorProps {
   /** Where Back and Continue go: the steps either side of hours, for this Partner's track. */
   backHref: string;
   nextHref: string;
+  /** An older draft had different hours per area; saving writes one set to all of them. */
+  differed?: boolean;
 }
 
 type ModalShiftState = {
@@ -52,6 +55,7 @@ export function AvailabilityEditor({
   saveError = null,
   backHref,
   nextHref,
+  differed = false,
 }: AvailabilityEditorProps) {
   const router = useRouter();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
@@ -157,31 +161,44 @@ export function AvailabilityEditor({
   }
 
   function applyPreset(type: "fulltime" | "weekdays" | "clear") {
-    const areaId = areas[0]?.id;
-    if (areaId === undefined) return;
+    if (areas.length === 0) return;
 
     if (type === "clear") {
       setPeriods([]);
       return;
     }
 
-    const days = type === "fulltime" ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4];
-    const newSchedule: DraftPeriod[] = days.map((day) => ({
-      key: `preset-${day}-${Date.now()}`,
-      serviceAreaId: areaId,
-      weekday: day,
-      startsAt: "09:00",
-      endsAt: "18:00",
-      endsNextDay: false,
-    }));
-    setPeriods(newSchedule);
+    // Every selected area, because Django needs hours for each one before it accepts the
+    // application. It used to fill only the first.
+    const stamp = Date.now();
+    setPeriods(
+      presetPeriods(
+        type,
+        areas.map((area) => area.id),
+      ).map((period) => ({
+        ...period,
+        key: `preset-${period.serviceAreaId}-${period.weekday}-${stamp}`,
+      })),
+    );
   }
 
   if (areas.length === 0) {
     return (
-      <p className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
-        {t("apply.schedule.chooseAreaFirst")}
-      </p>
+      <div className="flex flex-col gap-6 pb-24">
+        <p className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
+          {t("apply.schedule.noHoursNeededYet")}
+        </p>
+        <ApplyDock>
+          <div className="flex items-center justify-between gap-4">
+            <Button variant="outline" onClick={() => router.push(backHref)}>
+              {t("common.back")}
+            </Button>
+            <Button variant="primary" onClick={() => router.push(nextHref)}>
+              {t("common.continue")}
+            </Button>
+          </div>
+        </ApplyDock>
+      </div>
     );
   }
 
@@ -194,6 +211,15 @@ export function AvailabilityEditor({
           {hours === 0 ? t("apply.schedule.noHoursSet") : t("apply.schedule.hoursPerWeek", { hours })}
         </Badge>
       </div>
+
+      {differed ? (
+        <p
+          role="status"
+          className="rounded-control border border-info-line bg-info-surface p-3 text-xs text-info-text"
+        >
+          {t("apply.schedule.sameHoursNote")}
+        </p>
+      ) : null}
 
       {/* Quick Schedule Presets */}
       <div className="flex flex-wrap items-center gap-2">

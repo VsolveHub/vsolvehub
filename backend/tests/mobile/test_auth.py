@@ -103,6 +103,46 @@ def test_unknown_bearer_token_is_not_authenticated() -> None:
     assert response.json()["error"]["code"] == "not_authenticated"
 
 
+def test_unknown_bearer_token_does_not_block_sign_in() -> None:
+    """Regression: a phone with a dead token was refused at the OTP request with a 403."""
+    stale = "Bearer not-a-session"
+    client = APIClient()
+
+    issued = client.post(
+        "/api/v1/auth/otp/request/",
+        {"phone_number": "9876543210", "device_identifier": "install-1"},
+        format="json",
+        HTTP_AUTHORIZATION=stale,
+    )
+    assert issued.status_code == HTTPStatus.ACCEPTED
+
+    verified = client.post(
+        "/api/v1/auth/mobile/otp/verify/",
+        {
+            "challenge_id": issued.json()["challenge_id"],
+            "phone_number": "+919876543210",
+            "code": issued.json()["development_code"],
+            "device_identifier": "install-1",
+            "device_label": "iPhone",
+        },
+        format="json",
+        HTTP_AUTHORIZATION=stale,
+    )
+    assert verified.status_code == HTTPStatus.OK
+    assert verified.json()["session_token"]
+
+
+def test_unknown_bearer_token_still_refused_outside_sign_in() -> None:
+    response = APIClient().post(
+        "/api/v1/auth/logout/",
+        format="json",
+        HTTP_AUTHORIZATION="Bearer not-a-session",
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()["error"]["code"] == "not_authenticated"
+
+
 def test_bearer_post_does_not_need_csrf_and_cookie_post_still_does() -> None:
     setup = APIClient()
     issued = _issue_otp(setup)

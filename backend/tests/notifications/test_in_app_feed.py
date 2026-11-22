@@ -195,6 +195,7 @@ def test_every_registered_template_renders_from_its_documented_context() -> None
         "amount_asked": "₹1,200",
         "refund_amount": "₹400",
         "deducted_amount": "₹800",
+        "quote_amount": "750",
     }
     for template_code in registered_template_codes():
         rendered = render_notification(template_code=template_code, context=context)

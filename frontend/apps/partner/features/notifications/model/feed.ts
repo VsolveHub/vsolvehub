@@ -142,6 +142,11 @@ export function targetHref(
   // detail route is keyed by — and the offer is on a two-minute clock, so this
   // is the one notice where landing anywhere but the answer button is a loss.
   if (target.kind === "CREW_OFFER") return `/work/offers/${target.id}`;
+  // Every rental notice (new booking, delivery request, cancellation, damage claim, overdue).
+  // Rental bookings have no page of their own; the bookings list opens this one's panel.
+  if ((target as { kind: string }).kind === "RENTAL_BOOKING") {
+    return `/rentals/bookings?booking=${encodeURIComponent(target.id)}`;
+  }
   return null;
 }
 

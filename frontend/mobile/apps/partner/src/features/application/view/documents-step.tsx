@@ -1,7 +1,8 @@
 // Ported from frontend/apps/partner/features/application/view/documents-step.tsx
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import {
   AlertCircle,
   AlertTriangle,
@@ -14,13 +15,75 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
-import { offeredDocuments, requiredDocumentKinds } from "../model/readiness";
-import { isListingTrack } from "../model/steps";
+import { offeredDocumentKinds, requiredDocumentKinds } from "../model/readiness";
+import { documentLabel, isDocumentRejected } from "../model/status";
+import { previousStep } from "../model/progress";
 import { usePartnerApplication } from "../queries";
+import { usePartnerDocumentAccess } from "../upload-queries";
+import { StepFrame } from "./application-editor";
 import { DocumentUpload } from "./document-upload";
 
 type Application = Schemas["PartnerApplication"];
 type DocumentKind = Schemas["PartnerDocumentKindEnum"];
+
+/**
+ * What each slot says about itself: its name, why it is asked, and what it must match.
+ *
+ * An employer's documents are named for what they prove ("Your ID", "Business proof: Udyam
+ * registration"), and each says what the applicant gave that it must match, so the reviewer's
+ * checklist is no surprise to them. Every other track keeps its two documents as they were.
+ */
+/** Why each non-employer slot is asked. A ride captain's three driving documents come last. */
+const STANDARD_HINTS: Partial<Record<DocumentKind, string>> = {
+  GOVERNMENT_ID: "Confirms who you are. If you upload Aadhaar, cover the first 8 digits.",
+  ADDRESS_PROOF: "Any recent bill or statement showing your name and address.",
+  DRIVING_LICENCE: "Your valid driving licence for the vehicle you will drive.",
+  VEHICLE_RC: "The registration certificate (RC) of that vehicle.",
+  VEHICLE_INSURANCE: "That vehicle's current insurance policy.",
+};
+
+function slotText(
+  application: Application | null,
+  kind: DocumentKind,
+  t: ReturnType<typeof useT>,
+): { label: string; hint: string | null; notes: string[] } {
+  const fallback = documentLabel(kind);
+  if (application?.track !== "EMPLOYER") {
+    return { label: fallback, hint: STANDARD_HINTS[kind] ?? null, notes: [] };
+  }
+  const employer = application.employer;
+  switch (kind) {
+    case "GOVERNMENT_ID": {
+      const idType = employer?.id_document_type;
+      const notes: string[] = [];
+      if (idType) {
+        notes.push(
+          t("apply.employer.documents.idType", { type: t(`apply.employer.field.idType.${idType}`) }),
+        );
+        if (idType === "AADHAAR_MASKED") notes.push(t("apply.employer.documents.aadhaarHelp"));
+      }
+      return { label: t("apply.employer.documents.id.label"), hint: t("apply.employer.documents.id.why"), notes };
+    }
+    case "SELFIE":
+      return { label: fallback, hint: t("apply.employer.documents.selfie.why"), notes: [] };
+    case "BUSINESS_PROOF": {
+      const proof = employer?.business?.business_proof_type;
+      return {
+        label: proof
+          ? t("apply.employer.documents.businessProof.label", {
+              type: t(`apply.employer.business.proof.${proof}`),
+            })
+          : fallback,
+        hint: t("apply.employer.documents.businessProof.why"),
+        notes: [],
+      };
+    }
+    case "AUTHORIZATION_LETTER":
+      return { label: fallback, hint: t("apply.employer.documents.letter.why"), notes: [] };
+    default:
+      return { label: fallback, hint: null, notes: [] };
+  }
+}
 
 function currentDocument(application: Application, kind: DocumentKind): Schemas["PartnerDocument"] | null {
   const candidates = application.documents
@@ -30,20 +93,42 @@ function currentDocument(application: Application, kind: DocumentKind): Schemas[
 }
 
 export function DocumentsStep() {
+  const t = useT();
   const query = usePartnerApplication();
   const router = useRouter();
   const { registerDock } = useApplyDock();
-  const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
+  const isMissing = Boolean(
+    (query.error instanceof ApiRequestError && query.error.status === 404) ||
+      (query.error && typeof query.error === "object" && (query.error as { status?: number }).status === 404),
+  );
   const [replacingKind, setReplacingKind] = useState<DocumentKind | null>(null);
+  const access = usePartnerDocumentAccess();
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  /** A short-lived link to one of the person's own documents, as the website's "View document". */
+  async function viewDocument(documentId: string) {
+    setAccessError(null);
+    setOpeningId(documentId);
+    try {
+      const response = await access.mutateAsync(documentId);
+      if (response.access_url) await WebBrowser.openBrowserAsync(response.access_url);
+      else setAccessError("Could not generate a preview link. Please try again.");
+    } catch {
+      setAccessError("Could not open this document right now. Please try again.");
+    } finally {
+      setOpeningId(null);
+    }
+  }
 
   const application = query.data ?? null;
   const required = requiredDocumentKinds(application);
-  const offered = offeredDocuments(application);
   const allUploaded = required.every((kind) => {
     const document = application ? currentDocument(application, kind) : null;
-    return document !== null && document.status !== "REJECTED";
+    // A file that failed the security scan is rejected too, as on the website.
+    return document !== null && !isDocumentRejected(document);
   });
-  const anyUploaded = offered.some((item) => application !== null && currentDocument(application, item.kind) !== null);
+  const offered = offeredDocumentKinds(application);
 
   // Ride captains go on to their vehicle; everyone else to the agreements.
   const isCaptain = application?.track === "RIDE_CAPTAIN";
@@ -51,15 +136,20 @@ export function DocumentsStep() {
     router.push(isCaptain ? "/rides/vehicle" : "/apply/review");
   }, [router, isCaptain]);
 
+  // The step before Documents in this partner's own list: hours for services, Business details
+  // for employers, About you for stays and rentals.
+  const backHref =
+    previousStep("/apply/documents", application?.track, application?.employer?.hiring_as)?.href ??
+    "/apply/about";
+
   useEffect(() => {
     registerDock({
-      label: anyUploaded ? "Continue" : "Continue →",
-      // The step before Documents: your hours for services, About you for stays and rentals.
-      backHref: isListingTrack(application?.track) ? "/apply/about" : "/apply/schedule",
+      label: "Continue",
+      backHref,
       nextStepName: isCaptain ? "Your vehicle" : "Agree & send",
       onCommit,
       isSaving: false,
-      proceedDisabled: !allUploaded,
+      proceedDisabled: false,
       saved: false,
       conflict: false,
       refusal: null,
@@ -67,7 +157,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, allUploaded, anyUploaded, application?.track, isCaptain]);
+  }, [registerDock, onCommit, backHref, isCaptain]);
 
   useEffect(() => {
     return () => {
@@ -96,46 +186,50 @@ export function DocumentsStep() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Title & Subtitle Matching Mockups */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Documents</Text>
-        <Text style={styles.subtitle}>
-          Upload the required documents to verify your identity and address.
-        </Text>
-      </View>
-
-      {/* Cards List */}
+    <StepFrame
+      title="Documents"
+      description="A reviewer checks these before you can take work."
+    >
       <View style={styles.cardsContainer}>
-        {offered.map((item) => {
+        {[...offered]
+          .sort((a, b) => Number(required.includes(b)) - Number(required.includes(a)))
+          .map((kind) => {
+          const { label, hint, notes } = slotText(application, kind, t);
+          const item = { kind, label };
           const document = application ? currentDocument(application, item.kind) : null;
           const isUploaded = document !== null;
           const isReplacing = replacingKind === item.kind;
           const isApproved = document?.status === "APPROVED";
-          const isRejected = document?.status === "REJECTED";
+          const isRejected = document !== null && isDocumentRejected(document);
           const isPending = document?.status === "PENDING";
           // Replaceable only when the server says so: a declined application refuses it with a 409.
           const canReplace = document?.can_replace ?? false;
           const isReplaceState = isRejected && canReplace;
+          // Locked once sent: only a document the reviewer rejected can be swapped.
+          const isLockedForReview =
+            document !== null &&
+            !canReplace &&
+            (application?.status === "SUBMITTED" || application?.status === "UNDER_REVIEW");
+          const isRequired = required.includes(item.kind);
 
           return (
             <View key={item.kind} style={styles.card}>
-              {/* Card Header Row: Title + Status Pill */}
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>
-                  {item.label}{" "}
-                  {required.includes(item.kind) ? <Text style={styles.requiredAsterisk}>*</Text> : <Text>(optional)</Text>}
-                </Text>
+              {/* Header row: Title + Subtitle and Status Pill */}
+              <View style={styles.cardHeader}>
+                <View style={styles.cardTitleCol}>
+                  <Text style={styles.cardTitle}>{item.label}</Text>
+                  <Text style={styles.cardSubtitle}>
+                    {isRequired ? "Required" : "Optional"}
+                  </Text>
+                </View>
 
                 {isUploaded && !isReplacing ? (
                   isApproved ? (
                     <View style={styles.approvedPill}>
-                      <CheckCircle2 size={13} color="#2fa84f" strokeWidth={2.4} />
                       <Text style={styles.approvedPillText}>Approved</Text>
                     </View>
                   ) : isReplaceState ? (
                     <View style={styles.replacePill}>
-                      <AlertTriangle size={13} color="#d32f1e" strokeWidth={2.4} />
                       <Text style={styles.replacePillText}>Replace</Text>
                     </View>
                   ) : (
@@ -143,15 +237,32 @@ export function DocumentsStep() {
                       <Text style={styles.pendingPillText}>In review</Text>
                     </View>
                   )
-                ) : null}
+                ) : (
+                  <View style={styles.notUploadedPill}>
+                    <Text style={styles.notUploadedPillText}>Not uploaded</Text>
+                  </View>
+                )}
               </View>
+
+              {/* Hint text: only while there is nothing, or a rejection, to act on */}
+              {notes.map((note) => (
+                <Text key={note} style={styles.hintText}>
+                  {note}
+                </Text>
+              ))}
+              {hint && (!isUploaded || isRejected) ? <Text style={styles.hintText}>{hint}</Text> : null}
 
               {/* Expired / Rejected Banner if Replace State */}
               {isUploaded && !isReplacing && isReplaceState ? (
                 <View style={styles.expiredBanner}>
                   <AlertCircle size={15} color="#d32f1e" strokeWidth={2.2} />
                   <Text style={styles.expiredBannerText}>
-                    {document?.review_reason || "This document was not accepted."}
+                    {document?.scan_status === "REJECTED"
+                      ? "This file failed our security check. Upload it again."
+                      : `Reason: ${
+                          document?.review_reason ||
+                          "We could not verify this document. Upload a clearer photo or PDF."
+                        }`}
                   </Text>
                 </View>
               ) : null}
@@ -159,7 +270,6 @@ export function DocumentsStep() {
               {/* Render Uploaded File Body or Upload Box */}
               {isUploaded && !isReplacing ? (
                 <View style={styles.fileContainer}>
-                  {/* File Metadata Tile Row */}
                   <View style={styles.fileRow}>
                     <View style={[styles.fileTile, isApproved ? styles.fileTileBlue : styles.fileTileGray]}>
                       {item.kind === "GOVERNMENT_ID" ? (
@@ -170,37 +280,56 @@ export function DocumentsStep() {
                     </View>
 
                     <View style={styles.fileInfo}>
-                      <Text style={styles.fileName}>
-                        {document.file_name}
-                      </Text>
+                      <Text style={styles.fileName}>{document.file_name}</Text>
                       <Text style={styles.fileMeta}>
-                        {Math.round(document.size_bytes / 1024)} KB · {document.content_type.split("/")[1]?.toUpperCase()}
+                        {Math.round(document.size_bytes / 1024)} KB · {document.content_type.split("/")[1]?.toUpperCase()} ·{" "}
+                        {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "Asia/Kolkata" }).format(
+                          new Date(document.uploaded_at),
+                        )}
                       </Text>
                     </View>
-
                   </View>
 
-                  {/* Re-upload Outline Button (Screen 4 Replace Tile) */}
-                  {isReplaceState ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View document"
+                    disabled={openingId === document.id}
+                    onPress={() => void viewDocument(document.id)}
+                    style={styles.reuploadButton}
+                  >
+                    <Text style={styles.reuploadButtonText}>
+                      {openingId === document.id ? "Opening…" : "View document"}
+                    </Text>
+                  </Pressable>
+
+                  {canReplace ? (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Re-upload document"
+                      accessibilityLabel={isRejected ? "Re-upload document" : "Replace file"}
                       onPress={() => setReplacingKind(item.kind)}
                       style={styles.reuploadButton}
                     >
-                      <RotateCw size={15} color="#f26a0f" strokeWidth={2.4} />
-                      <Text style={styles.reuploadButtonText}>Re-upload</Text>
+                      <RotateCw size={15} color="#f87000" strokeWidth={2.4} />
+                      <Text style={styles.reuploadButtonText}>{isRejected ? "Re-upload" : "Replace file"}</Text>
                     </Pressable>
+                  ) : null}
+
+                  {isLockedForReview ? (
+                    <Text style={styles.hintText}>Locked while your application is being reviewed.</Text>
                   ) : null}
                 </View>
               ) : (
-                /* Empty / Upload State (Screen 3) */
-                <View style={{ marginTop: 8 }}>
+                /* Empty / Upload Dropzone State */
+                <View style={styles.uploadSection}>
+                  <Text style={styles.uploadSubheading}>
+                    Upload your {item.label.toLowerCase()}
+                  </Text>
                   <DocumentUpload
                     kind={item.kind}
                     label={item.label}
                     expectedVersion={application?.version ?? null}
                     replacing={isReplacing || isReplaceState}
+                    onSuccess={() => setReplacingKind(null)}
                   />
                   {isReplacing ? (
                     <Pressable
@@ -216,16 +345,17 @@ export function DocumentsStep() {
             </View>
           );
         })}
+        {accessError ? (
+          <Text accessibilityRole="alert" style={{ fontSize: 12, fontWeight: "600", color: "#be123c" }}>
+            {accessError}
+          </Text>
+        ) : null}
       </View>
-    </View>
+    </StepFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: "column",
-    width: "100%",
-  },
   loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -236,100 +366,102 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
   },
-  header: {
-    marginBottom: 18,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#0b1b3a",
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginTop: 4,
-    lineHeight: 20,
-  },
   cardsContainer: {
     flexDirection: "column",
     rowGap: 16,
+    width: "100%",
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
-    padding: 20,
-    ...(Platform.OS === "web"
-      ? ({
-          boxShadow: "0 1px 4px rgba(11, 27, 58, 0.05)",
-        } as any)
-      : {
-          elevation: 2,
-          shadowColor: "#0b1b3a",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-        }),
+    borderColor: "#e7e2da",
+    padding: 16,
   },
-  labelRow: {
+  cardHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
-  label: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#0b1b3a",
+  cardTitleCol: {
+    flex: 1,
+    flexDirection: "column",
   },
-  requiredAsterisk: {
-    color: "#f26a0f",
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#00112e",
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: "#453f37",
+    marginTop: 2,
+  },
+  notUploadedPill: {
+    backgroundColor: "#f4f1ec",
+    borderRadius: 9999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  notUploadedPillText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#453f37",
   },
   approvedPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 5,
-    backgroundColor: "#e8f7ec",
+    backgroundColor: "#dcfce7",
     borderRadius: 9999,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
   },
   approvedPillText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#2fa84f",
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#15803d",
   },
   replacePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 5,
-    backgroundColor: "#fdecec",
+    backgroundColor: "#fee2e2",
     borderRadius: 9999,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
   },
   replacePillText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#d32f1e",
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#b91c1c",
   },
   pendingPill: {
-    backgroundColor: "#e0f2fe",
+    backgroundColor: "#fef3c7",
     borderRadius: 9999,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
   },
   pendingPillText: {
-    fontSize: 12,
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#b45309",
+  },
+  hintText: {
+    fontSize: 13,
+    color: "#453f37",
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  uploadSection: {
+    marginTop: 12,
+    flexDirection: "column",
+  },
+  uploadSubheading: {
+    fontSize: 14,
     fontWeight: "700",
-    color: "#0369a1",
+    color: "#00112e",
+    marginBottom: 8,
   },
   expiredBanner: {
     flexDirection: "row",
     alignItems: "center",
     columnGap: 8,
-    backgroundColor: "#fdecec",
+    backgroundColor: "#fee2e2",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -338,7 +470,7 @@ const styles = StyleSheet.create({
   expiredBannerText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#d32f1e",
+    color: "#b91c1c",
   },
   fileContainer: {
     marginTop: 14,
@@ -370,35 +502,19 @@ const styles = StyleSheet.create({
   fileName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0b1b3a",
+    color: "#00112e",
   },
   fileMeta: {
     fontSize: 12,
-    color: "#6b7280",
+    color: "#64748b",
     marginTop: 2,
-  },
-  viewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 5,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  viewButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#0b1b3a",
   },
   reuploadButton: {
     width: "100%",
     height: 44,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#f26a0f",
+    borderColor: "#f87000",
     backgroundColor: "#ffffff",
     flexDirection: "row",
     alignItems: "center",
@@ -409,7 +525,7 @@ const styles = StyleSheet.create({
   reuploadButtonText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#f26a0f",
+    color: "#f87000",
   },
   cancelReplaceButton: {
     marginTop: 8,
@@ -417,7 +533,7 @@ const styles = StyleSheet.create({
   },
   cancelReplaceText: {
     fontSize: 13,
-    color: "#6b7280",
+    color: "#64748b",
     textDecorationLine: "underline",
   },
 });

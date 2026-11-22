@@ -1,10 +1,13 @@
 // Ported from frontend/apps/partner/features/application/view/availability-editor.tsx
-import { Badge, Button, Dialog, Input, Text } from "@vsolve/mobile-ui";
+import { Badge, Button, Dialog, Input, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { Clock, Edit2, Plus, Trash2 } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 
+import { presetPeriods } from "@vsolve/query/native";
+
+import { useApplyDock } from "../model/dock-context";
 import { WEEKDAYS, scheduleProblems, weeklyHours, type DraftPeriod, type PeriodProblem } from "../model/schedule";
 
 const PROBLEM_MESSAGES: Record<PeriodProblem, string> = {
@@ -21,9 +24,16 @@ export interface ServiceAreaOption {
 export interface AvailabilityEditorProps {
   areas: readonly ServiceAreaOption[];
   initialPeriods: readonly DraftPeriod[];
-  onSave: (periods: readonly DraftPeriod[]) => void;
+  /** Saves the hours; `onSaved` runs only once the server has accepted them. */
+  onSave: (periods: readonly DraftPeriod[], onSaved?: () => void) => void;
   isSaving?: boolean;
   saveError?: string | null;
+  /** The step before and after this one, for the layout's Back and Continue buttons. */
+  backHref: string;
+  nextHref: string;
+  nextStepName: string | null;
+  /** An older draft had different hours per area; saving writes one set to all of them. */
+  differed?: boolean;
 }
 
 type ModalShiftState = {
@@ -42,8 +52,14 @@ export function AvailabilityEditor({
   onSave,
   isSaving = false,
   saveError = null,
+  backHref,
+  nextHref,
+  nextStepName,
+  differed = false,
 }: AvailabilityEditorProps) {
+  const t = useT();
   const router = useRouter();
+  const { registerDock } = useApplyDock();
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
   const [modalShift, setModalShift] = useState<ModalShiftState>(null);
 
@@ -51,6 +67,41 @@ export function AvailabilityEditor({
   const hours = weeklyHours(periods);
   const hasProblems = problems.size > 0;
   const hasChanges = JSON.stringify(periods) !== JSON.stringify(initialPeriods);
+
+  /**
+   * Back and Continue belong to the apply layout's dock, like every other step. This screen used
+   * to draw its own row of three buttons ("Back", "Save Hours", "Review Application") under the
+   * list, which ran off the right edge of a phone, sent Back to the step after this one and let
+   * "Review Application" skip Documents. Saving now happens through Continue.
+   */
+  const onCommit = useCallback(() => {
+    if (hasProblems || isSaving) return;
+    if (hasChanges) onSave(periods, () => router.push(nextHref as never));
+    else router.push(nextHref as never);
+  }, [hasChanges, hasProblems, isSaving, nextHref, onSave, periods, router]);
+
+  useEffect(() => {
+    registerDock({
+      label: hasChanges ? "Save and continue" : "Continue",
+      backHref,
+      nextStepName,
+      onCommit,
+      isSaving,
+      proceedDisabled: hasProblems,
+      saved: false,
+      conflict: false,
+      // The dock sits at the bottom of the screen, always in view, so the save error is shown
+      // there instead of under the list where it would be scrolled out of sight.
+      refusal: saveError ? { title: "We could not save your hours", message: saveError } : null,
+      failed: false,
+      requestId: null,
+      fieldMessages: [],
+    });
+  }, [backHref, hasChanges, hasProblems, isSaving, nextStepName, onCommit, registerDock, saveError]);
+
+  useEffect(() => {
+    return () => registerDock(null);
+  }, [registerDock]);
 
   function remove(key: string) {
     setPeriods((current) => current.filter((period) => period.key !== key));
@@ -112,21 +163,21 @@ export function AvailabilityEditor({
   }
 
   function applyPreset(type: "fulltime" | "weekdays" | "clear") {
-    const areaId = areas[0]?.id;
-    if (areaId === undefined) return;
+    if (areas.length === 0) return;
     if (type === "clear") {
       setPeriods([]);
       return;
     }
-    const days = type === "fulltime" ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4];
+    // Every selected area, because Django needs hours for each one before it accepts the
+    // application. It used to fill only the first.
+    const stamp = Date.now();
     setPeriods(
-      days.map((day) => ({
-        key: `preset-${day}-${Date.now()}`,
-        serviceAreaId: areaId,
-        weekday: day,
-        startsAt: "09:00",
-        endsAt: "18:00",
-        endsNextDay: false,
+      presetPeriods(
+        type,
+        areas.map((area) => area.id),
+      ).map((period) => ({
+        ...period,
+        key: `preset-${period.serviceAreaId}-${period.weekday}-${stamp}`,
       })),
     );
   }
@@ -134,13 +185,21 @@ export function AvailabilityEditor({
   if (areas.length === 0) {
     return (
       <Text className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
-        Choose where you work before publishing hours — your schedule is per area.
+        {t("apply.schedule.noHoursNeededYet")}
       </Text>
     );
   }
 
   return (
     <View className="flex-col gap-6">
+      {differed ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          className="rounded-control border border-info-line bg-info-surface p-3 text-xs text-info-text"
+        >
+          {t("apply.schedule.sameHoursNote")}
+        </Text>
+      ) : null}
       <View className="flex-row items-center justify-between">
         <Text className="text-sm font-bold text-navy-900">Weekly Schedule</Text>
         <Badge tone={hours > 0 ? "success" : "neutral"} className="font-bold">
@@ -335,32 +394,6 @@ export function AvailabilityEditor({
         ) : null}
       </Dialog>
 
-      {saveError ? (
-        <Text accessibilityRole="alert" className="text-sm font-bold text-danger-text">
-          ⚠️ {saveError}
-        </Text>
-      ) : null}
-
-      <View className="flex-row items-center justify-between gap-3 border-t border-line bg-surface py-3">
-        <Button variant="outline" size="lg" className="h-12 px-5" onPress={() => router.push("/apply/documents")}>
-          Back
-        </Button>
-        <View className="flex-row items-center gap-2.5">
-          <Button
-            size="lg"
-            onPress={() => onSave(periods)}
-            disabled={hasProblems || isSaving || !hasChanges}
-            loading={isSaving}
-            loadingLabel="Saving"
-            className="h-12 px-4"
-          >
-            {hasChanges ? "Save Hours" : "Saved"}
-          </Button>
-          <Button size="lg" className="h-12 px-5 shadow-md" onPress={() => router.push("/apply/review")}>
-            Review Application
-          </Button>
-        </View>
-      </View>
     </View>
   );
 }

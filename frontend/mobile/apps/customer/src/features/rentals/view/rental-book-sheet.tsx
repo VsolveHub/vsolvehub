@@ -106,7 +106,7 @@ export function RentalBookSheet({
   const [addressSheetOpen, setAddressSheetOpen] = useState(false);
   const [contactPhone, setContactPhone] = useState<string>("");
 
-  const addressesQuery = useAddresses();
+  const addressesQuery = useAddresses(authStatus === "signedIn");
   const profileQuery = useCustomerProfile(authStatus === "signedIn");
 
   const addresses = addressesQuery.data ?? [];

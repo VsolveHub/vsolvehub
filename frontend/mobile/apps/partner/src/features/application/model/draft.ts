@@ -36,6 +36,8 @@ export interface ApplicationDraft {
   skillCodes: readonly string[];
   serviceVariantIds: readonly string[];
   serviceAreaIds: readonly string[];
+  /** PINs typed on "Where you work" that no open area covers (FLOW.md cases C, D, F). */
+  requestedPostalCodes: readonly string[];
   consents: readonly ConsentDraft[];
 }
 
@@ -46,6 +48,7 @@ export const EMPTY_DRAFT: ApplicationDraft = {
   skillCodes: [],
   serviceVariantIds: [],
   serviceAreaIds: [],
+  requestedPostalCodes: [],
   consents: [],
 };
 
@@ -66,6 +69,7 @@ export function draftFromApplication(application: Application | null): Applicati
     skillCodes: [...application.skill_codes],
     serviceVariantIds: [...application.service_variant_ids],
     serviceAreaIds: [...application.service_area_ids],
+    requestedPostalCodes: [...(application.requested_postal_codes ?? [])],
     consents: application.consents
       .filter((consent) => consent.withdrawn_at === null)
       .map((consent) => ({
@@ -132,6 +136,10 @@ export function changedFields(
   }
   if (!sameSet(draft.serviceAreaIds, saved.serviceAreaIds)) {
     patch.service_area_ids = [...draft.serviceAreaIds];
+  }
+
+  if (!sameSet(draft.requestedPostalCodes, saved.requestedPostalCodes)) {
+    patch.requested_postal_codes = [...draft.requestedPostalCodes];
   }
 
   // Consents are append-only receipts. Only ones not already on file are sent;

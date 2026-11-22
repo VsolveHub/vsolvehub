@@ -5,8 +5,8 @@ export type FirebaseAuthModule = typeof import("@react-native-firebase/auth");
 
 /**
  * Which phone sign-in this build uses, the same switch as the web's
- * `NEXT_PUBLIC_PHONE_AUTH_PROVIDER`. Store and test builds set `firebase` in `eas.json`; local
- * development (Expo Go) keeps the server-sent code, `otp`.
+ * `NEXT_PUBLIC_PHONE_AUTH_PROVIDER`. Store and test builds set `otp` in `eas.json` (MSG91 via
+ * Django, owner decision 2026-11-21), as does local development (Expo Go).
  */
 export function phoneAuthProvider(): "firebase" | "otp" {
   return process.env.EXPO_PUBLIC_PHONE_AUTH_PROVIDER === "firebase" ? "firebase" : "otp";

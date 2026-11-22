@@ -269,6 +269,9 @@ class CommunicationPreference(models.Model):
         SMS = "SMS", "SMS"
         EMAIL = "EMAIL", "Email"
         PUSH = "PUSH", "Push"
+        #: Opt-in, not opt-out: WhatsApp's policy requires the person to have asked. Nothing is
+        #: sent on this channel without a row where `is_enabled=True` (`notifications.whatsapp`).
+        WHATSAPP = "WHATSAPP", "WhatsApp"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -294,6 +297,20 @@ class CommunicationPreference(models.Model):
 
 
 class PrivacyRequest(models.Model):
+    """A person's request to see (ACCESS) or delete (ERASURE) what the platform holds on them.
+
+    An ERASURE request is an account deletion with a grace period, the pattern Uber and the DPDP
+    Rules 2025 (Rule 8: erasure pauses if the person signs in) both follow:
+
+    - ``RECEIVED``: filed. The account is closed (signed out everywhere) and is erased once
+      ``scheduled_for`` passes.
+    - ``IN_REVIEW``: on hold. Something must be settled first (open work, a dispute, money owed
+      either way); ``notes`` says what, in words an operator can relay.
+    - ``CANCELLED``: the person signed in again before ``scheduled_for``, or support cancelled it.
+    - ``COMPLETED``: the account was erased (``apps.identity.account_deletion``).
+    - ``REJECTED``: Operations refused it, with the reason in ``notes``.
+    """
+
     class Kind(models.TextChoices):
         ACCESS = "ACCESS", "Access"
         ERASURE = "ERASURE", "Erasure"
@@ -303,6 +320,10 @@ class PrivacyRequest(models.Model):
         IN_REVIEW = "IN_REVIEW", "In review"
         COMPLETED = "COMPLETED", "Completed"
         REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    #: Still being worked on. One person has at most one open ERASURE request (constraint below).
+    OPEN_STATUSES = (Status.RECEIVED, Status.IN_REVIEW)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -313,12 +334,42 @@ class PrivacyRequest(models.Model):
     kind = models.CharField(max_length=16, choices=Kind.choices)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.RECEIVED)
     requested_at = models.DateTimeField(default=timezone.now)
+    #: ERASURE only: when the account is erased unless the person signs in again first.
+    scheduled_for = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    #: The operator who last decided something about it (hold, release, cancel, erase now).
+    #: Empty when the person or the scheduled sweep did.
+    handled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="privacy_requests_handled",
+    )
     notes = models.CharField(max_length=500, blank=True)
 
     class Meta:
         ordering = ("-requested_at",)
-        indexes = [models.Index(fields=("status", "requested_at"))]
+        indexes = [
+            models.Index(fields=("status", "requested_at")),
+            models.Index(fields=("kind", "status", "scheduled_for")),
+        ]
+        constraints = [
+            # A second open deletion request for the same person would be a second clock on
+            # the same account; the service returns the open one instead of filing another.
+            models.UniqueConstraint(
+                fields=("user",),
+                condition=models.Q(kind="ERASURE", status__in=("RECEIVED", "IN_REVIEW")),
+                name="identity_one_open_erasure_per_user",
+            ),
+            # A scheduled deletion without a date would never run and never be noticed.
+            models.CheckConstraint(
+                condition=~models.Q(kind="ERASURE", status="RECEIVED")
+                | models.Q(scheduled_for__isnull=False),
+                name="identity_received_erasure_has_schedule",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.user_id}:{self.kind}:{self.status}"

@@ -185,6 +185,39 @@ def _offerable_services() -> QuerySet[Service]:
     )
 
 
+def work_catalog_services(*, excluded_category_slugs: Iterable[str]) -> list[Service]:
+    """Offerable services with just the variants a Partner may choose, in two extra queries.
+
+    Partner onboarding's "Your work" step used to walk the public catalog: one request per
+    category and one per service, hundreds in all. This is the same rows in one read. A service's
+    variants are exactly what `ServiceDetailSerializer.variants` publishes: the priced variants
+    plus the A10 hiring-partner apply row. Questions, rates and media are not loaded, since the
+    step shows a name and ticks an id.
+    """
+    return list(
+        _offerable_service_base()
+        .exclude(subcategory__category__slug__in=tuple(excluded_category_slugs))
+        .prefetch_related(
+            Prefetch(
+                "variants",
+                queryset=_public_variants().prefetch_related(None),
+                to_attr="public_variants",
+            ),
+            Prefetch(
+                "variants",
+                queryset=_listing_apply_variants(),
+                to_attr="listing_variants",
+            ),
+        )
+        .order_by(
+            "subcategory__category__display_order",
+            "subcategory__category__name",
+            "display_order",
+            "name",
+        ),
+    )
+
+
 def public_categories() -> QuerySet[Category]:
     return Category.objects.filter(is_active=True).prefetch_related(
         Prefetch(

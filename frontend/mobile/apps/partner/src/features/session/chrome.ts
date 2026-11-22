@@ -26,12 +26,21 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
   return "focused";
 }
 
-/** Portal routes demand an approved Partner. Home and apply do not. */
+/**
+ * Pages any signed-in account may open, whatever the state of their application.
+ *
+ * They sit outside `(app)`, but the `(app)` layout stays mounted underneath them and reads the
+ * global path, so without this list it judged them partner-only and sent an applicant back to
+ * `/apply` about a second after Help & support or Delete account opened.
+ */
+// A captain saves the vehicle while the application is still a draft, before approval.
+const OPEN_TO_ANY_ACCOUNT = ["/help", "/delete-account", "/rides/vehicle"];
+
+/** Portal routes demand an approved Partner. Home, apply and the open pages do not. */
 export function routeRequiresPartnerRole(pathname: string): boolean {
   if (pathname.startsWith("/apply")) return false;
   if (pathname === "/home" || pathname === "/work") return false;
-  // A captain saves the vehicle while the application is still a draft, before approval.
-  if (pathname === "/rides/vehicle") return false;
+  if (OPEN_TO_ANY_ACCOUNT.includes(pathname)) return false;
   return true;
 }
 

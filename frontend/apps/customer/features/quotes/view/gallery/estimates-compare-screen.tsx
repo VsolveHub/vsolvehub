@@ -172,7 +172,7 @@ export function EstimatesCompareScreen({
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
               <Fact label="Starts" value={estimate.startsOn} />
               <Fact label="Duration" value={estimate.duration} />
-              <Fact label="Warranty" value={estimate.warranty} />
+              <Fact label="Guarantee" value={estimate.warranty} />
               <Fact
                 label="Payments"
                 value={`${estimate.installmentCount} installments`}

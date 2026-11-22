@@ -140,12 +140,16 @@ describe("the workspaces", () => {
       // Applications)
       "/reviews",
       "/operations/partners",
+      "/operations/areas",
+      "/operations/area-requests",
+      "/operations/coverage",
       "/operations/partners/import",
       // Customers
       "/operations/customers",
       "/operations/stories",
       "/operations/loyalty",
       "/operations/feedback",
+      "/operations/account-deletions",
       // Money
       "/finance",
       "/operations/payouts",
@@ -219,7 +223,7 @@ describe("the phone menu", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("link", { name: "Dispatch" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("link", { name: "Kill switches" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

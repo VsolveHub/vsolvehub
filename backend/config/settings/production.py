@@ -118,6 +118,20 @@ if PAYMENT_PROVIDER != "razorpay":
 # without the auth key must not boot.
 if MESSAGE_TRANSPORT == "msg91" and not MSG91_AUTH_KEY:
     raise ImproperlyConfigured("MSG91_AUTH_KEY must be set when MESSAGE_TRANSPORT is msg91.")
+# WhatsApp switched on without its credentials would record every notice as "not configured" and
+# send none of them; refuse to boot instead, as every other provider does (ADR 0004).
+if WHATSAPP_ENABLED and not (WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID):
+    raise ImproperlyConfigured(
+        "WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set when WHATSAPP_ENABLED."
+    )
+# Notification SMS go through MESSAGE_TRANSPORT; with SMS on, only MSG91 may carry them.
+if SMS_NOTIFICATIONS_ENABLED and MESSAGE_TRANSPORT != "msg91":
+    raise ImproperlyConfigured("MESSAGE_TRANSPORT must be msg91 when SMS_NOTIFICATIONS_ENABLED.")
+# Production runs behind Caddy (infra/compose.production.yaml), so the visitor is one hop back.
+# Left at 0, every visitor would share Caddy's address and one OTP limit for the whole site.
+TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=1)
+if TRUSTED_PROXY_COUNT < 1:
+    raise ImproperlyConfigured("TRUSTED_PROXY_COUNT must be at least 1 behind Caddy.")
 if OTP_PROVIDER == "msg91" and not (MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID):
     raise ImproperlyConfigured(
         "MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID must be set when OTP_PROVIDER is msg91."
@@ -149,8 +163,18 @@ if PAYOUT_PROVIDER == "razorpayx":
         raise ImproperlyConfigured("RAZORPAYX_WEBHOOK_SECRET must contain at least 32 characters.")
     if not RAZORPAYX_API_BASE_URL.startswith("https://"):
         raise ImproperlyConfigured("RAZORPAYX_API_BASE_URL must use HTTPS.")
-if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER != "razorpayx":
-    raise ImproperlyConfigured("PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx.")
+if PAYOUT_PROVIDER == "cashfree":
+    if not (CASHFREE_PAYOUT_CLIENT_ID and CASHFREE_PAYOUT_CLIENT_SECRET):
+        raise ImproperlyConfigured(
+            "CASHFREE_PAYOUT_CLIENT_ID and CASHFREE_PAYOUT_CLIENT_SECRET must be set when "
+            "PAYOUT_PROVIDER is cashfree."
+        )
+    if not CASHFREE_PAYOUT_API_BASE_URL.startswith("https://"):
+        raise ImproperlyConfigured("CASHFREE_PAYOUT_API_BASE_URL must use HTTPS.")
+if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER not in ("razorpayx", "cashfree"):
+    raise ImproperlyConfigured(
+        "PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx or PAYOUT_PROVIDER=cashfree."
+    )
 guard_payout_account_cooling(
     PAYOUT_ACCOUNT_COOLING_HOURS, minimum_hours=PRODUCTION_MINIMUM_PAYOUT_COOLING_HOURS
 )

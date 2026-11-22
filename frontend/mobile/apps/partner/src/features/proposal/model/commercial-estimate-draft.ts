@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/proposal/model/commercial-estimate-draft.ts
 import type { Schemas } from "@vsolve/api-client";
-import { kvGet, kvRemove, kvSet } from "@vsolve/mobile-core/storage";
+import { storageAdapter } from "@vsolve/mobile-core";
 
 export type EstimateMode = Schemas["EstimateTypeEnum"];
 export type EstimateUnit = Schemas["UnitEnum"];
@@ -972,7 +972,7 @@ export async function saveCommercialEstimate(
   draft: CommercialEstimateDraft,
 ): Promise<void> {
   try {
-    await kvSet(`${STORAGE_PREFIX}${invitationId}`, JSON.stringify(draft));
+    await storageAdapter.setItem(`${STORAGE_PREFIX}${invitationId}`, JSON.stringify(draft));
   } catch {
     // Losing autosave is survivable; the controlled form remains intact.
   }
@@ -980,7 +980,7 @@ export async function saveCommercialEstimate(
 
 export async function loadCommercialEstimate(invitationId: string): Promise<CommercialEstimateDraft | null> {
   try {
-    const raw = await kvGet(`${STORAGE_PREFIX}${invitationId}`);
+    const raw = await storageAdapter.getItem(`${STORAGE_PREFIX}${invitationId}`);
     return raw === null ? null : parseCommercialEstimate(raw);
   } catch {
     return null;
@@ -1021,7 +1021,7 @@ export function parseCommercialEstimate(raw: string): CommercialEstimateDraft | 
 
 export async function clearCommercialEstimate(invitationId: string): Promise<void> {
   try {
-    await kvRemove(`${STORAGE_PREFIX}${invitationId}`);
+    await storageAdapter.removeItem(`${STORAGE_PREFIX}${invitationId}`);
   } catch {
     // Nothing to clear when storage is unavailable.
   }

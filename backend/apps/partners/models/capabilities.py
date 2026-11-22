@@ -16,7 +16,9 @@ from django.db import models
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
+from apps.foundation.storage_paths import employer_logo_upload_to
 from apps.locations.models import ServiceArea
+from apps.locations.pins import pin_constraints
 
 # ---------------------------------------------------------------------------
 # M2 capability foundation (A3_TIME_BLOCK and A5_CUSTOM_PROJECT)
@@ -52,6 +54,45 @@ class PartnerBusinessProfile(models.Model):
         RENTAL_OWNER = "RENTAL_OWNER", "Rental owner"
         PROPERTY_HOST = "PROPERTY_HOST", "Property host"
 
+    class BusinessCategory(models.TextChoices):
+        """What kind of business an employer runs ("I want to hire staff")."""
+
+        SHOP = "SHOP", "Shop / retail"
+        RESTAURANT = "RESTAURANT", "Restaurant / food"
+        CLINIC = "CLINIC", "Clinic / hospital"
+        OFFICE = "OFFICE", "Office / IT"
+        SCHOOL = "SCHOOL", "School / coaching"
+        FACTORY = "FACTORY", "Factory / workshop"
+        CONSTRUCTION = "CONSTRUCTION", "Construction"
+        FACILITY = "FACILITY", "Security / facility services"
+        LOGISTICS = "LOGISTICS", "Delivery / logistics"
+        HOTEL = "HOTEL", "Hotel"
+        SALON = "SALON", "Salon / beauty"
+        OTHER = "OTHER", "Other"
+
+    class LegalStructure(models.TextChoices):
+        PROPRIETORSHIP = "PROPRIETORSHIP", "Proprietorship"
+        PARTNERSHIP_LLP = "PARTNERSHIP_LLP", "Partnership / LLP"
+        COMPANY = "COMPANY", "Company"
+        TRUST_SOCIETY_NGO = "TRUST_SOCIETY_NGO", "Trust / society / NGO"
+        GOVERNMENT = "GOVERNMENT", "Government"
+
+    class CompanySize(models.TextChoices):
+        SIZE_1_10 = "SIZE_1_10", "1-10"
+        SIZE_11_50 = "SIZE_11_50", "11-50"
+        SIZE_51_200 = "SIZE_51_200", "51-200"
+        SIZE_200_PLUS = "SIZE_200_PLUS", "200+"
+
+    class BusinessProofType(models.TextChoices):
+        GST_CERTIFICATE = "GST_CERTIFICATE", "GST certificate"
+        INCORPORATION_CERTIFICATE = "INCORPORATION_CERTIFICATE", "Incorporation certificate"
+        COMPANY_PAN = "COMPANY_PAN", "Company PAN"
+        SHOP_ESTABLISHMENT = "SHOP_ESTABLISHMENT", "Shop & Establishment licence"
+        TRADE_LICENCE = "TRADE_LICENCE", "Trade licence"
+        FSSAI = "FSSAI", "FSSAI licence"
+        CLINIC_REGISTRATION = "CLINIC_REGISTRATION", "Clinic registration"
+        UDYAM = "UDYAM", "Udyam registration"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner = models.OneToOneField(
         "partners.PartnerProfile",
@@ -81,6 +122,27 @@ class PartnerBusinessProfile(models.Model):
     #: settlement job finding it. Blank is the ordinary state: the deep link is simply not offered,
     #: the published amount still is, and the crew is paid the way they were paid before the app.
     upi_vpa = models.CharField(max_length=120, blank=True)
+    #: An employer's business details, asked on the "Business details" sign-up step. Blank for
+    #: every other Partner. `legal_name` above is the business name shown on their jobs.
+    business_category = models.CharField(
+        max_length=16, choices=BusinessCategory.choices, blank=True
+    )
+    city = models.CharField(max_length=80, blank=True)
+    address = models.CharField(max_length=240, blank=True)
+    #: Public name on job cards. Blank means `legal_name` is shown.
+    trade_name = models.CharField(max_length=120, blank=True)
+    legal_structure = models.CharField(max_length=24, choices=LegalStructure.choices, blank=True)
+    company_size = models.CharField(max_length=16, choices=CompanySize.choices, blank=True)
+    area = models.CharField(max_length=120, blank=True)
+    state = models.CharField(max_length=40, default="Telangana")
+    pin_code = models.CharField(max_length=6, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    logo = models.FileField(upload_to=employer_logo_upload_to, blank=True)
+    website_url = models.URLField(max_length=300, blank=True)
+    business_proof_type = models.CharField(
+        max_length=32, choices=BusinessProofType.choices, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -90,6 +152,22 @@ class PartnerBusinessProfile(models.Model):
             models.CheckConstraint(
                 condition=models.Q(gst_registered=False, gstin="") | models.Q(gst_registered=True),
                 name="partners_gstin_requires_gst_registered",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(business_proof_type="")
+                | models.Q(gst_registered=True, business_proof_type="GST_CERTIFICATE")
+                | (
+                    models.Q(gst_registered=False)
+                    & ~models.Q(business_proof_type="GST_CERTIFICATE")
+                ),
+                name="partners_business_proof_fits_gst",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(pin_code="") | models.Q(pin_code__regex=r"^[1-9][0-9]{5}$"),
+                name="partners_business_pin_code_format",
+            ),
+            *pin_constraints(
+                prefix="partners_business", latitude="latitude", longitude="longitude"
             ),
             models.CheckConstraint(
                 condition=models.Q(gstin_verified_at__isnull=True)

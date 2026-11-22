@@ -38,6 +38,23 @@ export function homeForApplication(
   return "/home";
 }
 
+/**
+ * Which shell a signed-in Partner belongs in, on the phone.
+ *
+ * `homeForApplication` keeps the website's rule, where a submitted application lands on `/home`.
+ * On the phone `/home` is the workspace shell (dark header, five-icon dock), and a Partner who is
+ * not approved yet would see their checklist inside it, then be switched to the onboarding shell
+ * (`/apply`) on the first tap. Every application still being worked on or reviewed goes to the
+ * onboarding shell up front; `/apply` already shows the "in review" state for a submitted one.
+ * Approved, suspended and offboarded Partners keep `/home`.
+ */
+export function shellForApplication(
+  status: Status | null,
+): "/apply" | "/home" | "/apply/status" {
+  if (status === "SUBMITTED" || status === "UNDER_REVIEW") return "/apply";
+  return homeForApplication(status);
+}
+
 /** Whether a path is inside the onboarding tree (`/apply` and its steps). */
 function isApplicationPath(path: string): boolean {
   return path === "/apply" || path.startsWith("/apply/") || path.startsWith("/apply?");

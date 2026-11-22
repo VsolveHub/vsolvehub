@@ -1,7 +1,7 @@
 import { RemoteImage } from "@/components/remote-image";
 
 import type { ServiceDetail } from "../queries";
-import { addsToServiceCopy, warrantyText } from "../service-facts";
+import { addsToServiceCopy } from "../service-facts";
 
 /**
  * Service-page sections laid out the way a customer compares a job: what each option is,
@@ -71,20 +71,15 @@ function OptionDifference({ variant }: { variant: Variant }) {
 }
 
 /**
- * The assurance tiles. The warranty tile appears only when the service publishes one; the
+ * The assurance tiles. The guarantee tile appears only when the service publishes one; the
  * other two are how every booking works — the server prices before payment, and extra time
  * or parts need the customer's approval. No damage-cover amount: there is no such policy.
  */
-export function ServiceAssurance({ service }: { service: ServiceDetail }) {
-  const warranty = warrantyText(service.policies);
-  // "30-day warranty on the workmanship" → "30-day warranty" for a tile; the full line is
-  // still in "What's included". A warranty worded any other way is shown as written.
-  const warrantyLabel = warranty?.match(/^\d+[- ]day warranty/i)?.[0] ?? warranty;
+export function ServiceAssurance({ service: _service }: { service: ServiceDetail }) {
   const tiles = [
-    warrantyLabel ? { title: warrantyLabel, icon: <WarrantyArt /> } : null,
     { title: "Price shown before you pay", icon: <PriceArt /> },
     { title: "Extra work only with your approval", icon: <ApprovalArt /> },
-  ].filter((tile): tile is { title: string; icon: React.JSX.Element } => tile !== null);
+  ];
 
   // Laid out like a marketplace "cover" block: a coloured wordmark-style heading, three
   // flat grey tiles with large outline art and regular-weight text, then a full-width row.
@@ -98,7 +93,7 @@ export function ServiceAssurance({ service }: { service: ServiceDetail }) {
         <AssuranceMark />
         vsolve assurance
       </h2>
-      <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {tiles.map((tile) => (
           <li key={tile.title} className="flex min-h-[7rem] sm:min-h-[9.5rem] flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-5 rounded-xl bg-[#F5F5F5] p-4 sm:p-5">
             <span aria-hidden className="text-[#0F0F0F] shrink-0">
@@ -204,21 +199,9 @@ function ShieldIcon() {
 
 /*
  * Tile art for the assurance row: 40px outline drawings in one stroke weight, the way a
- * marketplace "cover" row is drawn — a shield with a tick, a banknote, a receipt with a tick.
+ * marketplace "cover" row is drawn — a banknote, a receipt with a tick.
  * Drawn here rather than fetched: they are part of the page's furniture, not catalogue data.
  */
-function WarrantyArt() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={2.2} className="size-10">
-      <path
-        strokeLinejoin="round"
-        d="M24 5 9 10.5v12.2c0 9.6 6.3 16.6 15 20.3 8.7-3.7 15-10.7 15-20.3V10.5L24 5Z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="m17 24.5 5 5 9.5-10" />
-    </svg>
-  );
-}
-
 function PriceArt() {
   return (
     <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={2.2} className="size-10">

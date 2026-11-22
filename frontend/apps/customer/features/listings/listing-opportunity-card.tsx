@@ -1,25 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Briefcase,
-  Calendar,
-  Coins,
-  Heart,
-  MapPin,
-  Sun,
-} from "lucide-react";
+import { Check, Heart, MapPin } from "lucide-react";
 
 import { useSavedItems } from "@/features/part-a";
 import { listingHref } from "@/lib/routes";
 import { formatMoneyText } from "@vsolve/ui";
 import { listingFields, type Listing } from "./queries";
-import { getCareerImage } from "./career-images";
+import { resolveCategoryTone } from "./view/career-tones";
+import {
+  EmployerMark,
+  VerifiedBadge,
+  employerDetailLine,
+  employerName,
+  listingEmployer,
+} from "./view/employer-identity";
+import { MATCH_LOOK, type JobMatch } from "./seeker-queries";
 
-export function ListingOpportunityCard({ listing }: { listing: Listing }) {
+export interface ListingOpportunityCardProps {
+  listing: Listing;
+  density?: "comfortable" | "compact";
+  isApplied?: boolean;
+  onApply?: (listing: Listing) => void;
+  match?: JobMatch;
+}
+
+export function ListingOpportunityCard({
+  listing,
+  density = "comfortable",
+  isApplied = false,
+  onApply,
+  match,
+}: ListingOpportunityCardProps) {
   const saved = useSavedItems("listing");
   const isSaved = saved.isSaved(listing.id);
   const fields = listingFields(listing.structured_fields);
+  const matchLook = match ? ((match.level ? MATCH_LOOK[match.level] : null) ?? MATCH_LOOK.OTHER!) : null;
 
   // Pay calculation
   const rawPay = fields.pay_range || fields.salary_range || fields.compensation;
@@ -35,14 +51,15 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
     listing.location_text ||
     (fields.location as string) ||
     (fields.city as string) ||
-    "Suryapet";
+    listing.city ||
+    "Hyderabad, Telangana";
 
   // Experience
   const rawExperience =
     fields.experience_years ||
     fields.experience ||
     fields.experience_band ||
-    fields.experience_required;
+    listing.experience_band;
   const experienceText = rawExperience
     ? String(rawExperience)
         .replace(/[-_]/g, " ")
@@ -58,10 +75,6 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
     "Full time";
   const roleTypeText = String(rawRoleType)
     .replace(/[-_]/g, " ")
-    .toLowerCase()
-    .replace(/^full\s*time$/i, "Full time")
-    .replace(/^part\s*time$/i, "Part time")
-    .replace(/^contract$/i, "Contract")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
   // Shift (e.g. Day shift)
@@ -80,138 +93,165 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
     .replace(/^general(\s*shift)?$/i, "General shift")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const heroImage = getCareerImage(listing);
+  const employer = listingEmployer(listing);
+  const employerDetail = employerDetailLine(employer);
+  const toneConfig = resolveCategoryTone(listing.job_category || (fields.category as string), listing.title);
 
-  const employerName = listing.poster_name || "Apex Staffing Solutions";
+  const isUrgent = Boolean(listing.urgency === "URGENT" || fields.urgent || fields.is_featured);
+  const isRemoteOrHybrid =
+    listing.work_mode === "HYBRID" ||
+    listing.work_mode === "REMOTE" ||
+    listing.work_mode === "WORK_FROM_HOME" ||
+    String(fields.work_mode || "").toLowerCase().includes("hybrid") ||
+    String(fields.work_mode || "").toLowerCase().includes("remote");
+
+  const workModeLabel =
+    listing.work_mode === "HYBRID" || String(fields.work_mode || "").toLowerCase().includes("hybrid")
+      ? "Hybrid"
+      : isRemoteOrHybrid
+      ? "Remote"
+      : null;
+
+  const isCompact = density === "compact";
+  const detailHref = listingHref(listing.slug);
 
   return (
-    <article className="group relative flex flex-col md:flex-row w-full min-h-[220px] md:h-[230px] rounded-[24px] border border-[#E8E3DE] bg-[#FFFFFF] shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.07)] hover:border-[#ded8d2] transition-all duration-300 overflow-hidden">
-      {/* Left Section: Image (~20-21% width, 100% card height, rounded top-left and bottom-left) */}
-      <div className="relative w-full md:w-[21%] md:min-w-[200px] md:max-w-[240px] h-52 md:h-auto self-stretch shrink-0 overflow-hidden bg-slate-100">
-        <Link href={listingHref(listing.slug)} className="block size-full" tabIndex={-1}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {heroImage ? (<img
-            src={heroImage}
-            alt={listing.title}
-            className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />) : null}
-        </Link>
+    <article
+      data-card={listing.id}
+      className={`group relative flex flex-col md:flex-row items-start justify-between gap-4 rounded-[16px] border border-[#E8E3DE] bg-[#FFFFFF] shadow-[0_1px_2px_rgba(21,38,77,.05),0_4px_14px_rgba(21,38,77,.05)] hover:border-[#FF7900]/60 hover:shadow-[0_6px_20px_rgba(21,38,77,.09)] transition-all duration-200 cursor-pointer ${
+        isCompact ? "p-3.5 md:p-4 gap-3.5" : "p-4 md:p-5 gap-4"
+      }`}
+    >
+      {/* Stretched Link: clicking anywhere on the card navigates to /listings/[slug] */}
+      <Link
+        href={detailHref}
+        prefetch={false}
+        aria-label={`View ${listing.title} details`}
+        className="absolute inset-0 z-0 rounded-[16px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF7900]"
+      />
+
+      {/* Left: the employer's logo, or the first letter of its name */}
+      <div
+        className={`rounded-[13px] grid place-items-center overflow-hidden font-extrabold border shrink-0 relative z-1 pointer-events-none ${
+          toneConfig.badgeClass
+        } ${isCompact ? "size-10 text-xs" : "size-12 text-sm"}`}
+      >
+        <EmployerMark employer={employer} />
       </div>
 
-      {/* Right Section: Job Information (~79-80% width) */}
-      <div className="flex-1 flex flex-col justify-between py-6 px-6 md:py-7 md:pl-10 md:pr-8 min-w-0">
-        <div>
-          {/* Top Row: Job Title & Heart Icon */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <Link href={listingHref(listing.slug)} className="block focus-visible:outline-none">
-                <h2 className="text-[26px] md:text-[28px] font-bold text-[#15264D] tracking-tight leading-tight hover:text-[#FF7900] transition-colors truncate">
-                  {listing.title}
-                </h2>
-              </Link>
+      {/* Middle: Job Details */}
+      <div className="flex-1 min-w-0 relative z-1 pointer-events-none">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`font-extrabold text-[#15264D] group-hover:text-[#FF7900] tracking-tight leading-snug transition-colors line-clamp-1 ${
+              isCompact ? "text-[16px]" : "text-[17px] md:text-[18px]"
+            }`}
+          >
+            {listing.title}
+          </span>
 
-              {/* Second Row: Company Name, Separator, Verified Badge, and Label */}
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                <span className="text-[15px] md:text-[16px] font-semibold text-[#15264D]/90 truncate">
-                  {employerName}
-                </span>
-                <span className="text-slate-400 font-bold" aria-hidden="true">
-                  ·
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-[13px] md:text-[14px] text-[#555555] font-normal whitespace-nowrap">
-                  <svg
-                    className="size-4 shrink-0 text-[#FF7900] fill-current"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span>Verified employer</span>
-                </span>
-              </div>
-            </div>
+          {match && matchLook ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#EEF2FF] text-[#3730A3] border border-[#C7D2FE]">
+              <span className="font-black text-[#1E1B4B]">{match.score}%</span>
+              <span className="text-[#4338CA]">{matchLook.label}</span>
+            </span>
+          ) : null}
 
-            {/* Favorite / Heart Icon (extreme top-right) */}
+          {isUrgent ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-[#FFF1E6] text-[#B54700] border border-[#FFD1A8]">
+              Urgent hiring
+            </span>
+          ) : null}
+
+          {workModeLabel ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
+              {workModeLabel}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Company and Verified Badge */}
+        <p className="mt-1 flex items-center gap-1.5 text-[13.5px] font-semibold text-[#15264D]">
+          <span className="truncate">{employerName(employer)}</span>
+          <VerifiedBadge
+            employer={employer}
+            className="text-[12px] font-bold text-[#047857] shrink-0 ml-1"
+          />
+        </p>
+        {employerDetail ? (
+          <p className="mt-0.5 text-[12.5px] text-[#5F6B7E] font-medium truncate">{employerDetail}</p>
+        ) : null}
+
+        {/* Location Row */}
+        <p className="mt-1.5 flex items-center gap-1.5 text-[13.5px] font-semibold text-[#15264D]">
+          <MapPin className="size-3.5 text-[#B54700] shrink-0" />
+          <span className="truncate">{locationText}</span>
+        </p>
+
+        {/* Metadata: Type, Shift, Experience */}
+        <p className="mt-1 text-[13px] text-[#5F6B7E] font-medium truncate">
+          {roleTypeText} · {shiftText} · {experienceText}
+        </p>
+      </div>
+
+      {/* Right: Pay & Action Controls */}
+      <div className="w-full md:w-auto flex md:flex-col items-center md:items-end justify-between md:justify-start gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-[#E8E3DE] shrink-0 relative z-10">
+        <div className="text-left md:text-right pointer-events-none">
+          <strong className="block text-[16px] md:text-[17px] font-extrabold text-[#047857] tracking-tight leading-tight whitespace-nowrap">
+            {payText}
+          </strong>
+          <span className="text-[12px] text-[#5F6B7E] font-medium">per month</span>
+        </div>
+
+        {/* Action Controls: Heart Save Button + Primary Apply Button */}
+        <div className="flex items-center gap-2">
+          {/* Heart Save Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              saved.toggle(listing.id);
+            }}
+            aria-label={isSaved ? "Remove from saved" : "Save this job"}
+            className={`size-[38px] rounded-xl grid place-items-center border transition relative z-20 ${
+              isSaved
+                ? "border-rose-300 bg-rose-50 text-rose-600"
+                : "border-[#E8E3DE] bg-white text-[#5F6B7E] hover:border-rose-300 hover:text-rose-600"
+            }`}
+          >
+            <Heart className={`size-4 ${isSaved ? "fill-current" : ""}`} />
+          </button>
+
+          {/* Apply Button (Opens Drawer) */}
+          {isApplied ? (
             <button
               type="button"
-              aria-label={isSaved ? "Remove from saved" : "Save this job"}
+              disabled
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                saved.toggle(listing.id);
               }}
-              className="text-[#2D3748] hover:text-rose-500 focus-visible:outline-none transition-colors p-1 shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 h-[38px] px-4 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] text-[13.5px] font-bold text-[#047857] cursor-default whitespace-nowrap relative z-20"
             >
-              <Heart
-                className={`size-[26px] md:size-[28px] transition-colors ${
-                  isSaved ? "text-rose-500 fill-rose-500" : "text-[#2D3748] hover:text-rose-500"
-                }`}
-                strokeWidth={1.3}
-              />
+              <Check className="size-4" />
+              Applied
             </button>
-          </div>
-
-          {/* Third Row: Job Metadata in One Horizontal Row with Subtle Vertical Separators */}
-          <div className="mt-3.5 flex flex-wrap md:flex-nowrap items-center gap-x-3.5 gap-y-2 text-[14px] text-[#333333] font-medium">
-            <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              <MapPin className="size-[18px] text-[#2D3748] shrink-0" strokeWidth={1.4} />
-              <span>{locationText}</span>
-            </div>
-
-            <span
-              className="hidden md:inline-block h-4 w-px bg-[#E8E3DE] shrink-0"
-              aria-hidden="true"
-            />
-
-            <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              <Coins className="size-[18px] text-[#2D3748] shrink-0" strokeWidth={1.4} />
-              <span>{payText}</span>
-            </div>
-
-            <span
-              className="hidden md:inline-block h-4 w-px bg-[#E8E3DE] shrink-0"
-              aria-hidden="true"
-            />
-
-            <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              <Briefcase className="size-[18px] text-[#2D3748] shrink-0" strokeWidth={1.4} />
-              <span>{experienceText}</span>
-            </div>
-
-            <span
-              className="hidden md:inline-block h-4 w-px bg-[#E8E3DE] shrink-0"
-              aria-hidden="true"
-            />
-
-            <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              <Calendar className="size-[18px] text-[#2D3748] shrink-0" strokeWidth={1.4} />
-              <span>{roleTypeText}</span>
-            </div>
-
-            <span
-              className="hidden md:inline-block h-4 w-px bg-[#E8E3DE] shrink-0"
-              aria-hidden="true"
-            />
-
-            <div className="inline-flex items-center gap-2 whitespace-nowrap">
-              <Sun className="size-[18px] text-[#2D3748] shrink-0" strokeWidth={1.4} />
-              <span>{shiftText}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom-Right Section: Large Rectangular Orange Apply Button */}
-        <div className="mt-2 flex items-center justify-end">
-          <Link
-            href={`${listingHref(listing.slug)}#apply-panel`}
-            className="inline-flex items-center justify-center w-[114px] h-[46px] rounded-xl bg-[#FF7900] hover:bg-[#e66d00] active:bg-[#cc6100] text-[16px] font-bold text-white shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7900] focus-visible:ring-offset-2"
-          >
-            Apply
-          </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onApply) {
+                  onApply(listing);
+                }
+              }}
+              className="inline-flex items-center justify-center h-[38px] px-5 rounded-xl bg-[#FF7900] hover:bg-[#ff8a1f] active:bg-[#e66d00] text-[13.5px] font-extrabold text-[#15264D] transition shadow-xs whitespace-nowrap relative z-20"
+            >
+              Apply
+            </button>
+          )}
         </div>
       </div>
     </article>

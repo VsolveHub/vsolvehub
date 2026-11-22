@@ -2,7 +2,7 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useServerCountdown, type Countdown } from "@vsolve/query/native";
 import { Badge, ErrorState, Spinner, Text, cn, formatMoney } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -11,6 +11,7 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession, subscribeStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { shellForApplication } from "@/features/session/model/redirect";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
@@ -40,7 +41,11 @@ export function WorkHome() {
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
-    return <OverviewHome />;
+    return (
+      <View className="flex-1 items-center justify-center">
+        <Spinner />
+      </View>
+    );
   }
 
   if (query.isError && !isMissing) {
@@ -57,6 +62,11 @@ export function WorkHome() {
   }
 
   if (isMissing || query.data === undefined || query.data.status !== "APPROVED") {
+    // The workspace shell is for approved Partners. Anyone still applying belongs in the
+    // onboarding shell, so a deep link or the Home button never shows the checklist inside the
+    // workspace dock.
+    const route = shellForApplication(isMissing ? null : (query.data?.status ?? null));
+    if (route !== "/home") return <Redirect href={route} />;
     return <OverviewHome />;
   }
 
@@ -289,24 +299,24 @@ function ScheduleFacts({ item }: { readonly item: WorkItem }) {
   const duration = durationLabel(item.durationMinutes);
   if (date === null && starts === null && duration === null && item.areaLabel === null) return null;
   return (
-    <View className="flex-row flex-wrap gap-x-4 gap-y-2">
+    <View className="flex-row flex-wrap gap-x-3 gap-y-2">
       {date === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="date" label="Date">{date}</Fact>
         </View>
       )}
       {starts === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="time" label="Starts">{starts}</Fact>
         </View>
       )}
       {duration === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="time" label="Duration">{duration}</Fact>
         </View>
       )}
       {item.areaLabel === null ? null : (
-        <View className="w-[48%]">
+        <View className="min-w-[45%] flex-1">
           <Fact name="distance" label="Area">{item.areaLabel}</Fact>
         </View>
       )}
