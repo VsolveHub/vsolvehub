@@ -1,5 +1,73 @@
 # API Contract Changelog
 
+## 1.112.0 - Pick up & Drop V1
+
+Additive. Parcels on the Rides engine (`docs/parcel/README.md` §4.2, ADR-0015).
+
+Customer:
+
+- **Changed** `GET /rides/availability/`: adds `parcel`, a list of `{vehicle_type,
+  max_weight_grams, size_label}` with an active parcel rate card at that place (empty when
+  Pick up & Drop does not run there), and `parcel_rules`: `{value_cap_paise, prohibited_items}`.
+- **Changed** `POST /rides/quotes/`: optional `kind` (`RIDE` default, or `PARCEL`). With `PARCEL`,
+  one quote per vehicle with an active parcel card (Bike, Auto), each with `max_weight_grams` and
+  `size_label`.
+- **Changed** `POST /rides/`: when the quote is a parcel quote, `parcel` is required: `mode`
+  (`SEND` or `RECEIVE`), `payer` (`SENDER` or `RECEIVER`), `pin_required`, `pickup` and `drop`
+  (each `name`, `phone`, `building`, `unit`, `meet_at` `CURB` or `DOOR`, `instructions` up to 120
+  characters). `422 parcel_details_required` when a name or phone is missing at either end; `400`
+  for a phone that is not a 10-digit Indian mobile.
+- **Changed** `GET /rides/{id}/` and ride history: add `kind` and, for parcels, `parcel` (the
+  details above, `payment_point` `PICKUP` or `DROP`, `delivery_pin` only to the booker, only when
+  `pin_required` and only from `CAPTAIN_ASSIGNED` until `COMPLETED` or `RETURNING`,
+  `return_fare_paise`, `return_payment_status`).
+- **Changed** `POST /rides/{id}/cancel/`: a parcel can be cancelled only in `SEARCHING`,
+  `CAPTAIN_ASSIGNED` and `CAPTAIN_ARRIVED`; otherwise `409 invalid_transition`.
+- **Added** to the ride `state`: `RETURNING` and `RETURNED`. **Added** to `payment_status`: `UNPAID`.
+
+Captain:
+
+- **Added** `PUT /partner/rides/parcel-preference/` (`{takes_parcels}`). Bike and Auto captains
+  only: `409 vehicle_not_eligible` for a Cab. `CaptainStatus` adds `takes_parcels`.
+- **Changed** offers: a parcel offer adds `kind`, the drop address, both ends' `meet_at` and
+  `payment_point`. Only on-duty captains with the same vehicle type and `takes_parcels` get it.
+- **Changed** `POST /partner/rides/{id}/start/`: for a parcel this is "picked up" (`IN_TRIP`). It
+  sets `final_fare_paise`; when the Sender pays, `payment_status` becomes `DUE`.
+- **Changed** `POST /partner/rides/{id}/cancel/`: adds the reason `ITEM_NOT_ALLOWED` (parcels only,
+  only from `CAPTAIN_ARRIVED`). The parcel ends `CANCELLED` and is not offered again.
+- **Added** `POST /partner/rides/{id}/arrived-at-drop/`: `IN_TRIP` only; the last ping must be
+  under 30 s old and within 200 m of the drop (`409 not_at_drop`). Sets `arrived_at_drop_at`. When
+  the Receiver pays, `payment_status` becomes `DUE`. Repeating it returns the ride.
+- **Added** `POST /partner/rides/{id}/deliver/`, with a required `Idempotency-Key`. `409
+  not_at_drop` before arriving; `409 payment_not_collected` when the Receiver pays and the payment
+  is not collected. When `pin_required`, `{pin}` is required: `400 pin_invalid` with
+  `attempts_left`, the fifth wrong try `423 pin_locked`. Success: `COMPLETED`, `delivered_at`.
+- **Added** `POST /partner/rides/{id}/receiver-unavailable/`: allowed when the free waiting minutes
+  after `arrived_at_drop_at` are over, or the PIN is locked (`409 wait_not_over` otherwise). Prices
+  the return leg with the fare engine; `503 routing_unavailable` (retryable) changes nothing. Sets
+  `RETURNING`, `return_fare_paise` and `return_payment_status = DUE`. `CaptainRide` adds
+  `receiver_unavailable_allowed_at`.
+- **Added** `POST /partner/rides/{id}/returned/` (`{otp}`, the pickup code), with a required
+  `Idempotency-Key`; within 200 m of the pickup (`409 not_at_pickup`). Sets `RETURNED`,
+  `returned_at`. Wrong codes count on `otp_attempts` (`400` with `attempts_left`, the fifth `423`).
+- **Changed** `POST /partner/rides/{id}/payment-received/`: for a parcel, marks every amount that
+  is `DUE` as `COLLECTED`.
+- **Added** `POST /partner/rides/{id}/payment-not-received/`: `RETURNED` parcels only; marks every
+  amount that is `DUE` as `UNPAID`.
+- **Changed** `GET /partner/rides/current/`: also returns a `RETURNING` parcel, and a delivered or
+  returned parcel with an amount still `DUE`.
+- **Changed** captain history and earnings: include parcels with `kind`; earnings count collected
+  amounts only.
+
+Operations:
+
+- **Changed** `GET /operations/rides/`: filters `kind` and `payment_status` (including `UNPAID`).
+- **Changed** `GET /operations/rides/{id}/`: adds the full `parcel` block with both ends' details.
+- **Changed** rate cards: `kind` on create and list; `max_parcel_weight_grams` and
+  `parcel_size_label` on parcel cards (a parcel card is `BIKE` or `AUTO`); `409 rate_card_exists`
+  is now per area, vehicle and kind.
+- **Changed** the Operations ride cancel: also works on `IN_TRIP` and `RETURNING` parcels.
+
 ## 1.111.0 - Rides V1
 
 Additive. The first part of VSolve Rides (`docs/rapido/README.md`); later Rides endpoints are
