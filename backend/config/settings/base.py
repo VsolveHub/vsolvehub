@@ -427,7 +427,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.111.0",
+    "VERSION": "1.112.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -885,6 +885,20 @@ RIDES_PING_MAX_AGE_SECONDS = env.int("RIDES_PING_MAX_AGE_SECONDS", default=30)
 RIDES_MATCHING_MAX_ACCURACY_M = env.int("RIDES_MATCHING_MAX_ACCURACY_M", default=100)
 # A pass purchase still waiting for payment blocks another one for this long (Revision 2).
 RIDES_PASS_PURCHASE_WINDOW_MINUTES = env.int("RIDES_PASS_PURCHASE_WINDOW_MINUTES", default=30)
+# Pick up & Drop (docs/parcel/README.md D4, D23): the value cap shown to customers (₹5,000) and the
+# prohibited-items list, as labels.
+RIDES_PARCEL_VALUE_CAP_PAISE = 500000
+RIDES_PARCEL_PROHIBITED_ITEMS = [
+    "Weapons and ammunition",
+    "Fireworks and explosives",
+    "Gas cylinders, fuel and other flammable or hazardous chemicals",
+    "Drugs and narcotics",
+    "Alcohol",
+    "Cash, currency, cheques and securities",
+    "Gold, silver, jewellery and precious stones",
+    "Live animals",
+    "Anything illegal",
+]
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
