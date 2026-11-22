@@ -80,7 +80,7 @@ receiver, no tracking web link, no phone masking.
 | D7 | **I'm sending / I'm receiving** toggle at the top of Review, **I'm sending** by default. Sending: the booker is at the pickup. Receiving: the booker is at the drop and gets an item picked up from someone else. The booker's own end is prefilled with their account name and phone (editable); the other end must be added. |
 | D8 | **Details for each end** (Pickup details / Dropoff details screen, opened by **Add** on Review): name, phone (+91), store or building name, unit/floor, **Meet at curb** or **Meet at door**, and optional instructions for the captain (up to 120 characters). Both ends need a name and phone before Confirm works. |
 | D9 | **Who pays is a toggle: Sender or Receiver**, as in Rapido, on Review. **Sender** pays at the pickup; **Receiver** pays at the drop. It follows D7 (sending → Sender, receiving → Receiver) until the booker switches it. Cash or UPI to the captain, the same as Rides. When the Receiver pays, the captain collects **before** handing the item over; a receiver who will not pay does not get the item, and after the free waiting minutes the captain uses Receiver not available (D12). |
-| D10 | **Codes, shown only in the booker's app, each with Share.** The **pickup code** is always used: it is the Rides start code, given to the captain at the pickup. The **delivery PIN** is optional: "Add peace of mind? **PIN confirmation**" toggle on Review, **off by default** (as in Uber). When it is on, the captain needs the PIN to finish; when it is off, the captain taps **Delivered** at the drop. |
+| D10 | **Codes, shown only in the booker's app, each with Share.** The **pickup code** is always used: it is the Rides start code, given to the captain at the pickup. The **delivery PIN** is a "Add peace of mind? **PIN confirmation**" toggle on Review, **on by default** for security; the booker may turn it off. When it is on, the captain needs the PIN to finish; when it is off, the captain taps **Delivered** at the drop. |
 | D11 | **Fare:** the Rides fare engine with a **parcel rate card** per area and vehicle (same price fields as a ride card). Waiting at the pickup is charged exactly as in Rides. **No waiting charge at the drop.** The fare is on the Confirm button. |
 | D12 | **Receiver not available:** after the captain marks "Arrived at drop", the card's free waiting minutes run. When they are over (or the PIN is locked after five wrong tries), the captain may press **Receiver not available**. The parcel then goes back to the pickup. |
 | D13 | **Return leg:** priced by the same fare engine, from the drop back to the pickup, with the same parcel rate card version. The person at the pickup gives the **pickup code** again to take the item back. |
@@ -274,7 +274,7 @@ Copy that layout. Leave out what D24 lists. Use our words from this brief.
    - **Who pays?** **Sender | Receiver** (D9), with "Sender pays ₹{fare} in cash or UPI to the
      captain at the pickup" or "Receiver pays ₹{fare} in cash or UPI to the captain at the drop"
    - "Add peace of mind? **PIN confirmation** · Turn on to confirm delivery with a 4-digit PIN",
-     off (D10)
+     **on** by default (D10)
    - **Package guidelines** from the server: each vehicle's limits, ₹5,000 or less, securely sealed
      and ready for pickup, "See prohibited items" (a sheet from `parcel_rules`)
    - the D6 line, then **Confirm Pick up & Drop · ₹{fare}** (disabled until both ends have a name
