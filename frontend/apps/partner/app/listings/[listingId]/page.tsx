@@ -443,7 +443,8 @@ export default function PartnerListingLeadsPage() {
               ? t("listings.detail.emptyAll")
               : t("listings.detail.emptyFiltered")}
           </p>
-          {listing?.counts?.matches && listing.counts.matches > 0 && view !== "matches" ? (
+          {/* Already inside the applicants view, so there is no need to ask which view is open. */}
+          {listing?.counts?.matches && listing.counts.matches > 0 ? (
             <div className="mt-6 flex flex-col items-center gap-2">
               <p className="text-xs font-semibold text-text-muted">
                 Don&apos;t wait for applicants to apply:
