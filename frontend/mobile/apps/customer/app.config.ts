@@ -42,7 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "V Solve Hub",
   slug: "vsolve-customer",
-  owner: "vsolvehub",
+  owner: "webaura7000s",
   scheme: "vsolvehub",
   version: "1.0.0",
   orientation: "portrait",
@@ -100,8 +100,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "onesignal-expo-plugin",
       {
         mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
+        // Status-bar icon: Android draws it as a one-colour shape, so it is the logo's white
+        // silhouette. The full-colour logo is the large icon beside every notification's text
+        // (saved as ic_onesignal_large_icon_default, which OneSignal uses unless a push names another).
         smallIcons: ["./assets/android-icon-monochrome.png"],
-        smallIconAccentColor: "#f87000",
+        largeIcons: ["./assets/logo-mark.png"],
+        // The logo's orange, measured from the owner's artwork. Android 12-16 paints the small icon
+        // in this one colour; Android 17+ shows the full-colour launcher icon instead.
+        smallIconAccentColor: "#fe6c01",
         disableLocation: true,
       },
     ],
@@ -116,6 +122,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-splash-screen",
       {
         image: "./assets/splash.png",
+        // Android 12+ crops the splash image to a 192dp circle; splash.png keeps the logo inside
+        // its own inscribed circle, so 190dp shows it whole (the 100dp default left it tiny).
+        imageWidth: 190,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
       },
