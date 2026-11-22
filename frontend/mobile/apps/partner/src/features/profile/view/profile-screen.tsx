@@ -1,65 +1,43 @@
 import { Text } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
-import { Lock, MapPin, Phone } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { Lock, Phone } from "lucide-react-native";
 import {
-  ActivityIndicator,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BrandHeader } from "@/features/onboarding/components/brand-header";
-import { ProfileMenuSheet } from "@/features/onboarding/components/profile-menu-sheet";
-import { usePartnerProfile, useUpdatePartnerProfile } from "../queries";
+import { usePartnerProfile } from "../queries";
 
 export function ProfileScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const bottomInset = Math.max(insets.bottom, Platform.OS === "ios" ? 34 : 16);
 
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const profileQuery = usePartnerProfile();
 
   // The owner decided against a name-change feature, and `/partner/me` ignores the field: this
   // screen shows what is on record, and support changes it.
   const name = profileQuery.data?.display_name?.trim() ?? "";
   const partnerPhone = profileQuery.data?.phone_number ?? "";
-  const initial = name[0]?.toUpperCase() ?? "";
 
   return (
     <View style={styles.root}>
-      {/* Brand Header with long-arrow (←) matching Screen 12 */}
-      <BrandHeader
-        showBack
-        backVariant="arrow"
-        onBack={() => router.back()}
-        onAvatarPress={() => setProfileModalOpen(true)}
-        partnerInitial={initial}
-      />
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
           {
             maxWidth: isDesktop ? 672 : "100%",
-            paddingBottom: bottomInset + 88,
+            paddingBottom: bottomInset + 32,
           },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Title */}
-        <Text style={styles.screenTitle}>Profile</Text>
-
         {/* Card 1: Editable Full Name & Bio */}
         <View style={styles.card}>
           <View style={styles.inputGroup}>
@@ -83,17 +61,7 @@ export function ProfileScreen() {
             <Text style={styles.lockedBadgeText}>Locked after submission</Text>
           </View>
         </View>
-
       </ScrollView>
-
-      {/* Screen 11: Profile Menu Bottom Sheet */}
-      <ProfileMenuSheet
-        visible={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        partnerName={name}
-        partnerPhone={partnerPhone}
-        partnerInitial={initial}
-      />
     </View>
   );
 }
