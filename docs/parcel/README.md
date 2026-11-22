@@ -2,7 +2,7 @@
 
 - Owner decides everything in this brief. You build it.
 - Branch: **`parcel/v1`**, cut from `rapido/v1` after `main` was merged into it on 22 November 2026.
-- Three days, testing and review included: **Monday 23 to Wednesday 25 November 2026.** Day 3 is the
+- Three days, testing and review included: **Sunday 22 to Tuesday 24 November 2026.** Day 3 is the
   owner's review.
 - Ships **together with Rides V1**, in one store version, behind one server off switch.
 
@@ -372,7 +372,7 @@ git switch parcel/v1
 The owner puts a partner-app build with Rides on the test phones before Day 2's testing: captains
 cannot go on duty in Expo Go.
 
-### Day 1: Monday 23 November. Check Rides, then the backend
+### Day 1: Sunday 22 November. Check Rides, then the backend
 
 - First, run the Rides tests on `parcel/v1` (`pytest tests/rides` and `tests/partners`). `main` was
   merged into Rides on 22 November and nothing has been tested since. If anything fails, tell the
@@ -387,7 +387,7 @@ cannot go on duty in Expo Go.
   entry.
 - The backend tests in §11.1, written and green.
 
-### Day 2: Tuesday 24 November. Apps, then testing
+### Day 2: Monday 23 November. Apps, then testing
 
 - Build the captain app (§6), the customer app (§5), the Operations console (§7) and the terms
   section.
@@ -395,7 +395,7 @@ cannot go on duty in Expo Go.
   deliveries (§11.3), the test report (§11.4).
 - Move the PR to Ready for review.
 
-### Day 3: Wednesday 25 November. Owner review
+### Day 3: Tuesday 24 November. Owner review
 
 - The owner reviews the PR and tries it on the phones.
 - You fix what the review finds the same day, on `parcel/v1`. The owner merges when it passes.
