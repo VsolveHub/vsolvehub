@@ -161,7 +161,7 @@ describe("save and continue", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/apply/areas"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/apply/schedule"));
   });
 
   it("stays put when the save is refused", async () => {

@@ -9,7 +9,6 @@ from rest_framework.views import APIView
 
 from apps.catalog.selectors import (
     active_promo_banners,
-    partner_work_variants,
     public_categories,
     public_service_by_slug,
     public_service_index,
@@ -17,7 +16,6 @@ from apps.catalog.selectors import (
 )
 from apps.catalog.serializers import (
     CategorySerializer,
-    PartnerWorkVariantSerializer,
     PromoBannerSerializer,
     ServiceCardSerializer,
     ServiceDetailSerializer,
@@ -56,23 +54,6 @@ class ServiceIndexView(APIView):
     )
     def get(self, _request: Request) -> Response:
         response = Response(ServiceIndexItemSerializer(public_service_index(), many=True).data)
-        patch_cache_control(response, public=True, max_age=300, stale_while_revalidate=600)
-        return response
-
-
-class PartnerWorkVariantListView(APIView):
-    """Everything a Partner can offer, in one response (replaces a request per service)."""
-
-    authentication_classes = ()
-    permission_classes = (AllowAny,)
-
-    @extend_schema(
-        operation_id="catalog_partner_work_variants",
-        tags=["Catalog"],
-        responses={200: PartnerWorkVariantSerializer(many=True)},
-    )
-    def get(self, _request: Request) -> Response:
-        response = Response(PartnerWorkVariantSerializer(partner_work_variants(), many=True).data)
         patch_cache_control(response, public=True, max_age=300, stale_while_revalidate=600)
         return response
 
