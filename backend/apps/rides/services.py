@@ -41,6 +41,7 @@ from apps.rides.models import (
     CaptainVehicle,
     FareQuote,
     Ride,
+    RideKind,
     RideRateCard,
     RideState,
     RideTrackPoint,
@@ -51,9 +52,10 @@ from apps.rides.routing import RoutingUnavailableError, get_route
 
 __all__ = [
     "VEHICLE_EDITABLE_STATUSES",
+    "Availability",
     "LocationPing",
     "TripPoint",
-    "available_vehicle_types",
+    "availability",
     "buy_pass",
     "complete_pass_payment",
     "create_quotes",
@@ -170,33 +172,51 @@ def _pickup_area(pickup: TripPoint) -> ServiceArea:
     return decision.service_area
 
 
-def available_vehicle_types(*, latitude: Decimal, longitude: Decimal) -> list[str]:
-    """Which vehicle types can be booked from here, cheapest first. Empty when none can.
+@dataclass(frozen=True, slots=True)
+class Availability:
+    #: Ride vehicle types bookable here, cheapest first.
+    vehicle_types: list[str]
+    #: The active parcel cards here (they carry the limits), cheapest vehicle first.
+    parcel_cards: list[RideRateCard]
 
-    Drives the Rides entry on the customer Home screen (brief §5.11), so "not served here" is an
-    empty answer, not an error. A geocoder failure still raises: the app hides the entry then.
+
+def availability(*, latitude: Decimal, longitude: Decimal) -> Availability:
+    """What can be booked from here: rides and Pick up & Drop. Empty lists when nothing can.
+
+    Drives the Rides and Pick up & Drop entries on the customer Home screen (D21), so "not served
+    here" is an empty answer, not an error. A geocoder failure still raises: the app hides the
+    entries then.
     """
     try:
         area = _pickup_area(TripPoint(latitude, longitude, ""))
     except AreaNotServedError:
-        return []
-    types = RideRateCard.objects.filter(service_area=area, is_active=True).values_list(
-        "vehicle_type", flat=True
+        return Availability(vehicle_types=[], parcel_cards=[])
+    cards = _active_cards(area)
+    return Availability(
+        vehicle_types=[c.vehicle_type for c in cards if c.kind == RideKind.RIDE],
+        parcel_cards=[c for c in cards if c.kind == RideKind.PARCEL],
     )
-    return sorted(types, key=lambda vehicle: _VEHICLE_ORDER[VehicleType(vehicle)])
 
 
-def create_quotes(*, rider: Any, pickup: TripPoint, drop: TripPoint) -> list[FareQuote]:
+def _active_cards(area: ServiceArea, *, kind: str | None = None) -> list[RideRateCard]:
+    """The area's active rate cards, bike first, then auto, then cab."""
+    cards = RideRateCard.objects.filter(service_area=area, is_active=True)
+    if kind is not None:
+        cards = cards.filter(kind=kind)
+    return sorted(cards, key=lambda card: _VEHICLE_ORDER[VehicleType(card.vehicle_type)])
+
+
+def create_quotes(
+    *, rider: Any, pickup: TripPoint, drop: TripPoint, kind: str = RideKind.RIDE
+) -> list[FareQuote]:
     """One quote per bookable vehicle type, priced on the server from the road route.
 
-    A vehicle type is bookable only while its area has an active rate card. If any route cannot be
-    had, no quote is made: a partial list would hide a vehicle the rider could have booked.
+    A vehicle type is bookable only while its area has an active rate card of this kind. If any
+    route cannot be had, no quote is made: a partial list would hide a vehicle the rider could
+    have booked.
     """
     area = _pickup_area(pickup)
-    cards = sorted(
-        RideRateCard.objects.filter(service_area=area, is_active=True),
-        key=lambda card: _VEHICLE_ORDER[VehicleType(card.vehicle_type)],
-    )
+    cards = _active_cards(area, kind=kind)
     if not cards:
         raise AreaNotServedError
 
@@ -212,6 +232,7 @@ def create_quotes(*, rider: Any, pickup: TripPoint, drop: TripPoint) -> list[Far
                 rider=rider,
                 service_area=area,
                 vehicle_type=card.vehicle_type,
+                kind=kind,
                 rate_card=card,
                 rate_card_version=card.version,
                 pickup_latitude=pickup.latitude,

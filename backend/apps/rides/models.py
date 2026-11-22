@@ -174,7 +174,11 @@ class RideRateCard(models.Model):
             # A parcel card states its limits; a ride card has none.
             models.CheckConstraint(
                 condition=(
-                    Q(kind=RideKind.PARCEL, max_parcel_weight_grams__gt=0)
+                    Q(
+                        kind=RideKind.PARCEL,
+                        max_parcel_weight_grams__isnull=False,
+                        max_parcel_weight_grams__gt=0,
+                    )
                     & ~Q(parcel_size_label="")
                 )
                 | (

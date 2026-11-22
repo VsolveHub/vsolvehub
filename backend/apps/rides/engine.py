@@ -18,7 +18,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.foundation.services import enqueue_outbox_event
 from apps.partners.models import PartnerApplication, PartnerProfile
@@ -28,6 +28,7 @@ from apps.rides.exceptions import (
     LocationUnavailableError,
     NotAtPickupError,
     NotOnDutyError,
+    ParcelDetailsRequiredError,
     QuoteExpiredError,
     QuoteUsedError,
     RideAlreadyOpenError,
@@ -42,7 +43,9 @@ from apps.rides.models import (
     CaptainPass,
     CaptainVehicle,
     FareQuote,
+    ParcelDetails,
     Ride,
+    RideKind,
     RideOffer,
     RideRateCard,
     RideRating,
@@ -117,9 +120,29 @@ def _transition(
 # --- Booking ----------------------------------------------------------------------------------
 
 
+def _parcel_details(ride: Ride, parcel: dict[str, Any]) -> ParcelDetails:
+    """Save the parcel's two ends. `create_ride` has already checked each has a name and a phone."""
+    pickup, drop = parcel["pickup"], parcel["drop"]
+    fields = {
+        f"{side}_{name}": end.get(name, "")
+        for side, end in (("pickup", pickup), ("drop", drop))
+        for name in ("name", "phone", "building", "unit", "meet_at", "instructions")
+    }
+    return ParcelDetails.objects.create(
+        ride=ride,
+        mode=parcel["mode"],
+        payer=parcel["payer"],
+        pin_required=parcel["pin_required"],
+        **fields,
+    )
+
+
 @transaction.atomic
-def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
-    """Book a ride from the rider's own quote and start looking for a captain."""
+def create_ride(*, rider: Any, quote_id: UUID, parcel: dict[str, Any] | None = None) -> Ride:
+    """Book a ride (or a Pick up & Drop parcel) from the rider's own quote and look for a captain.
+
+    A parcel quote needs `parcel`: both ends' details, who pays and the PIN setting.
+    """
     quote = (
         FareQuote.objects.select_for_update()
         .select_related("service_area")
@@ -133,8 +156,20 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
     now = timezone.now()
     if quote.expires_at <= now:
         raise QuoteExpiredError
+    if quote.kind == RideKind.PARCEL and (
+        parcel is None
+        or not all(
+            end.get("name") and end.get("phone") for end in (parcel["pickup"], parcel["drop"])
+        )
+    ):
+        raise ParcelDetailsRequiredError
+    if quote.kind == RideKind.RIDE and parcel is not None:
+        raise ValidationError({"parcel": "Parcel details are only for a Pick up & Drop quote."})
     vehicle_on_sale = RideRateCard.objects.filter(
-        service_area=quote.service_area, vehicle_type=quote.vehicle_type, is_active=True
+        service_area=quote.service_area,
+        vehicle_type=quote.vehicle_type,
+        kind=quote.kind,
+        is_active=True,
     ).exists()
     if not quote.service_area.is_active or not vehicle_on_sale:
         raise VehicleUnavailableError
@@ -146,6 +181,7 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
         quote=quote,
         service_area=quote.service_area,
         vehicle_type=quote.vehicle_type,
+        kind=quote.kind,
         pickup_latitude=quote.pickup_latitude,
         pickup_longitude=quote.pickup_longitude,
         pickup_label=quote.pickup_label,
@@ -160,6 +196,8 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
     except IntegrityError as exc:
         # Two bookings raced; the one-open-ride-per-rider rule let exactly one through.
         raise RideAlreadyOpenError from exc
+    if parcel is not None:
+        _parcel_details(ride, parcel)
     _transition(
         ride, RideState.SEARCHING, actor=rider, actor_kind=ActorKind.RIDER, now=now, first=True
     )
@@ -180,6 +218,7 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
             "rider_id": str(rider.pk),
             "service_area_id": str(ride.service_area_id),
             "vehicle_type": ride.vehicle_type,
+            "kind": ride.kind,
         },
     )
     return ride

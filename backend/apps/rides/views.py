@@ -2,6 +2,7 @@ import logging
 import uuid
 from typing import Any
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -425,7 +426,9 @@ class RidesView(APIView):
 
         def command() -> tuple[int, dict[str, Any]]:
             ride = engine.create_ride(
-                rider=request.user, quote_id=serializer.validated_data["quote_id"]
+                rider=request.user,
+                quote_id=serializer.validated_data["quote_id"],
+                parcel=serializer.validated_data.get("parcel"),
             )
             return http_status.HTTP_201_CREATED, dict(RideSerializer(ride).data)
 
@@ -532,8 +535,24 @@ class AvailabilityView(APIView):
     def get(self, request: Any) -> Response:
         query = AvailabilityQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        types = services.available_vehicle_types(**query.validated_data)
-        return Response(AvailabilitySerializer({"vehicle_types": types}).data)
+        found = services.availability(**query.validated_data)
+        parcel = [
+            {
+                "vehicle_type": card.vehicle_type,
+                "max_weight_grams": card.max_parcel_weight_grams,
+                "size_label": card.parcel_size_label,
+            }
+            for card in found.parcel_cards
+        ]
+        rules = {
+            "value_cap_paise": settings.RIDES_PARCEL_VALUE_CAP_PAISE,
+            "prohibited_items": settings.RIDES_PARCEL_PROHIBITED_ITEMS,
+        }
+        return Response(
+            AvailabilitySerializer(
+                {"vehicle_types": found.vehicle_types, "parcel": parcel, "parcel_rules": rules}
+            ).data
+        )
 
 
 class CaptainCurrentRideView(APIView):
@@ -980,6 +999,7 @@ class FareQuotesView(ThrottledWriteMixin, APIView):
             rider=request.user,
             pickup=services.TripPoint(pickup["latitude"], pickup["longitude"], pickup["address"]),
             drop=services.TripPoint(drop["latitude"], drop["longitude"], drop["address"]),
+            kind=data["kind"],
         )
         return Response(
             FareQuoteListSerializer({"quotes": quotes}).data, status=http_status.HTTP_201_CREATED

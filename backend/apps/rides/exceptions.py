@@ -146,6 +146,16 @@ class VehicleUnavailableError(RidesApiError):
         )
 
 
+class ParcelDetailsRequiredError(RidesApiError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="parcel_details_required",
+            message="Add a name and phone number for the pickup and the drop.",
+        )
+
+
 class RideAlreadyOpenError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 

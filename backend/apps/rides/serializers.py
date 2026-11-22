@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -23,7 +24,9 @@ from apps.rides.models import (
     CaptainPassPlan,
     CaptainVehicle,
     FareQuote,
+    ParcelDetails,
     Ride,
+    RideKind,
     RideOffer,
     RideRateCard,
     RideSosEvent,
@@ -69,6 +72,11 @@ __all__ = [
     "OpsRideRowSerializer",
     "OpsSosSerializer",
     "OpsTransitionSerializer",
+    "ParcelEndSerializer",
+    "ParcelLimitsSerializer",
+    "ParcelRequestSerializer",
+    "ParcelRulesSerializer",
+    "ParcelSerializer",
     "RateCardCreateSerializer",
     "RateCardUpdateSerializer",
     "RatingSerializer",
@@ -243,16 +251,35 @@ class AvailabilityQuerySerializer(serializers.Serializer[Any]):
     )
 
 
+class ParcelLimitsSerializer(serializers.Serializer[Any]):
+    vehicle_type = serializers.ChoiceField(choices=VehicleType.choices)
+    max_weight_grams = serializers.IntegerField()
+    size_label = serializers.CharField()
+
+
+class ParcelRulesSerializer(serializers.Serializer[Any]):
+    value_cap_paise = serializers.IntegerField()
+    prohibited_items = serializers.ListField(child=serializers.CharField())
+
+
 class AvailabilitySerializer(serializers.Serializer[Any]):
     vehicle_types = serializers.ListField(
         child=serializers.ChoiceField(choices=VehicleType.choices),
         help_text="Bookable here, cheapest first. Empty: hide the Rides entry.",
     )
+    parcel = ParcelLimitsSerializer(
+        many=True,
+        help_text="Pick up & Drop vehicles bookable here, with limits. Empty: hide the entry.",
+    )
+    parcel_rules = ParcelRulesSerializer()
 
 
 class FareQuoteRequestSerializer(serializers.Serializer[Any]):
     pickup = TripPointSerializer()
     drop = TripPointSerializer()
+    kind = serializers.ChoiceField(
+        choices=RideKind.choices, default=RideKind.RIDE, help_text="PARCEL for Pick up & Drop."
+    )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         pickup, drop = attrs["pickup"], attrs["drop"]
@@ -262,10 +289,24 @@ class FareQuoteRequestSerializer(serializers.Serializer[Any]):
 
 
 class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
+    max_weight_grams = serializers.IntegerField(
+        source="rate_card.max_parcel_weight_grams",
+        read_only=True,
+        help_text="Parcel quotes only; null for a ride.",
+    )
+    size_label = serializers.CharField(
+        source="rate_card.parcel_size_label",
+        read_only=True,
+        help_text="Parcel quotes only; empty for a ride.",
+    )
+
     class Meta:
         model = FareQuote
         fields = (
             "id",
+            "kind",
+            "max_weight_grams",
+            "size_label",
             "vehicle_type",
             "fare_paise",
             "distance_m",
@@ -276,8 +317,44 @@ class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
         read_only_fields = fields
 
 
+_MOBILE = re.compile(r"[6-9]\d{9}")
+
+
+class ParcelEndSerializer(serializers.Serializer[Any]):
+    """One end of a parcel: who is there and how to meet them.
+
+    A missing name or phone is a 422 from the booking (`parcel_details_required`), not a 400, so
+    the app can send the customer back to the details screen. A malformed phone is a 400.
+    """
+
+    name = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    phone = serializers.CharField(
+        required=False, allow_blank=True, help_text="A 10-digit Indian mobile number, without +91."
+    )
+    building = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    unit = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    meet_at = serializers.ChoiceField(choices=ParcelDetails.MeetAt.choices)
+    instructions = serializers.CharField(max_length=120, required=False, allow_blank=True)
+
+    def validate_phone(self, value: str) -> str:
+        if value and not _MOBILE.fullmatch(value):
+            raise serializers.ValidationError("Enter a 10-digit mobile number.")
+        return value
+
+
+class ParcelRequestSerializer(serializers.Serializer[Any]):
+    mode = serializers.ChoiceField(choices=ParcelDetails.Mode.choices)
+    payer = serializers.ChoiceField(choices=ParcelDetails.Payer.choices)
+    pin_required = serializers.BooleanField()
+    pickup = ParcelEndSerializer()
+    drop = ParcelEndSerializer()
+
+
 class RideCreateSerializer(serializers.Serializer[Any]):
     quote_id = serializers.UUIDField(help_text="One of the rider's quotes from POST rides/quotes/.")
+    parcel = ParcelRequestSerializer(
+        required=False, help_text="Required when the quote is a Pick up & Drop quote."
+    )
 
 
 class RidePlaceSerializer(serializers.Serializer[Any]):
@@ -383,6 +460,7 @@ class _RideBaseSerializer(serializers.ModelSerializer[Ride]):
         model = Ride
         fields: tuple[str, ...] = (
             "id",
+            "kind",
             "state",
             "vehicle_type",
             "pickup",
@@ -417,8 +495,47 @@ class _RideBaseSerializer(serializers.ModelSerializer[Ride]):
         return _drop(obj)
 
 
+def _end(parcel: ParcelDetails, side: str) -> dict[str, Any]:
+    return {
+        name: getattr(parcel, f"{side}_{name}")
+        for name in ("name", "phone", "building", "unit", "meet_at", "instructions")
+    }
+
+
+class ParcelSerializer(serializers.Serializer[Any]):
+    """The parcel block on a ride, as the booker sees it."""
+
+    mode = serializers.CharField()
+    payer = serializers.CharField()
+    pin_required = serializers.BooleanField()
+    pickup = serializers.SerializerMethodField()
+    drop = serializers.SerializerMethodField()
+    payment_point = serializers.SerializerMethodField(
+        help_text="PICKUP when the sender pays, DROP when the receiver pays."
+    )
+    arrived_at_drop_at = serializers.DateTimeField()
+    delivered_at = serializers.DateTimeField()
+    receiver_unavailable_at = serializers.DateTimeField()
+    returned_at = serializers.DateTimeField()
+    return_fare_paise = serializers.IntegerField()
+    return_payment_status = serializers.CharField()
+
+    @extend_schema_field(ParcelEndSerializer)
+    def get_pickup(self, obj: ParcelDetails) -> dict[str, Any]:
+        return _end(obj, "pickup")
+
+    @extend_schema_field(ParcelEndSerializer)
+    def get_drop(self, obj: ParcelDetails) -> dict[str, Any]:
+        return _end(obj, "drop")
+
+    def get_payment_point(self, obj: ParcelDetails) -> str:
+        return "PICKUP" if obj.payer == ParcelDetails.Payer.SENDER else "DROP"
+
+
 class RideSerializer(_RideBaseSerializer):
     """The rider's view of one ride."""
+
+    parcel = serializers.SerializerMethodField(help_text="Pick up & Drop only; null for a ride.")
 
     captain = serializers.SerializerMethodField()
     otp = serializers.SerializerMethodField(
@@ -434,12 +551,19 @@ class RideSerializer(_RideBaseSerializer):
     class Meta(_RideBaseSerializer.Meta):
         fields = (
             *_RideBaseSerializer.Meta.fields,
+            "parcel",
             "captain",
             "otp",
             "searching_again",
             "my_rating",
         )
         read_only_fields = fields
+
+    @extend_schema_field(ParcelSerializer(allow_null=True))
+    def get_parcel(self, obj: Ride) -> dict[str, Any] | None:
+        if obj.kind != RideKind.PARCEL:
+            return None
+        return dict(ParcelSerializer(obj.parcel).data)
 
     @extend_schema_field(RideCaptainSerializer(allow_null=True))
     def get_captain(self, obj: Ride) -> dict[str, Any] | None:
@@ -568,6 +692,7 @@ class RideHistorySerializer(serializers.ModelSerializer[Ride]):
         model = Ride
         fields = (
             "id",
+            "kind",
             "state",
             "vehicle_type",
             "pickup_address",
