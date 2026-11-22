@@ -19,7 +19,7 @@ from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from apps.catalog.models import A7VariantConfiguration, Category, Service, Subcategory
-from apps.commerce.models import FinancialException, PaymentAttempt
+from apps.commerce.models import FinancialException, PaymentAttempt, Refund
 from apps.commerce.services import _request_automatic_refund
 from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
@@ -1127,6 +1127,8 @@ def mark_deposit_held(*, payment_attempt_id: UUID) -> None:
     """
     deposit = RentalDeposit.objects.select_for_update().get(payment_attempt_id=payment_attempt_id)
     booking = RentalBooking.objects.select_for_update().get(deposit_id=deposit.id)
+    if _refund_if_cancelled(deposit=deposit, booking=booking):
+        return
     if _capture_already_applied(deposit, booking):
         return
     _hold_deposit(deposit)
@@ -1495,8 +1497,62 @@ def release_deposit(*, booking: RentalBooking, partner: Any) -> RentalDeposit:
     return deposit
 
 
-@transaction.atomic
+#: A payment the app has not seen finish, which the provider may nevertheless have taken.
+_OPEN_ATTEMPT_STATUSES = (
+    PaymentAttempt.Status.CREATED,
+    PaymentAttempt.Status.PROVIDER_PENDING,
+    PaymentAttempt.Status.AUTHORIZED,
+)
+
+
+def _record_payment_before_cancel(booking: RentalBooking) -> None:
+    """Ask the provider about an open payment before cancelling as though it were unpaid.
+
+    A customer who has just paid sees the booking as pending until the capture is recorded, and
+    may cancel in that gap. Recording the capture first means the cancel below sees a paid
+    booking and refunds it at once. Outside the cancel's transaction, so the provider call holds
+    no row locks; a failure here is not fatal, because a capture that still lands afterwards is
+    refunded by `_refund_if_cancelled`.
+    """
+
+    attempt = (
+        PaymentAttempt.objects.filter(rental_deposits__id=booking.deposit_id)
+        .only("id", "status", "provider_order_id")
+        .first()
+    )
+    if attempt is None or attempt.status not in _OPEN_ATTEMPT_STATUSES:
+        return
+    if not attempt.provider_order_id:
+        return
+    from apps.commerce.services import reconcile_payment_attempt  # noqa: PLC0415
+
+    try:
+        reconcile_payment_attempt(attempt_id=attempt.id)
+    except Exception:
+        logger.exception(
+            "Could not check the payment before cancelling a rental",
+            extra={"booking_id": str(booking.id), "payment_attempt_id": str(attempt.id)},
+        )
+
+
 def cancel_booking(
+    *,
+    booking: RentalBooking,
+    customer: Any = None,
+    partner: Any = None,
+    is_ops: bool = False,
+    reason: str = "",
+) -> RentalBooking:
+    """Cancel a rental, after first recording any payment the provider already took."""
+
+    _record_payment_before_cancel(booking)
+    return _cancel_booking(
+        booking=booking, customer=customer, partner=partner, is_ops=is_ops, reason=reason
+    )
+
+
+@transaction.atomic
+def _cancel_booking(
     *,
     booking: RentalBooking,
     customer: Any = None,
@@ -1849,6 +1905,46 @@ def _capture_already_applied(deposit: RentalDeposit, booking: RentalBooking) -> 
     )
 
 
+#: The refund reason for money that arrived after its booking was cancelled.
+PAID_AFTER_CANCELLATION = "rental_paid_after_cancellation"
+
+
+def _refund_if_cancelled(*, deposit: RentalDeposit, booking: RentalBooking) -> bool:
+    """A payment that lands on a cancelled booking is returned, never kept. True if it was.
+
+    The customer paid, then cancelled before the capture was recorded (a slow webhook, a missed
+    reconcile, the payment window running out). Holding the deposit and re-confirming the
+    reservation would keep their money for a booking that no longer exists and block the item's
+    dates for nobody. So the whole payment is refunded, the deposit stays released, the
+    reservation is left alone, and Operations is shown that it happened.
+    """
+
+    if booking.status != RentalBooking.Status.CANCELLED:
+        return False
+    attempt = deposit.payment_attempt
+    if attempt is None or attempt.status not in PAYMENT_FINAL_STATES:
+        return True
+    if attempt.refunds.exclude(status=Refund.Status.FAILED).exists():
+        # Cancelled after the payment was recorded: the cancel already asked for this refund,
+        # and a replayed capture must not ask for a second one.
+        return True
+    _request_automatic_refund(attempt=attempt, reason_code=PAID_AFTER_CANCELLATION)
+    if deposit.status != RentalDeposit.Status.RELEASED:
+        deposit.status = RentalDeposit.Status.RELEASED
+        deposit.save(update_fields=("status", "updated_at"))
+    _open_exception(
+        kind=FinancialException.Kind.CAPTURE_WITHOUT_CAPACITY,
+        code=PAID_AFTER_CANCELLATION,
+        attempt=attempt,
+        context={"booking_id": str(booking.id)},
+    )
+    logger.warning(
+        "Rental payment captured after cancellation; refunding it",
+        extra={"booking_id": str(booking.id), "payment_attempt_id": str(attempt.id)},
+    )
+    return True
+
+
 def _hold_deposit(deposit: RentalDeposit) -> None:
     if deposit.status == RentalDeposit.Status.HELD:
         return
@@ -1860,6 +1956,8 @@ def _hold_deposit(deposit: RentalDeposit) -> None:
 def complete_rental_booking_payment(*, payment_attempt_id: UUID) -> None:
     deposit = RentalDeposit.objects.select_for_update().get(payment_attempt_id=payment_attempt_id)
     booking = RentalBooking.objects.select_for_update().get(deposit_id=deposit.id)
+    if _refund_if_cancelled(deposit=deposit, booking=booking):
+        return
     if _capture_already_applied(deposit, booking):
         return
     _hold_deposit(deposit)

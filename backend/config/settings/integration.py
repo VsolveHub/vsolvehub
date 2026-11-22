@@ -9,11 +9,16 @@ the worker subprocess register the same outbox handlers. No other settings modul
 """
 
 from config.settings.base import *
-from config.settings.guards import guard_cashfree_sandbox, guard_razorpayx_test_keys
+from config.settings.guards import (
+    guard_cashfree_sandbox,
+    guard_cashfree_verification_sandbox,
+    guard_razorpayx_test_keys,
+)
 
 DEBUG = False
 guard_razorpayx_test_keys(RAZORPAYX_KEY_ID)
 guard_cashfree_sandbox(CASHFREE_PAYOUT_API_BASE_URL)
+guard_cashfree_verification_sandbox(CASHFREE_VERIFICATION_API_BASE_URL)
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 INSTALLED_APPS = [*INSTALLED_APPS, "tests.integration.support.apps.IntegrationSupportConfig"]

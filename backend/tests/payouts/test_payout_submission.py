@@ -310,7 +310,9 @@ def test_starting_payment_requires_an_approved_batch_and_emits_one_event_per_ite
     item = _reserved_item("start-paying")
     batch = PayoutBatch.objects.get(id=item.batch_id)
 
-    started = start_paying_batch(batch_id=batch.id, expected_version=batch.version)
+    started = start_paying_batch(
+        batch_id=batch.id, expected_version=batch.version, actor=_operator()
+    )
 
     assert started.status == PayoutBatch.Status.PAYING
     assert (

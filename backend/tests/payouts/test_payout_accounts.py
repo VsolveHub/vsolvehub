@@ -5,6 +5,7 @@ The rules that matter for real money, each asserted here:
 * the full account number reaches the provider and nowhere else;
 * nothing submitted by a Partner is payable until Operations verifies it *and* cooling passes;
 * the person who registered an account cannot review it, and reviewing needs a step-up;
+* one bank account is live for at most one Partner, whatever ids the provider hands out;
 * a payout webhook is only believed when it is signed, and settling is idempotent.
 """
 
@@ -24,14 +25,17 @@ from rest_framework.test import APIClient
 
 from apps.identity.models import Role, User, UserRole, UserSession
 from apps.partners.models import PartnerProfile
+from apps.payouts.exceptions import PayoutAccountInUseApiError
 from apps.payouts.models import PartnerLedgerEntry, PartnerPayoutAccount, PayoutBatchItem
 from apps.payouts.providers import (
+    FakePayoutProvider,
     PayoutProviderError,
     RazorpayXPayoutProvider,
     get_payout_account_provider,
     get_payout_provider,
 )
 from apps.payouts.services import (
+    bank_account_fingerprint,
     payable_account,
     register_payout_account,
     reserve_entry_for_batch,
@@ -196,6 +200,101 @@ def test_a_new_submission_replaces_the_old_account_and_restarts_cooling() -> Non
     assert old.status == PartnerPayoutAccount.Status.REPLACED
     assert second.json()["status"] == "PENDING"
     assert payable_account(profile) is None
+
+
+def _fingerprint(account_number: str = ACCOUNT_NUMBER) -> str:
+    return bank_account_fingerprint(ifsc="SBIN0001234", account_number=account_number)
+
+
+def _hold(partner: PartnerProfile, **overrides: Any) -> PartnerPayoutAccount:
+    """Another Partner's account for ACCOUNT_NUMBER, under an id only that Partner has."""
+
+    fields: dict[str, Any] = {
+        "account_last4": ACCOUNT_NUMBER[-4:],
+        "ifsc": "SBIN0001234",
+        "holder_name": "Ravi Kumar",
+        "provider_fund_account_id": f"fa_{partner.id.hex}",
+        "account_fingerprint": _fingerprint(),
+        **overrides,
+    }
+    return register_payout_account(partner_id=partner.id, **fields)
+
+
+@FAKE_PROVIDER
+def test_a_bank_account_another_partner_holds_is_refused_whatever_id_the_provider_gives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # RazorpayX makes a new fund account for every contact, so one bank account has a different
+    # provider id for each Partner. The fingerprint recognises it anyway, before anyone is called.
+    _, other = _partner()
+    _hold(other)
+
+    def must_not_be_called(*_args: Any, **_kwargs: Any) -> str:
+        raise AssertionError("an account another Partner holds must not reach the provider")
+
+    monkeypatch.setattr(FakePayoutProvider, "create_contact", must_not_be_called)
+    monkeypatch.setattr(FakePayoutProvider, "create_fund_account", must_not_be_called)
+    client, profile = _partner()
+
+    response = _submit(client)
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json()["error"]["code"] == "payout_account_in_use"
+    assert not PartnerPayoutAccount.objects.filter(partner=profile).exists()
+
+
+@FAKE_PROVIDER
+def test_a_submitted_account_stores_its_fingerprint_and_never_its_number() -> None:
+    client, profile = _partner()
+
+    response = _submit(client)
+
+    assert response.status_code == HTTPStatus.CREATED
+    account = PartnerPayoutAccount.objects.get(partner=profile)
+    # The form sends a lowercase IFSC; it names the same account as the uppercase one.
+    assert account.account_fingerprint == _fingerprint()
+    assert ACCOUNT_NUMBER not in account.account_fingerprint
+    assert "account_fingerprint" not in response.json()
+
+
+@FAKE_PROVIDER
+def test_two_partners_cannot_both_hold_one_bank_account_even_at_the_same_moment() -> None:
+    # Two simultaneous submissions both pass the service's check; the database refuses the
+    # second, and the refused Partner keeps the account they already had.
+    _, first = _partner()
+    _, second = _partner()
+    kept = _hold(
+        second,
+        account_last4="7777",
+        provider_fund_account_id="fa_second_old",
+        account_fingerprint=_fingerprint("999988887777"),
+    )
+    _hold(first)
+
+    with pytest.raises(PayoutAccountInUseApiError):
+        _hold(second)
+
+    kept.refresh_from_db()
+    assert kept.status == PartnerPayoutAccount.Status.PENDING
+    assert list(PartnerPayoutAccount.objects.filter(partner=second)) == [kept]
+
+
+@FAKE_PROVIDER
+def test_a_partner_can_add_the_same_account_again_and_a_rejected_one_blocks_nobody() -> None:
+    client, profile = _partner()
+    first = _submit(client).json()
+
+    again = _submit(client)
+
+    assert again.status_code == HTTPStatus.CREATED
+    old = PartnerPayoutAccount.objects.get(id=first["id"])
+    assert old.status == PartnerPayoutAccount.Status.REPLACED
+
+    PartnerPayoutAccount.objects.filter(partner=profile).update(
+        status=PartnerPayoutAccount.Status.REJECTED
+    )
+    other_client, _ = _partner()
+    assert _submit(other_client).status_code == HTTPStatus.CREATED
 
 
 @override_settings(PAYOUT_PROVIDER="unconfigured")

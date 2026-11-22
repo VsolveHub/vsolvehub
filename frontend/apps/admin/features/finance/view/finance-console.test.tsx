@@ -32,7 +32,7 @@ const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELE
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 
 const { RefundConsole } = await import("./refund-console");
-const { StepUpGate } = await import("./step-up-gate");
+const { CompactStepUpGate, StepUpGate } = await import("./step-up-gate");
 
 const ORDER_ID = "20202020-2020-4020-8020-202020202020";
 
@@ -42,7 +42,21 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
+/** The console with its refund form opened, as an operator about to issue one sees it. */
+function renderConsole(onStepUpRequired: (reason: string) => void) {
+  const view = render(<RefundConsole onStepUpRequired={onStepUpRequired} />, { wrapper });
+  openRefundForm();
+  return view;
+}
+
+/** The form sits behind a button now that the refund list leads the page. */
+function openRefundForm() {
+  const open = screen.queryByRole("button", { name: /refund several visits of one order/i });
+  if (open) fireEvent.click(open);
+}
+
 function fillRefund() {
+  openRefundForm();
   fireEvent.change(screen.getByLabelText(/order id/i), { target: { value: ORDER_ID } });
   fireEvent.change(screen.getByLabelText(/reason code/i), {
     target: { value: "service-not-delivered" },
@@ -73,7 +87,7 @@ afterEach(() => {
 
 describe("issuing a refund", () => {
   it("sends nothing on the first press, and reads the decision back", () => {
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
     fillRefund();
 
     fireEvent.click(screen.getByRole("button", { name: /review this refund/i }));
@@ -85,7 +99,7 @@ describe("issuing a refund", () => {
 
   it("sends the Order, the visits and the reason, with an idempotency key", async () => {
     client.POST.mockResolvedValue(ok(refund(), 202));
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
 
@@ -101,7 +115,7 @@ describe("issuing a refund", () => {
   });
 
   it("chooses no amount, because Django works out what is left", () => {
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     // An amount field here would be a client deciding how much of somebody's
     // payment is still refundable.
@@ -110,7 +124,7 @@ describe("issuing a refund", () => {
   });
 
   it("refuses to send a malformed refund", () => {
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     fireEvent.change(screen.getByLabelText(/order id/i), { target: { value: "nope" } });
     fireEvent.click(screen.getByRole("button", { name: /review this refund/i }));
@@ -121,7 +135,7 @@ describe("issuing a refund", () => {
 
   it("reuses one key for the same Order, visits and reason", async () => {
     client.POST.mockResolvedValue(ok(refund(), 202));
-    const view = render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    const view = renderConsole(vi.fn());
     requestRefund();
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
 
@@ -129,7 +143,7 @@ describe("issuing a refund", () => {
     // itself, so the second call must carry the same one or it creates a second
     // refund.
     view.unmount();
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
     requestRefund();
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
 
@@ -141,7 +155,7 @@ describe("issuing a refund", () => {
   it("treats the same visits in a different order as the same refund", async () => {
     const other = "21212121-2121-4121-8121-212121212121";
     client.POST.mockResolvedValue(ok(refund(), 202));
-    const view = render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    const view = renderConsole(vi.fn());
 
     fireEvent.change(screen.getByLabelText(/order id/i), { target: { value: ORDER_ID } });
     fireEvent.change(screen.getByLabelText(/reason code/i), { target: { value: "goodwill" } });
@@ -153,7 +167,7 @@ describe("issuing a refund", () => {
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
     view.unmount();
 
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
     fireEvent.change(screen.getByLabelText(/order id/i), { target: { value: ORDER_ID } });
     fireEvent.change(screen.getByLabelText(/reason code/i), { target: { value: "goodwill" } });
     fireEvent.change(screen.getByLabelText(/fulfilment unit ids/i), {
@@ -170,7 +184,7 @@ describe("issuing a refund", () => {
 
   it("is never retried automatically", async () => {
     client.POST.mockResolvedValue(refusal("payment_conflict", 409));
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
     await screen.findByText(/was not accepted/i);
@@ -182,7 +196,7 @@ describe("issuing a refund", () => {
 describe("what the operator is told about the refund afterwards", () => {
   it("does not call a requested refund refunded", async () => {
     client.POST.mockResolvedValue(ok(refund({ status: "REQUESTED" }), 202));
-    const { container } = render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    const { container } = renderConsole(vi.fn());
 
     requestRefund();
     await screen.findByText("Requested");
@@ -193,7 +207,7 @@ describe("what the operator is told about the refund afterwards", () => {
 
   it("warns against a second refund while the outcome is unknown", async () => {
     client.POST.mockResolvedValue(ok(refund({ status: "PROCESSING" }), 202));
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
 
@@ -205,7 +219,7 @@ describe("what the operator is told about the refund afterwards", () => {
     client.POST.mockResolvedValue(
       ok(refund({ status: "SUCCEEDED", reconciliation_state: "NEEDS_ATTENTION" }), 202),
     );
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
 
@@ -215,7 +229,7 @@ describe("what the operator is told about the refund afterwards", () => {
 
   it("breaks the amount down per visit, as Django allocated it", async () => {
     client.POST.mockResolvedValue(ok(refund(), 202));
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
     await screen.findByText(/per visit/i);
@@ -229,7 +243,7 @@ describe("reconciling", () => {
     client.POST.mockResolvedValueOnce(ok(refund(), 202)).mockResolvedValueOnce(
       ok(refund({ status: "SUCCEEDED", reconciliation_state: "IN_SYNC" })),
     );
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
     fireEvent.click(await screen.findByRole("button", { name: /ask the provider/i }));
@@ -246,7 +260,7 @@ describe("reconciling", () => {
     client.POST.mockResolvedValueOnce(ok(refund(), 202)).mockResolvedValueOnce(
       refusal("payment_provider_unavailable", 503),
     );
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
     requestRefund();
     fireEvent.click(await screen.findByRole("button", { name: /ask the provider/i }));
@@ -261,7 +275,7 @@ describe("the step-up", () => {
   it("gates nothing in the browser and counts nothing down", () => {
     // The TTL is unpublished. A countdown here would be a number invented about
     // an authorization decision.
-    const { container } = render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    const { container } = renderConsole(vi.fn());
 
     expect(screen.getByRole("button", { name: /review this refund/i })).toBeEnabled();
     expect(container.textContent ?? "").not.toMatch(/minutes left|expires in|\d+:\d\d/i);
@@ -276,7 +290,7 @@ describe("the step-up", () => {
   it("sends the operator back to confirm when a refund is refused for it", async () => {
     const onStepUpRequired = vi.fn();
     client.POST.mockResolvedValue(refusal("permission_denied", 403));
-    render(<RefundConsole onStepUpRequired={onStepUpRequired} />, { wrapper });
+    renderConsole(onStepUpRequired);
 
     requestRefund();
 
@@ -286,41 +300,56 @@ describe("the step-up", () => {
     expect(onStepUpRequired.mock.calls[0]![0]).toMatch(/nothing was changed/i);
   });
 
-  it("confirms against the signed-in session, then forgets the code", async () => {
-    const onSteppedUp = vi.fn();
+  const ISSUED = {
+    challenge_id: "chal-1",
+    code_length: 6,
+    expires_in_seconds: 300,
+    resend_after_seconds: 30,
+    development_code: null,
+    phone_number_masked: "+91 •••••• 0001",
+  };
+
+  function routeStepUp(confirmResult: unknown) {
     client.POST.mockImplementation((path: string) =>
-      path === "/api/v1/auth/otp/request/"
-        ? Promise.resolve(
-            ok({
-              challenge_id: "chal-1",
-              code_length: 6,
-              expires_in_seconds: 300,
-              resend_after_seconds: 30,
-              development_code: null,
-            }),
-          )
-        : Promise.resolve(ok({ stepped_up_at: "2026-08-05T12:00:00Z" })),
+      Promise.resolve(path === "/api/v1/auth/finance/step-up/code/" ? ok(ISSUED, 202) : confirmResult),
     );
+  }
+
+  async function sendAndConfirm() {
+    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
+    fireEvent.change(await screen.findByLabelText(/the code we sent you/i), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+  }
+
+  it("sends the code to the signed-in number without asking for one, then forgets the code", async () => {
+    const onSteppedUp = vi.fn();
+    routeStepUp(ok({ stepped_up_at: "2026-08-05T12:00:00Z" }));
     render(<StepUpGate session={null} onSteppedUp={onSteppedUp} />, { wrapper });
 
-    fireEvent.change(screen.getByLabelText(/your mobile number/i), {
-      target: { value: "9000000001" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
-
-    const codeField = await screen.findByLabelText(/the code we sent you/i);
-    fireEvent.change(codeField, { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+    expect(screen.queryByRole("textbox", { name: /mobile number/i })).not.toBeInTheDocument();
+    await sendAndConfirm();
 
     await waitFor(() => expect(onSteppedUp).toHaveBeenCalledTimes(1));
+    expect(client.POST.mock.calls[0]![0]).toBe("/api/v1/auth/finance/step-up/code/");
+    expect(client.POST.mock.calls[0]![1]).toBeUndefined();
     expect(client.POST.mock.calls[1]![0]).toBe("/api/v1/auth/finance/step-up/");
-    expect(client.POST.mock.calls[1]![1].body).toEqual({
-      challenge_id: "chal-1",
-      phone_number: "9000000001",
-      code: "123456",
-    });
-    // Single-use and now spent: the form is back at the phone step.
-    expect(screen.getByLabelText(/your mobile number/i)).toBeInTheDocument();
+    // No number travels with the code: Django checks it against the signed-in account.
+    expect(client.POST.mock.calls[1]![1].body).toEqual({ challenge_id: "chal-1", code: "123456" });
+    // Single-use and now spent: the form is back at the send step.
+    expect(screen.getByRole("button", { name: /send me a code/i })).toBeInTheDocument();
+  });
+
+  it("shows the masked number the code went to", async () => {
+    routeStepUp(ok({ stepped_up_at: "2026-08-05T12:00:00Z" }));
+    render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
+    await screen.findByLabelText(/the code we sent you/i);
+    fireEvent.click(screen.getByRole("button", { name: /send a new code/i }));
+
+    expect(screen.getByText("+91 •••••• 0001")).toBeInTheDocument();
   });
 
   it("shows the instant Django stamped, and claims nothing beyond it", () => {
@@ -333,33 +362,23 @@ describe("the step-up", () => {
     expect(screen.getByRole("time")).toHaveAttribute("datetime", "2026-08-05T12:00:00Z");
   });
 
-  it("does not say which of a wrong code or a wrong session was refused", async () => {
-    // Django does not distinguish them, and neither should the console.
-    client.POST.mockImplementation((path: string) =>
-      path === "/api/v1/auth/otp/request/"
-        ? Promise.resolve(
-            ok({
-              challenge_id: "chal-1",
-              code_length: 6,
-              expires_in_seconds: 300,
-              resend_after_seconds: 30,
-              development_code: null,
-            }),
-          )
-        : Promise.resolve(refusal("invalid_otp", 400)),
-    );
+  it("calls a wrong code wrong", async () => {
+    routeStepUp(refusal("invalid_otp", 400));
     render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
 
-    fireEvent.change(screen.getByLabelText(/your mobile number/i), {
-      target: { value: "9000000001" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
-    fireEvent.change(await screen.findByLabelText(/the code we sent you/i), {
-      target: { value: "123456" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+    await sendAndConfirm();
 
     expect(await screen.findByText(/not right, or it has expired/i)).toBeInTheDocument();
+  });
+
+  it("does not call a correct code wrong when it was for a different number", async () => {
+    routeStepUp(refusal("step_up_identity_mismatch", 403));
+    render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
+
+    await sendAndConfirm();
+
+    expect(await screen.findByText(/for a different number/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not right, or it has expired/i)).not.toBeInTheDocument();
   });
 });
 
@@ -369,9 +388,9 @@ describe("operations refunds ledger", () => {
     client.GET.mockResolvedValue(ok({ results: [sampleRefund], next: null, previous: null }));
     client.POST.mockResolvedValue(ok(refund({ id: "refund-123", status: "SUCCEEDED" })));
 
-    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+    renderConsole(vi.fn());
 
-    expect(await screen.findByText(/Refunds ledger & history/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "All refunds" })).toBeInTheDocument();
     expect(await screen.findByText(formatMoney(sampleRefund.amount.amount_paise))).toBeInTheDocument();
 
     const reconcileBtn = await screen.findByRole("button", { name: "Reconcile" });
@@ -381,6 +400,82 @@ describe("operations refunds ledger", () => {
     expect(client.POST.mock.calls[0]![0]).toBe(
       "/api/v1/finance/refunds/{refund_id}/reconcile/",
     );
+  });
+
+  it("says who started each refund, what it was for and why, and filters by it", async () => {
+    client.GET.mockResolvedValue(
+      ok({
+        results: [
+          refund({
+            id: "auto-1",
+            started_by: "AUTOMATIC",
+            paid_for: "A7_RENTAL_BOOKING",
+            reason_code: "rental_paid_after_cancellation",
+          }),
+          refund({ id: "staff-1", started_by: "OPERATIONS", paid_for: "BOOKING_GROUP" }),
+        ],
+        next: null,
+        previous: null,
+      }),
+    );
+    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+
+    expect(await screen.findByText("Paid after the booking was already cancelled")).toBeInTheDocument();
+    expect(screen.getByText("Rental")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Automatic (1)" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Automatic (1)" }));
+
+    expect(screen.queryByText("Service not delivered")).not.toBeInTheDocument();
+    expect(screen.getByText("Paid after the booking was already cancelled")).toBeInTheDocument();
+  });
+
+  it("leads with the refund list and keeps the issuing form closed until asked", async () => {
+    client.GET.mockResolvedValue(ok({ results: [refund()], next: null, previous: null }));
+    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+
+    expect(await screen.findByRole("heading", { name: "All refunds" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/order id/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /refund several visits of one order/i }));
+    expect(screen.getByLabelText(/order id/i)).toBeInTheDocument();
+  });
+});
+
+describe("the one-line confirmation", () => {
+  it("stays one line until asked", () => {
+    render(<CompactStepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
+
+    expect(screen.getByText(/need a quick code to confirm it is you/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send me a code/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm it is you" }));
+    expect(screen.getByRole("button", { name: /send me a code/i })).toBeInTheDocument();
+  });
+
+  it("opens itself when a command was refused for want of it", () => {
+    render(
+      <CompactStepUpGate
+        session={null}
+        onSteppedUp={vi.fn()}
+        reason="Your confirmation lapsed. The account was not changed."
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByText(/confirmation lapsed/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send me a code/i })).toBeInTheDocument();
+  });
+
+  it("says when it was confirmed", () => {
+    render(
+      <CompactStepUpGate
+        session={{ stepped_up_at: "2026-11-21T18:26:00Z" }}
+        onSteppedUp={vi.fn()}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByText(/Confirmed it is you/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm again" })).toBeInTheDocument();
   });
 });
 

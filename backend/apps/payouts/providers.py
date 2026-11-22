@@ -498,6 +498,8 @@ _CASHFREE_TRANSFER_ID = re.compile(r"^[A-Za-z0-9_]{1,40}$")
 CASHFREE_TRANSFER_REMARKS = PAYOUT_NARRATION
 #: 409 codes that mean "you already sent exactly this", so the earlier result stands.
 _CASHFREE_DUPLICATE_BENEFICIARY = "beneficiary_id_already_exists"
+#: 409 when the same bank account and IFSC are already a beneficiary under a *different* id.
+_CASHFREE_ACCOUNT_ALREADY_BENEFICIARY = "conflict_with_existing_beneficiary"
 _CASHFREE_DUPLICATE_TRANSFER = "transfer_id_already_exists"
 _CASHFREE_TRANSFER_NOT_FOUND = "transfer_id_not_found"
 
@@ -739,10 +741,30 @@ class CashfreePayoutProvider:
                     "bank_ifsc": ifsc,
                 },
             },
-            accept_codes=(_CASHFREE_DUPLICATE_BENEFICIARY,),
+            accept_codes=(_CASHFREE_DUPLICATE_BENEFICIARY, _CASHFREE_ACCOUNT_ALREADY_BENEFICIARY),
         )
-        del duplicate  # Same id means same Partner and same account: the earlier one stands.
+        if duplicate == _CASHFREE_ACCOUNT_ALREADY_BENEFICIARY:
+            # Cashfree keeps one beneficiary per bank account. The existing one is returned, not
+            # trusted: `apps.payouts.services` refuses it if another Partner's live account uses
+            # it, so this only ever re-adopts one nobody here holds (a deleted Partner, a reset
+            # database, or one added in the dashboard).
+            return self._beneficiary_for_account(ifsc=ifsc, account_number=account_number)
+        # Same id means same Partner and same account: the earlier one stands.
         return beneficiary_id
+
+    def _beneficiary_for_account(self, *, ifsc: str, account_number: str) -> str:
+        data, _ = self._request(
+            "GET",
+            "/beneficiary",
+            params={"bank_account_number": account_number, "bank_ifsc": ifsc},
+        )
+        existing = data.get("beneficiary_id")
+        if not isinstance(existing, str) or not existing:
+            raise PayoutProviderAmbiguousError(
+                "Cashfree reported an existing beneficiary it cannot find."
+            )
+        logger.info("Cashfree bank account already a beneficiary; reusing it")
+        return existing
 
 
 def cashfree_2fa_signature(*, client_id: str, public_key_pem: str) -> str:
@@ -792,6 +814,244 @@ def _cashfree_error_detail(response: requests.Response) -> ProviderErrorDetail:
         reason=_error_text(error, "type"),
         description=_error_text(error, "message"),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class BankAccountCheck:
+    """What the bank said about an account, before any money is sent to it.
+
+    `name_at_bank` is the account holder's name as the bank holds it, which is the one thing a
+    reviewer cannot get from the Partner. The match result compares it with the name the Partner
+    typed, so it says the two agree, not that either is the Partner's own.
+    """
+
+    is_valid: bool
+    #: `ACCOUNT_IS_VALID`, `INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`, `INVALID_IFSC_FAIL`,
+    #: `NRE_ACCOUNT_FAIL`, or `FRAUD_ACCOUNT` when Cashfree refused it as one.
+    status_code: str
+    name_at_bank: str = ""
+    #: `DIRECT_MATCH`, `GOOD_PARTIAL_MATCH`, `MODERATE_PARTIAL_MATCH`, `POOR_PARTIAL_MATCH`,
+    #: `NO_MATCH`, or empty when the bank gave no name.
+    name_match_result: str = ""
+    name_match_score: str = ""
+    reference: str = ""
+
+
+class BankAccountVerifier(Protocol):
+    """Asks the bank whether an account exists and whose it is. Moves none of our money."""
+
+    code: str
+
+    def verify_bank_account(
+        self, *, account_number: str, ifsc: str, holder_name: str
+    ) -> BankAccountCheck: ...
+
+
+class FakeBankAccountVerifier:
+    """Deterministic: the holder name's first word picks the bank's answer.
+
+    `Invalid …` is an account the bank does not have, `Mismatch …` is one held by somebody else,
+    `Unreachable …` is a check that could not finish. Anything else is valid and in that name.
+    """
+
+    code = "fake"
+
+    def verify_bank_account(
+        self,
+        *,
+        account_number: str,  # noqa: ARG002 - the fake has no bank to look it up in
+        ifsc: str,  # noqa: ARG002
+        holder_name: str,
+    ) -> BankAccountCheck:
+        first = holder_name.split(" ", 1)[0].lower()
+        if first == "unreachable":
+            raise PayoutProviderAmbiguousError("The fake bank check could not finish.")
+        if first == "invalid":
+            return BankAccountCheck(is_valid=False, status_code="INVALID_ACCOUNT_FAIL")
+        if first == "mismatch":
+            return BankAccountCheck(
+                is_valid=True,
+                status_code="ACCOUNT_IS_VALID",
+                name_at_bank="SOMEONE ELSE",
+                name_match_result="NO_MATCH",
+                name_match_score="0.00",
+                reference="fake_bav_mismatch",
+            )
+        return BankAccountCheck(
+            is_valid=True,
+            status_code="ACCOUNT_IS_VALID",
+            name_at_bank=holder_name.upper(),
+            name_match_result="DIRECT_MATCH",
+            name_match_score="100.00",
+            reference="fake_bav",
+        )
+
+
+#: Cashfree BAV `name`: letters, digits, space and `. - / &`, at most 100.
+_CASHFREE_BAV_NAME_DISALLOWED = re.compile(r"[^A-Za-z0-9 .\-/&]+")
+_CASHFREE_BAV_NAME_MAX_LENGTH = 100
+#: A 422 that means the bank told Cashfree no about the account itself, so it is an answer.
+_CASHFREE_BAV_FRAUD = "fraud_account"
+#: A 422 that means the check did not finish (bank, NPCI or Cashfree): ask again later.
+_CASHFREE_BAV_UNFINISHED = frozenset(
+    {
+        "insufficient_balance",
+        "verification_already_under_process",
+        "failed_at_bank",
+        "npci_unavailable",
+        "connection_timeout",
+        "source_bank_declined",
+        "bene_bank_declined",
+        "imps_mode_fail",
+        "benficiary_bank_offline",
+        "beneficiary_bank_offline",
+    }
+)
+#: Cashfree's 400 codes for the account details themselves, rather than for our request.
+_CASHFREE_BAV_BAD_DETAILS = frozenset(
+    {
+        "bank_account_length_exceeded",
+        "bank_account_length_short",
+        "bank_account_value_invalid",
+        "ifsc_value_invalid",
+    }
+)
+
+
+class CashfreeBankAccountVerifier:
+    """Cashfree Bank Account Verification V2 (sync), with bounded I/O and no automatic retry.
+
+    It is Cashfree's Secure ID product, with its own keys (`CASHFREE_VERIFICATION_*`), not the
+    Payouts ones. An invalid or blocked account is a `200` with `account_status: INVALID`, which
+    is an answer; a `422` is either a fraud flag (also an answer) or a check that did not finish.
+    Nothing here is worth retrying automatically: the Partner submits again.
+    """
+
+    code = "cashfree"
+
+    def __init__(self) -> None:
+        self._base_url = settings.CASHFREE_VERIFICATION_API_BASE_URL.rstrip("/")
+        self._client_id = settings.CASHFREE_VERIFICATION_CLIENT_ID
+        self._client_secret = settings.CASHFREE_VERIFICATION_CLIENT_SECRET
+        self._public_key = settings.CASHFREE_VERIFICATION_PUBLIC_KEY
+        self._timeout = (
+            settings.PAYMENT_PROVIDER_CONNECT_TIMEOUT_SECONDS,
+            settings.CASHFREE_VERIFICATION_READ_TIMEOUT_SECONDS,
+        )
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"x-client-id": self._client_id, "x-client-secret": self._client_secret}
+        if self._public_key:
+            headers["x-cf-signature"] = cashfree_2fa_signature(
+                client_id=self._client_id, public_key_pem=self._public_key
+            )
+        return headers
+
+    def verify_bank_account(
+        self, *, account_number: str, ifsc: str, holder_name: str
+    ) -> BankAccountCheck:
+        name = " ".join(_CASHFREE_BAV_NAME_DISALLOWED.sub(" ", holder_name).split())
+        try:
+            response = requests.post(
+                f"{self._base_url}/bank-account/sync",
+                json={
+                    "bank_account": account_number,
+                    "ifsc": ifsc,
+                    "name": name[:_CASHFREE_BAV_NAME_MAX_LENGTH],
+                },
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            logger.warning(
+                "Cashfree bank account verification did not answer",
+                extra={"error_type": type(exc).__name__},
+            )
+            raise PayoutProviderAmbiguousError("The bank check did not answer.") from exc
+
+        if response.status_code == HTTPStatus.OK:
+            return self.parse_check(CashfreePayoutProvider._json(response))
+        detail = _cashfree_error_detail(response)
+        # Never the request body: it carries a full bank account number.
+        logger.warning(
+            "Cashfree bank account verification refused",
+            extra={
+                "http_status": detail.http_status,
+                "provider_error_code": detail.code,
+                "provider_error_reason": detail.reason,
+            },
+        )
+        if detail.code == _CASHFREE_BAV_FRAUD:
+            return BankAccountCheck(is_valid=False, status_code="FRAUD_ACCOUNT")
+        if detail.code in _CASHFREE_BAV_UNFINISHED or (
+            response.status_code == HTTPStatus.TOO_MANY_REQUESTS
+            or response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+        ):
+            raise PayoutProviderAmbiguousError("The bank check could not finish.")
+        if detail.code in _CASHFREE_BAV_BAD_DETAILS:
+            raise PayoutProviderRejectedError("Cashfree refused these bank details.", detail=detail)
+        # Credentials, IP whitelist, 2FA, or the product not enabled: ours to fix, not the
+        # Partner's, and not worth their retrying.
+        raise PayoutProviderError(
+            f"Cashfree bank account verification is misconfigured: {detail.code or 'unknown'}"
+        )
+
+    @staticmethod
+    def parse_check(data: dict[str, object]) -> BankAccountCheck:
+        status = str(data.get("account_status") or "").strip().upper()
+        if status not in ("VALID", "INVALID"):
+            raise PayoutProviderAmbiguousError("Cashfree returned no account status.")
+        return BankAccountCheck(
+            is_valid=status == "VALID",
+            status_code=_scalar_text(data.get("account_status_code"), 32).upper(),
+            name_at_bank=_scalar_text(data.get("name_at_bank"), 140),
+            name_match_result=_scalar_text(data.get("name_match_result"), 32).upper(),
+            name_match_score=_scalar_text(data.get("name_match_score"), 8),
+            reference=_scalar_text(data.get("reference_id"), 64),
+        )
+
+
+def _scalar_text(value: object, limit: int) -> str:
+    """A string or number as text; null, booleans and objects as empty."""
+
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return ""
+    return str(value).strip()[:limit]
+
+
+def get_bank_account_verifier(*, provider_code: str | None = None) -> BankAccountVerifier | None:
+    """The bank check for the configured payout provider, or None where there is none.
+
+    None only for RazorpayX, which is not checked here: that is a stated gap, not a fallback.
+    Cashfree without its verification keys is refused rather than skipped, so a production
+    deployment cannot quietly register accounts nobody asked the bank about.
+    """
+
+    code = provider_code or settings.PAYOUT_PROVIDER
+    if code == FakePayoutProvider.code:
+        if not settings.DEBUG and not settings.PAYOUTS_ALLOW_FAKE_PROVIDER:
+            raise PayoutProviderError(
+                "The fake payout provider is not permitted outside development."
+            )
+        return FakeBankAccountVerifier()
+    if code == CashfreePayoutProvider.code:
+        if not (
+            settings.CASHFREE_VERIFICATION_CLIENT_ID
+            and settings.CASHFREE_VERIFICATION_CLIENT_SECRET
+        ):
+            raise PayoutProviderError(
+                "Cashfree bank account verification credentials are not configured."
+            )
+        return CashfreeBankAccountVerifier()
+    if code == RazorpayXPayoutProvider.code:
+        return None
+    raise PayoutProviderError("No payout provider is configured for this environment.")
+
+
+def bank_check_required(*, provider_code: str | None = None) -> bool:
+    """Whether an account must carry a bank check before Operations may verify it."""
+
+    return (provider_code or settings.PAYOUT_PROVIDER) == CashfreePayoutProvider.code
 
 
 def get_payout_account_provider(*, provider_code: str | None = None) -> PayoutAccountProvider:

@@ -25,7 +25,6 @@ from apps.identity.models import User
 from apps.payouts.exceptions import (
     LedgerEntryNotPayableApiError,
     PayoutBatchInvalidApiError,
-    SelfApprovalDeniedApiError,
 )
 from apps.payouts.models import (
     PartnerLedgerEntry,
@@ -403,7 +402,10 @@ def test_cancelling_a_batch_frees_its_entries_for_a_later_one() -> None:
 # --------------------------------------------------------------------------------------------
 
 
-def test_a_proposer_cannot_approve_their_own_batch() -> None:
+def test_a_proposer_may_approve_their_own_run_and_it_is_recorded_as_self() -> None:
+    """One Operations person must be able to pay. Their own approval is allowed, and recorded as
+    `SELF` so it never passes for a second person's."""
+
     booked = create_booked_group(key_prefix="maker-checker")
     _deliver(booked, key="maker-checker")
     _verified_account(booked)
@@ -416,12 +418,13 @@ def test_a_proposer_cannot_approve_their_own_batch() -> None:
         actor=proposer,
     )
 
-    with pytest.raises(SelfApprovalDeniedApiError):
-        approve_payout_batch(batch_id=batch.id, expected_version=batch.version, actor=proposer)
+    approved = approve_payout_batch(
+        batch_id=batch.id, expected_version=batch.version, actor=proposer
+    )
 
-    batch.refresh_from_db()
-    assert batch.status == PayoutBatch.Status.PENDING_APPROVAL
-    assert batch.approved_by is None
+    assert approved.status == PayoutBatch.Status.APPROVED
+    assert approved.approved_by_id == proposer.id
+    assert approved.approval_basis == PayoutBatch.ApprovalBasis.SELF
 
 
 def test_a_different_operator_can_approve_it() -> None:
@@ -444,22 +447,45 @@ def test_a_different_operator_can_approve_it() -> None:
     assert approved.status == PayoutBatch.Status.APPROVED
     assert approved.approved_by_id == checker.id
     assert approved.approved_at is not None
+    assert approved.approval_basis == PayoutBatch.ApprovalBasis.OPERATIONS
 
 
-def test_self_approval_is_refused_by_the_database_as_well() -> None:
-    """The service check gives a typed refusal. This proves a command that forgot to make it
-    would still be stopped."""
+def test_an_unrecorded_self_approval_is_refused_by_the_database() -> None:
+    """A proposer approving their own run must be recorded as `SELF`. A command that wrote the
+    same person into both columns as an ordinary approval is stopped by PostgreSQL."""
 
     operator = _operator()
+    window = {
+        "period_start": timezone.now() - timedelta(days=7),
+        "period_end": timezone.now() + timedelta(days=1),
+    }
 
     with pytest.raises(IntegrityError), transaction.atomic():
         PayoutBatch.objects.create(
             reference="mc-db",
-            period_start=timezone.now() - timedelta(days=7),
-            period_end=timezone.now() + timedelta(days=1),
             proposed_by=operator,
             approved_by=operator,
+            approval_basis=PayoutBatch.ApprovalBasis.OPERATIONS,
+            **window,
         )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PayoutBatch.objects.create(
+            reference="mc-db-withdrawal",
+            kind=PayoutBatch.Kind.WITHDRAWAL,
+            proposed_by=operator,
+            approved_by=operator,
+            approval_basis=PayoutBatch.ApprovalBasis.SELF,
+            **window,
+        )
+
+    recorded = PayoutBatch.objects.create(
+        reference="mc-db-self",
+        proposed_by=operator,
+        approved_by=operator,
+        approval_basis=PayoutBatch.ApprovalBasis.SELF,
+        **window,
+    )
+    assert recorded.approved_by_id == recorded.proposed_by_id
 
 
 def test_an_empty_batch_cannot_be_approved() -> None:

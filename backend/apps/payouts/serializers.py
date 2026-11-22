@@ -15,19 +15,39 @@ provider, which is the only party that needs it.
 """
 
 import re
+from dataclasses import asdict
 from typing import Any
 
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.identity.models import User
+from apps.partners.models import PartnerProfile
+from apps.payouts.ledger_sources import SOURCE_TYPES, describe_ledger_sources
 from apps.payouts.models import (
     PartnerLedgerEntry,
     PartnerPayoutAccount,
+    PayoutAuditEvent,
     PayoutBatch,
     PayoutBatchItem,
 )
+from apps.payouts.providers import bank_check_required
 from apps.payouts.services import WITHDRAWAL_REFUSAL_REASONS, WITHDRAWAL_REVIEW_REASONS
+
+
+class PartnerLedgerSourceSerializer(serializers.Serializer[dict[str, Any]]):
+    """What a ledger line was for, so a statement reads as bookings rather than amounts."""
+
+    type = serializers.ChoiceField(choices=SOURCE_TYPES)
+    title = serializers.CharField(allow_blank=True)
+    stage_position = serializers.IntegerField(allow_null=True)
+    stage_label = serializers.CharField(allow_blank=True)
+    starts_on = serializers.DateField(allow_null=True)
+    ends_on = serializers.DateField(allow_null=True)
+    booking_id = serializers.UUIDField(allow_null=True)
+    rental_booking_id = serializers.UUIDField(allow_null=True)
+    engagement_id = serializers.UUIDField(allow_null=True)
 
 
 class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntry]):
@@ -55,12 +75,19 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
             "until the hold is lifted."
         )
     )
+    origin = serializers.SerializerMethodField(
+        help_text=(
+            "What this line was for: the visit, rental, project stage or correction behind it, "
+            "with its name, dates and the id the Partner app opens."
+        )
+    )
 
     class Meta:
         model = PartnerLedgerEntry
         fields = (
             "id",
             "booking_id",
+            "origin",
             "kind",
             "status",
             "gross_paise",
@@ -75,6 +102,15 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(PartnerLedgerSourceSerializer)
+    def get_origin(self, instance: PartnerLedgerEntry) -> Any:
+        # A list passes every line's source in `context["sources"]`, looked up in one batch;
+        # a single line (an adjustment's response) looks up its own.
+        sources = self.context.get("sources")
+        if sources is None or instance.id not in sources:
+            sources = describe_ledger_sources([instance])
+        return PartnerLedgerSourceSerializer(asdict(sources[instance.id])).data
 
     def get_is_on_hold(self, instance: PartnerLedgerEntry) -> bool:
         # Annotated by the views that list lines (`selectors.with_hold_flags`); a line created a
@@ -233,6 +269,7 @@ class OperationsPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayou
     partner_phone_number = serializers.CharField(source="partner.user.phone_number", read_only=True)
     reviewed_by_id = serializers.UUIDField(read_only=True, allow_null=True)
     is_registered_with_provider = serializers.SerializerMethodField()
+    is_missing_required_bank_check = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerPayoutAccount
@@ -246,6 +283,12 @@ class OperationsPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayou
             "ifsc",
             "holder_name",
             "is_registered_with_provider",
+            "bank_check_provider",
+            "bank_checked_at",
+            "name_at_bank",
+            "name_match_result",
+            "name_match_score",
+            "is_missing_required_bank_check",
             "verified_at",
             "reviewed_by_id",
             "rejection_reason",
@@ -257,6 +300,17 @@ class OperationsPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayou
     @extend_schema_field(serializers.BooleanField())
     def get_is_registered_with_provider(self, instance: PartnerPayoutAccount) -> bool:
         return bool(instance.provider_fund_account_id)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_missing_required_bank_check(self, instance: PartnerPayoutAccount) -> bool:
+        """True when this deployment checks accounts with the bank and this one never was: it
+        cannot be verified, and the Partner must enter the details again."""
+
+        return (
+            instance.status == PartnerPayoutAccount.Status.PENDING
+            and instance.bank_checked_at is None
+            and bank_check_required()
+        )
 
 
 class OperationsPayoutAccountPageSerializer(serializers.Serializer[dict[str, Any]]):
@@ -310,6 +364,88 @@ class PayoutBatchItemSerializer(serializers.ModelSerializer[PayoutBatchItem]):
         return len(instance.entries.all())
 
 
+class PayoutAuditEventSerializer(serializers.ModelSerializer[PayoutAuditEvent]):
+    """One line of a run's or withdrawal's history.
+
+    Names are looked up when read, never stored: an account deleted later shows as an empty name
+    rather than being kept in the log (`PayoutAuditEvent`).
+    """
+
+    actor_name = serializers.SerializerMethodField()
+    partner_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PayoutAuditEvent
+        fields = (
+            "id",
+            "event_type",
+            "actor_role",
+            "actor_id",
+            "actor_name",
+            "approval_basis",
+            "partner_id",
+            "partner_name",
+            "amount_paise",
+            "reason",
+            "details",
+            "occurred_at",
+        )
+        read_only_fields = fields
+
+    def _names(self) -> tuple[dict[Any, str], dict[Any, str]]:
+        return self.context.get("actor_names", {}), self.context.get("partner_names", {})
+
+    @extend_schema_field(serializers.CharField())
+    def get_actor_name(self, instance: PayoutAuditEvent) -> str:
+        return self._names()[0].get(instance.actor_id, "")
+
+    @extend_schema_field(serializers.CharField())
+    def get_partner_name(self, instance: PayoutAuditEvent) -> str:
+        return self._names()[1].get(instance.partner_id, "")
+
+
+def audit_history(batch: PayoutBatch) -> Any:
+    """The batch's events in order, with actor and partner names resolved in two queries."""
+
+    events = list(batch.audit_events.all())
+    actor_ids = {event.actor_id for event in events if event.actor_id}
+    partner_ids = {event.partner_id for event in events if event.partner_id}
+    actor_names = {user.id: user.full_name or "" for user in User.objects.filter(id__in=actor_ids)}
+    partner_names = {
+        partner.id: partner.display_name
+        for partner in PartnerProfile.objects.filter(id__in=partner_ids)
+    }
+    return PayoutAuditEventSerializer(
+        events,
+        many=True,
+        context={"actor_names": actor_names, "partner_names": partner_names},
+    ).data
+
+
+class PayoutBatchPreviewItemSerializer(serializers.Serializer[dict[str, Any]]):
+    item_id = serializers.UUIDField()
+    partner_id = serializers.UUIDField()
+    partner_name = serializers.CharField()
+    amount_paise = serializers.IntegerField()
+    account_last4 = serializers.CharField()
+    ifsc = serializers.CharField()
+    skip_reason = serializers.CharField(allow_blank=True)
+
+
+class PayoutBatchPreviewSerializer(serializers.Serializer[dict[str, Any]]):
+    """What Approve or Pay would do right now. Building it changes nothing."""
+
+    batch_id = serializers.UUIDField()
+    version = serializers.IntegerField()
+    status = serializers.ChoiceField(choices=PayoutBatch.Status.choices)
+    items = PayoutBatchPreviewItemSerializer(many=True)
+    send_count = serializers.IntegerField()
+    send_total_paise = serializers.IntegerField()
+    skip_count = serializers.IntegerField()
+    skip_total_paise = serializers.IntegerField()
+    includes_actor = serializers.BooleanField()
+
+
 class PayoutBatchSerializer(serializers.ModelSerializer[PayoutBatch]):
     """A run, with both signatures on it.
 
@@ -323,6 +459,7 @@ class PayoutBatchSerializer(serializers.ModelSerializer[PayoutBatch]):
     cancelled_by_id = serializers.UUIDField(read_only=True, allow_null=True)
     item_count = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
+    history = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -345,10 +482,15 @@ class PayoutBatchSerializer(serializers.ModelSerializer[PayoutBatch]):
             "currency",
             "item_count",
             "items",
+            "history",
             "server_now",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(PayoutAuditEventSerializer(many=True))
+    def get_history(self, instance: PayoutBatch) -> Any:
+        return audit_history(instance)
 
     @extend_schema_field(serializers.IntegerField())
     def get_item_count(self, instance: PayoutBatch) -> int:
@@ -698,6 +840,7 @@ class OperationsWithdrawalSerializer(serializers.ModelSerializer[PayoutBatch]):
     approved_by_id = serializers.UUIDField(read_only=True, allow_null=True)
     cancelled_by_id = serializers.UUIDField(read_only=True, allow_null=True)
     transfer = serializers.SerializerMethodField()
+    history = serializers.SerializerMethodField()
 
     class Meta:
         model = PayoutBatch
@@ -715,9 +858,14 @@ class OperationsWithdrawalSerializer(serializers.ModelSerializer[PayoutBatch]):
             "cancelled_by_id",
             "cancelled_at",
             "transfer",
+            "history",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(PayoutAuditEventSerializer(many=True))
+    def get_history(self, instance: PayoutBatch) -> Any:
+        return audit_history(instance)
 
     @extend_schema_field(OperationsWithdrawalTransferSerializer(allow_null=True))
     def get_transfer(self, instance: PayoutBatch) -> Any:

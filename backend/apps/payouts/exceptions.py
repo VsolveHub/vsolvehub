@@ -43,6 +43,26 @@ class SelfApprovalDeniedApiError(APIException):
     retryable = False
 
 
+class SelfPaymentDeniedApiError(APIException):
+    """An Operations user may not approve or send money to themselves.
+
+    With one person able to propose, approve and pay a run alone, this is the check that keeps an
+    Operations user who is also a Partner from paying their own balance.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_code = "self_payment_denied"
+    error_code = "self_payment_denied"
+    safe_message = (
+        "This payout includes money for your own Partner account. Another Operations user must "
+        "approve and send it."
+    )
+    retryable = False
+
+    def __init__(self) -> None:
+        super().__init__(detail=self.safe_message, code=self.default_code)
+
+
 class LedgerEntryNotPayableApiError(APIException):
     status_code = status.HTTP_409_CONFLICT
     default_code = "ledger_entry_not_payable"
@@ -101,6 +121,57 @@ class PayoutAccountRejectedApiError(APIException):
     error_code = "payout_account_rejected"
     safe_message = "These bank details were not accepted. Check the account number and IFSC."
     retryable = False
+
+
+class PayoutAccountNotValidAtBankApiError(APIException):
+    """The bank checked the account and it cannot receive money. Nothing was saved.
+
+    `bank_status` is the bank's reason (`INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`,
+    `INVALID_IFSC_FAIL`, `NRE_ACCOUNT_FAIL`, `FRAUD_ACCOUNT`), so the app can say which.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_code = "payout_account_not_valid_at_bank"
+    error_code = "payout_account_not_valid_at_bank"
+    safe_message = (
+        "Your bank says this account cannot receive money. Check the account number and IFSC, "
+        "or add a different savings or current account."
+    )
+    retryable = False
+
+    def __init__(self, *, status_code: str) -> None:
+        super().__init__(detail=self.safe_message, code=self.default_code)
+        self.api_details: dict[str, object] = {"bank_status": status_code}
+
+
+class PayoutAccountInUseApiError(APIException):
+    """Another Partner's live account is this bank account. Nothing was saved.
+
+    One bank account paying two Partners is how a takeover or a shared-account fraud looks, so it
+    is refused and left to support rather than quietly linked twice.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "payout_account_in_use"
+    error_code = "payout_account_in_use"
+    safe_message = (
+        "This bank account is already linked to another partner. Add a different account, or "
+        "contact support if it is yours."
+    )
+    retryable = False
+
+
+class PayoutAccountBankCheckUnavailableApiError(APIException):
+    """The bank check did not finish (the bank, NPCI or Cashfree). Nothing was saved."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_code = "payout_account_bank_check_unavailable"
+    error_code = "payout_account_bank_check_unavailable"
+    safe_message = (
+        "We could not check this account with your bank just now. Nothing was saved. "
+        "Please try again in a few minutes."
+    )
+    retryable = True
 
 
 class PayoutAccountReviewInvalidApiError(APIException):

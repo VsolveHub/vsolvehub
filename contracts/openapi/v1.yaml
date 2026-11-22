@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.110.0
+  version: 1.116.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -321,19 +321,21 @@ paths:
   /api/v1/auth/finance/step-up/:
     post:
       operationId: auth_finance_step_up_create
+      description: Confirms the step-up code, against the signed-in person's own number
+        only.
       tags:
       - Authentication
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OtpVerifyRequest'
+              $ref: '#/components/schemas/StepUpVerifyRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/OtpVerifyRequest'
+              $ref: '#/components/schemas/StepUpVerifyRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/OtpVerifyRequest'
+              $ref: '#/components/schemas/StepUpVerifyRequest'
         required: true
       security:
       - cookieAuth: []
@@ -343,6 +345,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StepUpSession'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`invalid_otp`: the code is wrong, used or expired.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`step_up_identity_mismatch`: a number other than the signed-in
+            person''s was sent; or `account_blocked`.'
+  /api/v1/auth/finance/step-up/code/:
+    post:
+      operationId: auth_finance_step_up_code_create
+      description: |-
+        Sends a step-up code to the signed-in person's own number. Takes no number.
+
+        A step-up re-proves the person already signed in, so the number comes from their account,
+        never from the request.
+      tags:
+      - Authentication
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepUpCodeIssued'
+              examples:
+                OTPIssued:
+                  value:
+                    challenge_id: 6d8cd4d8-c50a-4cb2-85e8-0357ee735cc6
+                    expires_in_seconds: 300
+                    resend_after_seconds: 60
+                    code_length: 6
+                    development_code: null
+                  summary: OTP issued
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                OTPRateLimited:
+                  value:
+                    error:
+                      code: throttled
+                      message: Too many code requests. Try again when the countdown
+                        ends.
+                      details:
+                        retry_after_seconds: 47
+                      retryable: true
+                      request_id: req_example
+                  summary: OTP rate limited
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/auth/firebase/precheck/:
     post:
@@ -444,7 +511,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: The verified number is not the signed-in person's.
+          description: '`step_up_identity_mismatch`: the verified number is not the
+            signed-in person''s.'
         '404':
           content:
             application/json:
@@ -7897,6 +7965,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/commercial-policies/tax-categories/:
+    get:
+      operationId: m2_operations_tax_categories_list
+      description: |-
+        Every tax category the catalogue's active services use, with the services under it.
+
+        Read-only. The policy form offers these instead of asking Operations to type category codes,
+        which had to match a service's code exactly and failed silently when they did not.
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaxCategoryUsage'
+          description: ''
   /api/v1/operations/compatibility-rules/:
     get:
       operationId: operations_compatibility_rule_list
@@ -10401,11 +10490,12 @@ paths:
     post:
       operationId: operations_payout_batch_approve
       description: |-
-        Maker-checker plus a fresh OTP.
+        Approval with a fresh OTP, by a second person or by the proposer after the preview.
 
-        Two different people is a control against one person acting alone. The step-up is a control
-        against neither of them actually being present — an unlocked laptop with an Operations
-        session open should not be able to release a week of payouts.
+        A proposer's own approval is recorded as `SELF` and logged (`PayoutAuditEvent`), so a
+        one-person team can pay without it passing for a second person's. The step-up is a control
+        against nobody actually being present — an unlocked laptop with an Operations session open
+        should not be able to release a week of payouts.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -10613,6 +10703,50 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-batches/{batch_id}/preview/:
+    get:
+      operationId: operations_payout_batch_preview
+      description: |-
+        What Approve or Pay would do now: who is sent what, who is skipped and why.
+
+        Read-only and needs no step-up: looking changes nothing. The confirm that follows carries the
+        `version` shown here, so a batch that changed in between is refused rather than acted on.
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBatchPreview'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -18126,13 +18260,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: ''
+          description: '`validation_error`, `payout_account_rejected`, or `payout_account_not_valid_at_bank`:
+            the bank checked the account and it cannot receive money; `details.bank_status`
+            says why (`INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`, `INVALID_IFSC_FAIL`,
+            `NRE_ACCOUNT_FAIL`, `FRAUD_ACCOUNT`). Nothing was saved.'
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`payout_account_in_use`: another partner''s live account is
+            this bank account. Nothing was saved.'
         '429':
           content:
             application/json:
@@ -18144,7 +18288,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: ''
+          description: '`payout_accounts_unavailable`, `payout_account_provider_unavailable`,
+            or `payout_account_bank_check_unavailable`: the bank check did not finish.
+            Nothing was saved; submitting again later is safe.'
   /api/v1/partner/performance/:
     get:
       operationId: partner_performance_retrieve
@@ -36270,6 +36416,26 @@ components:
         is_registered_with_provider:
           type: boolean
           readOnly: true
+        bank_check_provider:
+          type: string
+          readOnly: true
+        bank_checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        name_at_bank:
+          type: string
+          readOnly: true
+        name_match_result:
+          type: string
+          readOnly: true
+        name_match_score:
+          type: string
+          readOnly: true
+        is_missing_required_bank_check:
+          type: boolean
+          readOnly: true
         verified_at:
           type: string
           format: date-time
@@ -36293,12 +36459,18 @@ components:
           readOnly: true
       required:
       - account_last4
+      - bank_check_provider
+      - bank_checked_at
       - created_at
       - effective_from
       - holder_name
       - id
       - ifsc
+      - is_missing_required_bank_check
       - is_registered_with_provider
+      - name_at_bank
+      - name_match_result
+      - name_match_score
       - partner_display_name
       - partner_id
       - partner_phone_number
@@ -37008,6 +37180,11 @@ components:
           - $ref: '#/components/schemas/OperationsWithdrawalTransfer'
           nullable: true
           readOnly: true
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutAuditEvent'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -37019,6 +37196,7 @@ components:
       - cancelled_at
       - cancelled_by_id
       - created_at
+      - history
       - id
       - proposed_by_id
       - reference
@@ -38260,6 +38438,42 @@ components:
       required:
       - outcome
       - work_task_id
+    PaidForEnum:
+      enum:
+      - BOOKING_GROUP
+      - SCOPE_AMENDMENT_REVISION
+      - M2_QUOTE_UNLOCK
+      - M2_VISIT_PLAN
+      - M2_SITE_VISIT_FEE
+      - M2_STAGE_FUNDING
+      - M2_MATERIAL_ADVANCE
+      - M2_SCOPE_AMENDMENT
+      - M2_BOOKING_FEE
+      - A10_VENDOR_SUBSCRIPTION
+      - A10_PREMIUM_LISTING
+      - WALLET_TOP_UP
+      - A7_RENTAL_DEPOSIT
+      - A9_STAY_RESERVATION
+      - A7_RENTAL_BOOKING
+      - A9_STAY_SUBSCRIPTION
+      type: string
+      description: |-
+        * `BOOKING_GROUP` - Booking group
+        * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+        * `M2_QUOTE_UNLOCK` - M2 quote unlock
+        * `M2_VISIT_PLAN` - M2 visit plan
+        * `M2_SITE_VISIT_FEE` - M2 site visit fee
+        * `M2_STAGE_FUNDING` - M2 stage funding
+        * `M2_MATERIAL_ADVANCE` - M2 material advance
+        * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+        * `M2_BOOKING_FEE` - M2 booking fee
+        * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+        * `A10_PREMIUM_LISTING` - A10 premium listing
+        * `WALLET_TOP_UP` - Wallet top-up
+        * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+        * `A9_STAY_RESERVATION` - A9 stay reservation
+        * `A7_RENTAL_BOOKING` - A7 rental booking
+        * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
     PartnerApplication:
       type: object
       properties:
@@ -39899,6 +40113,13 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        origin:
+          allOf:
+          - $ref: '#/components/schemas/PartnerLedgerSource'
+          readOnly: true
+          description: 'What this line was for: the visit, rental, project stage or
+            correction behind it, with its name, dates and the id the Partner app
+            opens.'
         kind:
           allOf:
           - $ref: '#/components/schemas/LedgerEntryKindEnum'
@@ -39958,6 +40179,7 @@ components:
       - is_on_hold
       - kind
       - net_paise
+      - origin
       - reason
       - status
     PartnerLedgerPage:
@@ -39979,6 +40201,74 @@ components:
       - next
       - previous
       - results
+    PartnerLedgerSource:
+      type: object
+      description: What a ledger line was for, so a statement reads as bookings rather
+        than amounts.
+      properties:
+        type:
+          $ref: '#/components/schemas/PartnerLedgerSourceTypeEnum'
+        title:
+          type: string
+        stage_position:
+          type: integer
+          nullable: true
+        stage_label:
+          type: string
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        booking_id:
+          type: string
+          format: uuid
+          nullable: true
+        rental_booking_id:
+          type: string
+          format: uuid
+          nullable: true
+        engagement_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - booking_id
+      - ends_on
+      - engagement_id
+      - rental_booking_id
+      - stage_label
+      - stage_position
+      - starts_on
+      - title
+      - type
+    PartnerLedgerSourceTypeEnum:
+      enum:
+      - HOME_VISIT
+      - RENTAL
+      - PROJECT_STAGE
+      - PROJECT_RETENTION
+      - BOOKING_FEE
+      - SITE_VISIT
+      - ADJUSTMENT
+      - WITHDRAWAL_FEE
+      - WITHDRAWAL_FEE_REFUND
+      - OTHER
+      type: string
+      description: |-
+        * `HOME_VISIT` - Home-service visit
+        * `RENTAL` - Rental
+        * `PROJECT_STAGE` - Project or workforce stage
+        * `PROJECT_RETENTION` - Project retention released
+        * `BOOKING_FEE` - Booking fee kept as compensation
+        * `SITE_VISIT` - Site visit share
+        * `ADJUSTMENT` - Correction by Vsolve
+        * `WITHDRAWAL_FEE` - Withdrawal fee
+        * `WITHDRAWAL_FEE_REFUND` - Withdrawal fee refunded
+        * `OTHER` - Other
     PartnerListing:
       type: object
       properties:
@@ -42625,6 +42915,101 @@ components:
         * `VERIFIED` - Verified
         * `REJECTED` - Rejected
         * `REPLACED` - Replaced
+    PayoutAuditActorRoleEnum:
+      enum:
+      - OPERATIONS
+      - PARTNER
+      - SYSTEM
+      type: string
+      description: |-
+        * `OPERATIONS` - Operations
+        * `PARTNER` - Partner
+        * `SYSTEM` - System
+    PayoutAuditEvent:
+      type: object
+      description: |-
+        One line of a run's or withdrawal's history.
+
+        Names are looked up when read, never stored: an account deleted later shows as an empty name
+        rather than being kept in the log (`PayoutAuditEvent`).
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        event_type:
+          allOf:
+          - $ref: '#/components/schemas/PayoutAuditEventTypeEnum'
+          readOnly: true
+        actor_role:
+          allOf:
+          - $ref: '#/components/schemas/PayoutAuditActorRoleEnum'
+          readOnly: true
+        actor_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        actor_name:
+          type: string
+          readOnly: true
+        approval_basis:
+          type: string
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        partner_name:
+          type: string
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        reason:
+          type: string
+          readOnly: true
+        details:
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor_id
+      - actor_name
+      - actor_role
+      - amount_paise
+      - approval_basis
+      - details
+      - event_type
+      - id
+      - occurred_at
+      - partner_id
+      - partner_name
+      - reason
+    PayoutAuditEventTypeEnum:
+      enum:
+      - RUN_PROPOSED
+      - RUN_APPROVED
+      - RUN_PAY_STARTED
+      - RUN_CANCELLED
+      - PARTNER_SKIPPED
+      - WITHDRAWAL_REQUESTED
+      - WITHDRAWAL_APPROVED
+      - WITHDRAWAL_DECLINED
+      type: string
+      description: |-
+        * `RUN_PROPOSED` - Run proposed
+        * `RUN_APPROVED` - Run approved
+        * `RUN_PAY_STARTED` - Payment started
+        * `RUN_CANCELLED` - Run cancelled
+        * `PARTNER_SKIPPED` - Partner skipped
+        * `WITHDRAWAL_REQUESTED` - Withdrawal requested
+        * `WITHDRAWAL_APPROVED` - Withdrawal approved
+        * `WITHDRAWAL_DECLINED` - Withdrawal declined
     PayoutBatch:
       type: object
       description: |-
@@ -42702,6 +43087,11 @@ components:
           items:
             $ref: '#/components/schemas/PayoutBatchItem'
           readOnly: true
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutAuditEvent'
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -42718,6 +43108,7 @@ components:
       - cancelled_by_id
       - created_at
       - currency
+      - history
       - id
       - item_count
       - items
@@ -42733,10 +43124,12 @@ components:
     PayoutBatchApprovalBasisEnum:
       enum:
       - OPERATIONS
+      - SELF
       - POLICY
       type: string
       description: |-
         * `OPERATIONS` - Approved by Operations
+        * `SELF` - Approved by the proposer
         * `POLICY` - Approved by withdrawal policy
     PayoutBatchItem:
       type: object
@@ -42930,6 +43323,68 @@ components:
       - next
       - previous
       - results
+    PayoutBatchPreview:
+      type: object
+      description: What Approve or Pay would do right now. Building it changes nothing.
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        status:
+          $ref: '#/components/schemas/PayoutBatchStatusEnum'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutBatchPreviewItem'
+        send_count:
+          type: integer
+        send_total_paise:
+          type: integer
+        skip_count:
+          type: integer
+        skip_total_paise:
+          type: integer
+        includes_actor:
+          type: boolean
+      required:
+      - batch_id
+      - includes_actor
+      - items
+      - send_count
+      - send_total_paise
+      - skip_count
+      - skip_total_paise
+      - status
+      - version
+    PayoutBatchPreviewItem:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        partner_id:
+          type: string
+          format: uuid
+        partner_name:
+          type: string
+        amount_paise:
+          type: integer
+        account_last4:
+          type: string
+        ifsc:
+          type: string
+        skip_reason:
+          type: string
+      required:
+      - account_last4
+      - amount_paise
+      - ifsc
+      - item_id
+      - partner_id
+      - partner_name
+      - skip_reason
     PayoutBatchStatusEnum:
       enum:
       - DRAFT
@@ -47576,6 +48031,41 @@ components:
           items:
             $ref: '#/components/schemas/RefundAllocation'
           readOnly: true
+        started_by:
+          allOf:
+          - $ref: '#/components/schemas/StartedByEnum'
+          description: |-
+            Who set the refund going: AUTOMATIC (the system, e.g. a cancellation), CUSTOMER (their own action) or OPERATIONS (staff, from the console).
+
+            * `AUTOMATIC` - Automatic
+            * `CUSTOMER` - Customer
+            * `OPERATIONS` - Operations
+          readOnly: true
+        paid_for:
+          nullable: true
+          description: |-
+            What the refunded payment was for: its payment attempt's purpose.
+
+            * `BOOKING_GROUP` - Booking group
+            * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+            * `M2_QUOTE_UNLOCK` - M2 quote unlock
+            * `M2_VISIT_PLAN` - M2 visit plan
+            * `M2_SITE_VISIT_FEE` - M2 site visit fee
+            * `M2_STAGE_FUNDING` - M2 stage funding
+            * `M2_MATERIAL_ADVANCE` - M2 material advance
+            * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+            * `M2_BOOKING_FEE` - M2 booking fee
+            * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+            * `A10_PREMIUM_LISTING` - A10 premium listing
+            * `WALLET_TOP_UP` - Wallet top-up
+            * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+            * `A9_STAY_RESERVATION` - A9 stay reservation
+            * `A7_RENTAL_BOOKING` - A7 rental booking
+            * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/PaidForEnum'
+          - $ref: '#/components/schemas/NullEnum'
         created_at:
           type: string
           format: date-time
@@ -47598,10 +48088,12 @@ components:
       - failure_code
       - id
       - order_id
+      - paid_for
       - payment_attempt_id
       - provider_refund_id
       - reason_code
       - reconciliation_state
+      - started_by
       - status
       - submitted_at
     RefundAllocation:
@@ -51461,6 +51953,16 @@ components:
           format: uuid
       required:
       - plan_id
+    StartedByEnum:
+      enum:
+      - AUTOMATIC
+      - CUSTOMER
+      - OPERATIONS
+      type: string
+      description: |-
+        * `AUTOMATIC` - Automatic
+        * `CUSTOMER` - Customer
+        * `OPERATIONS` - Operations
     Status0a1Enum:
       enum:
       - REQUESTED
@@ -52224,6 +52726,39 @@ components:
       - id
       - start_time
       - weekday
+    StepUpCodeIssued:
+      type: object
+      description: A step-up code sent to the signed-in person's own number, which
+        is shown masked.
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+          readOnly: true
+        expires_in_seconds:
+          type: integer
+          readOnly: true
+        resend_after_seconds:
+          type: integer
+          readOnly: true
+        code_length:
+          type: integer
+          readOnly: true
+        development_code:
+          type: string
+          readOnly: true
+          nullable: true
+        phone_number_masked:
+          type: string
+          readOnly: true
+          description: The number the code went to, all but the last four hidden.
+      required:
+      - challenge_id
+      - code_length
+      - development_code
+      - expires_in_seconds
+      - phone_number_masked
+      - resend_after_seconds
     StepUpSession:
       type: object
       properties:
@@ -52233,6 +52768,26 @@ components:
           readOnly: true
       required:
       - stepped_up_at
+    StepUpVerifyRequest:
+      type: object
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          writeOnly: true
+          minLength: 6
+          maxLength: 6
+        phone_number:
+          type: string
+          minLength: 1
+          description: Deprecated and optional. The code is always checked against
+            the signed-in person's own number; a different number here is refused.
+          maxLength: 32
+      required:
+      - challenge_id
+      - code
     StructureEnum:
       enum:
       - SINGLE_PARTNER_SEQUENTIAL
@@ -52406,6 +52961,29 @@ components:
         * `DECLINED` - DECLINED
         * `SUSPENDED` - SUSPENDED
         * `OFFBOARDED` - OFFBOARDED
+    TaxCategoryUsage:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The `tax_category_code` services carry.
+        service_count:
+          type: integer
+          description: Active services using this category.
+        crew_and_project_service_count:
+          type: integer
+          description: 'Of those, crew (A3) and project (A5) services: the ones this
+            policy prices.'
+        example_services:
+          type: array
+          items:
+            type: string
+          description: A few of their names, alphabetical.
+      required:
+      - code
+      - crew_and_project_service_count
+      - example_services
+      - service_count
     TaxDocument:
       type: object
       properties:

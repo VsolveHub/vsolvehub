@@ -1,9 +1,19 @@
 "use client";
 
-import { getStableIdempotencyKey, request, type Schemas } from "@vsolve/api-client";
+import {
+  getStableIdempotencyKey,
+  request,
+  type Schemas,
+} from "@vsolve/api-client";
 import { EXPIRING_STATE, cursorFromNextUrl, queryKeys } from "@vsolve/query";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
+import { partnerActivityKey } from "@/features/partners/queries";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
@@ -16,14 +26,17 @@ import { getApiClient } from "@/lib/api/browser";
  * the step-up rather than show them a failure they cannot interpret. `isStepUpRequired` exists
  * for exactly that branch.
  *
- * ## Self-approval is refused by the server, and shown before it is attempted
+ * ## One person may run a payout alone, after a review (contract 1.111.0)
  *
- * `proposed_by_id` is published on the batch so the console can grey out Approve for the person
- * who proposed it. The server refuses it regardless — `403 self_approval_denied` — and this is
- * only about not offering a button that cannot work.
+ * The proposer may approve their own run; it is recorded as `approval_basis: SELF` and in the
+ * run's `history`. Approve and Pay are confirmed against `usePayoutBatchPreview`, which runs the
+ * same checks Pay runs and changes nothing. Nobody may approve or send a payout that includes
+ * their own Partner account (`403 self_payment_denied`).
  */
 
 export type PayoutBatch = Schemas["PayoutBatch"];
+export type PayoutBatchPreview = Schemas["PayoutBatchPreview"];
+export type PayoutAuditEvent = Schemas["PayoutAuditEvent"];
 export type PayoutBatchRow = Schemas["PayoutBatchList"];
 export type PayoutBatchStatus = Schemas["PayoutBatchStatusEnum"];
 
@@ -46,8 +59,51 @@ export function isSelfApproval(error: unknown): boolean {
   );
 }
 
+function hasCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === code
+  );
+}
+
+/** `403`: the payout includes the acting user's own Partner account. */
+export function isSelfPayment(error: unknown): boolean {
+  return hasCode(error, "self_payment_denied");
+}
+
+/** `409`: the run changed after it was reviewed. Nothing happened; review it again. */
+export function isVersionConflict(error: unknown): boolean {
+  return hasCode(error, "payout_batch_version_conflict");
+}
+
+/**
+ * What Approve or Pay would do right now: who is sent what, who would be skipped and why.
+ * Always read fresh when a review opens (`staleTime: 0`), never from an older answer.
+ */
+export function usePayoutBatchPreview(batchId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...queryKeys.operations.payoutBatch(batchId), "preview"],
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET(
+          "/api/v1/operations/payout-batches/{batch_id}/preview/",
+          {
+            params: { path: { batch_id: batchId } },
+          },
+        ),
+      ),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
 /** `kind: "RUN"` keeps Partner withdrawals out of the run console; they have their own queue. */
-export function usePayoutBatches(filters: { status?: string; kind?: "RUN" | "WITHDRAWAL" } = {}) {
+export function usePayoutBatches(
+  filters: { status?: string; kind?: "RUN" | "WITHDRAWAL" } = {},
+) {
   return useInfiniteQuery({
     queryKey: queryKeys.operations.payoutBatches(filters),
     queryFn: async ({ pageParam }) => {
@@ -93,13 +149,18 @@ function useBatchCache() {
   const queryClient = useQueryClient();
   return {
     apply(batch: PayoutBatch) {
-      queryClient.setQueryData(queryKeys.operations.payoutBatch(batch.id), batch);
+      queryClient.setQueryData(
+        queryKeys.operations.payoutBatch(batch.id),
+        batch,
+      );
       void queryClient.invalidateQueries({
         queryKey: [...queryKeys.operations.all, "payout-batches"],
       });
     },
     refetch(batchId: string) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.operations.payoutBatch(batchId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.payoutBatch(batchId),
+      });
     },
   };
 }
@@ -124,7 +185,11 @@ function useBatchCommand(
           params: {
             path: { batch_id: input.batchId },
             header: {
-              "Idempotency-Key": batchKey(action, input.batchId, input.expectedVersion),
+              "Idempotency-Key": batchKey(
+                action,
+                input.batchId,
+                input.expectedVersion,
+              ),
             },
           },
           body: { expected_version: input.expectedVersion },
@@ -138,26 +203,41 @@ function useBatchCommand(
 }
 
 export function useApprovePayoutBatch() {
-  return useBatchCommand("/api/v1/operations/payout-batches/{batch_id}/approve/", "approve");
+  return useBatchCommand(
+    "/api/v1/operations/payout-batches/{batch_id}/approve/",
+    "approve",
+  );
 }
 
 export function usePayPayoutBatch() {
-  return useBatchCommand("/api/v1/operations/payout-batches/{batch_id}/pay/", "pay");
+  return useBatchCommand(
+    "/api/v1/operations/payout-batches/{batch_id}/pay/",
+    "pay",
+  );
 }
 
 export function useCancelPayoutBatch() {
-  return useBatchCommand("/api/v1/operations/payout-batches/{batch_id}/cancel/", "cancel");
+  return useBatchCommand(
+    "/api/v1/operations/payout-batches/{batch_id}/cancel/",
+    "cancel",
+  );
 }
 
 export function useProposePayoutBatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { reference: string; periodStart: string; periodEnd: string }) =>
+    mutationFn: (input: {
+      reference: string;
+      periodStart: string;
+      periodEnd: string;
+    }) =>
       request(() =>
         getApiClient().POST("/api/v1/operations/payout-batches/", {
           params: {
             header: {
-              "Idempotency-Key": getStableIdempotencyKey(`payout-propose:${input.reference}`),
+              "Idempotency-Key": getStableIdempotencyKey(
+                `payout-propose:${input.reference}`,
+              ),
             },
           },
           body: {
@@ -182,13 +262,17 @@ export function useProposePayoutBatch() {
  * Read alongside a proposed run rather than buried: a Partner silently left out of a batch has
  * no way to find out why, and this is the list somebody chases before the run goes out.
  */
-export function useUnpayablePartners(period: { start: string; end: string } | null) {
+export function useUnpayablePartners(
+  period: { start: string; end: string } | null,
+) {
   return useQuery({
     queryKey: [...queryKeys.operations.all, "unpayable-partners", period],
     queryFn: () =>
       request(() =>
         getApiClient().GET("/api/v1/operations/unpayable-partners/", {
-          params: { query: { period_start: period!.start, period_end: period!.end } },
+          params: {
+            query: { period_start: period!.start, period_end: period!.end },
+          },
         }),
       ),
     enabled: period !== null,
@@ -200,8 +284,12 @@ export function useUnpayablePartners(period: { start: string; end: string } | nu
  *
  * `net_paise` is signed: positive pays the Partner more, negative recovers an overpayment.
  * Step-up, because it changes what the next payout run sends.
+ *
+ * The Partner's balance is refreshed once it is saved: the dialog's "available now / after"
+ * preview reads it, and a second correction must be weighed against the new balance.
  */
 export function useLedgerAdjustment() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       idempotencyKey,
@@ -220,6 +308,13 @@ export function useLedgerAdjustment() {
         }),
       ),
     retry: false,
+    onSuccess: (_entry, { partner_id }) => {
+      void queryClient.invalidateQueries({ queryKey: partnerActivityKey(partner_id) });
+      // A recovery can leave a Partner with nothing to pay, which this list explains.
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "unpayable-partners"],
+      });
+    },
   });
 }
 
@@ -228,7 +323,8 @@ export function useLedgerAdjustment() {
    ------------------------------------------------------------------------- */
 
 export type OperationsPayoutAccount = Schemas["OperationsPayoutAccount"];
-export type PayoutAccountStatus = "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
+export type PayoutAccountStatus =
+  "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
 
 /** `403 payout_account_self_review`: the reviewer registered this account themselves. */
 export function isSelfReview(error: unknown): boolean {
@@ -246,7 +342,9 @@ export function usePayoutAccounts(status: PayoutAccountStatus) {
     queryFn: async ({ pageParam }) => {
       const page = await request(() =>
         getApiClient().GET("/api/v1/operations/payout-accounts/", {
-          params: { query: { status, ...(pageParam ? { cursor: pageParam } : {}) } },
+          params: {
+            query: { status, ...(pageParam ? { cursor: pageParam } : {}) },
+          },
         }),
       );
       cursorFromNextUrl(page.next);
@@ -265,19 +363,27 @@ export function useReviewPayoutAccount() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (
-      input: { accountId: string; decision: "verify" } | { accountId: string; decision: "reject"; reason: string },
+      input:
+        | { accountId: string; decision: "verify" }
+        | { accountId: string; decision: "reject"; reason: string },
     ) =>
       input.decision === "verify"
         ? request(() =>
-            getApiClient().POST("/api/v1/operations/payout-accounts/{account_id}/verify/", {
-              params: { path: { account_id: input.accountId } },
-            }),
+            getApiClient().POST(
+              "/api/v1/operations/payout-accounts/{account_id}/verify/",
+              {
+                params: { path: { account_id: input.accountId } },
+              },
+            ),
           )
         : request(() =>
-            getApiClient().POST("/api/v1/operations/payout-accounts/{account_id}/reject/", {
-              params: { path: { account_id: input.accountId } },
-              body: { reason: input.reason },
-            }),
+            getApiClient().POST(
+              "/api/v1/operations/payout-accounts/{account_id}/reject/",
+              {
+                params: { path: { account_id: input.accountId } },
+                body: { reason: input.reason },
+              },
+            ),
           ),
     onSettled: () => {
       void queryClient.invalidateQueries({
@@ -293,7 +399,8 @@ export function useReviewPayoutAccount() {
    ------------------------------------------------------------------------- */
 
 export type OperationsWithdrawal = Schemas["OperationsWithdrawal"];
-export type WithdrawalQueueStatus = "PENDING_APPROVAL" | "PAYING" | "PAID" | "FAILED" | "CANCELLED";
+export type WithdrawalQueueStatus =
+  "PENDING_APPROVAL" | "PAYING" | "PAID" | "FAILED" | "CANCELLED";
 
 /**
  * Partner withdrawals by status. `PENDING_APPROVAL` is the queue: the ones the rules sent to a
@@ -305,7 +412,9 @@ export function useWithdrawals(status: WithdrawalQueueStatus) {
     queryFn: async ({ pageParam }) => {
       const page = await request(() =>
         getApiClient().GET("/api/v1/operations/withdrawals/", {
-          params: { query: { status, ...(pageParam ? { cursor: pageParam } : {}) } },
+          params: {
+            query: { status, ...(pageParam ? { cursor: pageParam } : {}) },
+          },
         }),
       );
       cursorFromNextUrl(page.next);
@@ -320,7 +429,9 @@ export function useWithdrawals(status: WithdrawalQueueStatus) {
 function useWithdrawalQueueRefresh() {
   const queryClient = useQueryClient();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: [...queryKeys.operations.all, "withdrawals"] });
+    void queryClient.invalidateQueries({
+      queryKey: [...queryKeys.operations.all, "withdrawals"],
+    });
   };
 }
 
@@ -333,15 +444,22 @@ export function useApproveWithdrawal() {
   return useMutation({
     mutationFn: (input: { batchId: string; expectedVersion: number }) =>
       request(() =>
-        getApiClient().POST("/api/v1/operations/withdrawals/{batch_id}/approve/", {
-          params: {
-            path: { batch_id: input.batchId },
-            header: {
-              "Idempotency-Key": batchKey("withdrawal-approve", input.batchId, input.expectedVersion),
+        getApiClient().POST(
+          "/api/v1/operations/withdrawals/{batch_id}/approve/",
+          {
+            params: {
+              path: { batch_id: input.batchId },
+              header: {
+                "Idempotency-Key": batchKey(
+                  "withdrawal-approve",
+                  input.batchId,
+                  input.expectedVersion,
+                ),
+              },
             },
+            body: { expected_version: input.expectedVersion },
           },
-          body: { expected_version: input.expectedVersion },
-        }),
+        ),
       ),
     onSettled: refresh,
     retry: false,
@@ -352,17 +470,31 @@ export function useApproveWithdrawal() {
 export function useDeclineWithdrawal() {
   const refresh = useWithdrawalQueueRefresh();
   return useMutation({
-    mutationFn: (input: { batchId: string; expectedVersion: number; reason: string }) =>
+    mutationFn: (input: {
+      batchId: string;
+      expectedVersion: number;
+      reason: string;
+    }) =>
       request(() =>
-        getApiClient().POST("/api/v1/operations/withdrawals/{batch_id}/decline/", {
-          params: {
-            path: { batch_id: input.batchId },
-            header: {
-              "Idempotency-Key": batchKey("withdrawal-decline", input.batchId, input.expectedVersion),
+        getApiClient().POST(
+          "/api/v1/operations/withdrawals/{batch_id}/decline/",
+          {
+            params: {
+              path: { batch_id: input.batchId },
+              header: {
+                "Idempotency-Key": batchKey(
+                  "withdrawal-decline",
+                  input.batchId,
+                  input.expectedVersion,
+                ),
+              },
+            },
+            body: {
+              expected_version: input.expectedVersion,
+              reason: input.reason,
             },
           },
-          body: { expected_version: input.expectedVersion, reason: input.reason },
-        }),
+        ),
       ),
     onSettled: refresh,
     retry: false,

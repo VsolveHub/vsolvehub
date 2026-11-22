@@ -356,8 +356,10 @@ def test_earning_includes_transport_at_zero_commission(rental_world):
     rent = RATE * 2
     fee = rent // 10
     assert entry.gross_paise == rent + QUOTE
-    assert entry.commission_paise == fee
-    assert entry.net_paise == rent - fee + QUOTE
+    # The fee was charged to the customer on top of the rent, so the owner keeps all of both.
+    assert entry.commission_paise == 0
+    assert entry.net_paise == rent + QUOTE
+    assert entry.calculation_snapshot["platform_fee_paise"] == fee
     assert entry.calculation_snapshot["transport_paise"] == QUOTE
     assert entry.calculation_snapshot["transport_fee_paise"] == 0
 

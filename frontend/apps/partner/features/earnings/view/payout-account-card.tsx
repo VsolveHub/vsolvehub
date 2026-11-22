@@ -28,6 +28,17 @@ function fieldError(error: unknown, field: keyof PayoutAccountInput): string | u
   return error instanceof ApiRequestError ? error.fieldErrors[field]?.[0] : undefined;
 }
 
+/**
+ * Whether the error is already shown under one of this form's own fields. Only those count:
+ * a refusal that is not about a field still carries `details` (`{message, code}`, or the bank's
+ * `bank_status`), and treating those keys as fields hid the message with nothing in its place.
+ */
+function isShownOnAField(error: unknown): boolean {
+  return (Object.keys(EMPTY) as (keyof PayoutAccountInput)[]).some(
+    (field) => fieldError(error, field) !== undefined,
+  );
+}
+
 function StatusLine({ account }: { account: PayoutAccount }) {
   const t = useT();
   const masked = <span data-numeric>••••{account.account_last4}</span>;
@@ -268,7 +279,7 @@ export function PayoutAccountCard() {
               </Button>
             ) : null}
           </div>
-          {submit.isError && !(submit.error instanceof ApiRequestError && Object.keys(submit.error.fieldErrors).length > 0) ? (
+          {submit.isError && !isShownOnAField(submit.error) ? (
             <p role="alert" className="text-sm text-danger-text sm:col-span-2">
               {friendlyErrorMessage(submit.error)}
             </p>

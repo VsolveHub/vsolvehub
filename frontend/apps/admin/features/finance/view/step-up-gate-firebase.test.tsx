@@ -41,11 +41,25 @@ function routeStepUp(stepUpResult: unknown) {
   );
 }
 
+const OWN_PHONE = "+919000000001";
+
+function signedInAs(phone: string | null) {
+  client.GET.mockImplementation((path: string) =>
+    Promise.resolve(
+      path === "/api/v1/auth/session/"
+        ? ok({
+            user: phone ? { id: "u-1", phone_number: phone, roles: ["operations"] } : null,
+            active_role: "operations",
+            session_expires_at: null,
+          })
+        : ok({ results: [], next: null, previous: null }),
+    ),
+  );
+}
+
 async function sendAndConfirm() {
-  fireEvent.change(screen.getByLabelText(/your mobile number/i), {
-    target: { value: "9000000001" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /send me a code/i }));
+  await screen.findByText(/\+91 •••••• 0001/);
   const codeField = await screen.findByLabelText(/the code we sent you/i);
   fireEvent.change(codeField, { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
@@ -55,11 +69,13 @@ describe("StepUpGate with Firebase", () => {
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.POST.mockReset();
+    client.GET.mockReset();
+    signedInAs(OWN_PHONE);
     confirmCode.mockReset().mockResolvedValue("fresh-id-token");
     startVerification.mockReset().mockResolvedValue(confirmCode);
   });
 
-  it("checks the number with Django first, then exchanges the fresh token once", async () => {
+  it("uses the signed-in number, checks it with Django first, then exchanges the token once", async () => {
     const onSteppedUp = vi.fn();
     routeStepUp(ok({ stepped_up_at: "2026-10-26T12:00:00Z" }));
     render(<StepUpGate session={null} onSteppedUp={onSteppedUp} />, { wrapper });
@@ -72,21 +88,20 @@ describe("StepUpGate with Firebase", () => {
       phone_number: "+919000000001",
       intended_role: "operations",
     });
-    expect(startVerification).toHaveBeenCalledWith("9000000001");
+    expect(startVerification).toHaveBeenCalledWith(OWN_PHONE);
     expect(confirmCode).toHaveBeenCalledWith("123456");
     expect(client.POST.mock.calls[1]![0]).toBe("/api/v1/auth/firebase/step-up/");
     expect(client.POST.mock.calls[1]![1].body).toEqual({ id_token: "fresh-id-token" });
-    // Spent: back at the phone step.
-    expect(screen.getByLabelText(/your mobile number/i)).toBeInTheDocument();
+    // Spent: back at the send step. There is no number to type.
+    expect(screen.getByRole("button", { name: /send me a code/i })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /mobile number/i })).not.toBeInTheDocument();
   });
 
   it("sends no SMS to a number without Operations access", async () => {
     client.POST.mockResolvedValue(refusal("no_account_for_role", 404));
     render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
 
-    fireEvent.change(screen.getByLabelText(/your mobile number/i), {
-      target: { value: "9000000002" },
-    });
+    await screen.findByText(/\+91 •••••• 0001/);
     fireEvent.click(screen.getByRole("button", { name: /send me a code/i }));
 
     expect(await screen.findByText(/no operations access/i)).toBeInTheDocument();
@@ -95,7 +110,7 @@ describe("StepUpGate with Firebase", () => {
 
   it("says plainly when the number is not the signed-in operator's", async () => {
     const onSteppedUp = vi.fn();
-    routeStepUp(refusal("permission_denied", 403));
+    routeStepUp(refusal("step_up_identity_mismatch", 403));
     render(<StepUpGate session={null} onSteppedUp={onSteppedUp} />, { wrapper });
 
     await sendAndConfirm();
@@ -103,7 +118,18 @@ describe("StepUpGate with Firebase", () => {
     expect(await screen.findByText(/that is not your number/i)).toBeInTheDocument();
     expect(onSteppedUp).not.toHaveBeenCalled();
     // The token is spent, so a new code is needed.
-    expect(screen.getByLabelText(/your mobile number/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send me a code/i })).toBeInTheDocument();
+  });
+
+  it("sends no SMS when the signed-in number cannot be read", async () => {
+    signedInAs(null);
+    render(<StepUpGate session={null} onSteppedUp={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: /send me a code/i }));
+
+    expect(await screen.findByText(/could not read the number you signed in with/i)).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+    expect(startVerification).not.toHaveBeenCalled();
   });
 
   it("keeps the operator on the code step when Firebase rejects the code", async () => {

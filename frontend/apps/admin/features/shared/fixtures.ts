@@ -143,6 +143,8 @@ export function refund(overrides: Partial<Schemas["Refund"]> = {}): Schemas["Ref
     status: "REQUESTED",
     reason_code: "service-not-delivered",
     reconciliation_state: "PENDING",
+    started_by: "OPERATIONS",
+    paid_for: "BOOKING_GROUP",
     failure_code: "",
     provider_refund_id: "",
     amount: money(150000),

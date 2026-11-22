@@ -293,3 +293,42 @@ def test_the_sweep_does_nothing_when_there_is_nothing_in_flight() -> None:
     """No provider call at all — the sweep must not wake a payout API up for an empty table."""
 
     assert reconcile_payouts() == 0
+
+
+def test_a_run_can_be_previewed_and_its_history_read_without_changing_it() -> None:
+    booked, _entry = _earning("api-preview")
+    _verified_account(booked)
+    client, _actor = _operations_client()
+    proposed = client.post(
+        "/api/v1/operations/payout-batches/",
+        {
+            "reference": f"api-preview-{uuid.uuid4().hex[:8]}",
+            "period_start": (timezone.now() - timedelta(days=7)).isoformat(),
+            "period_end": (timezone.now() + timedelta(days=1)).isoformat(),
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=f"propose-{uuid.uuid4()}",
+    ).json()
+
+    preview = client.get(f"/api/v1/operations/payout-batches/{proposed['id']}/preview/")
+    detail = client.get(f"/api/v1/operations/payout-batches/{proposed['id']}/")
+
+    assert preview.status_code == HTTPStatus.OK, preview.json()
+    body = preview.json()
+    assert body["version"] == proposed["version"]
+    assert body["send_count"] >= 1
+    assert body["includes_actor"] is False
+    assert {"partner_name", "account_last4", "ifsc", "skip_reason"} <= set(body["items"][0])
+    history = detail.json()["history"]
+    assert [event["event_type"] for event in history] == ["RUN_PROPOSED"]
+    assert detail.json()["version"] == proposed["version"]
+
+
+def test_a_partner_cannot_preview_a_run() -> None:
+    booked, _entry = _earning("api-preview-partner")
+    _verified_account(booked)
+    batch = _batch(_user(), f"api-preview-partner-{uuid.uuid4().hex[:8]}")
+
+    response = _partner_client(booked).get(f"/api/v1/operations/payout-batches/{batch.id}/preview/")
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
