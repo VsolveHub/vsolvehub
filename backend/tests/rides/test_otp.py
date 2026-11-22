@@ -1,4 +1,4 @@
-"""Start OTP (proposal 0030, "Start OTP"): wrong codes are counted once each, never per network
+"""Start OTP (proposal 0031, "Start OTP"): wrong codes are counted once each, never per network
 retry; five lock the ride; the idempotency table never holds the code."""
 
 import hashlib

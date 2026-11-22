@@ -1,4 +1,4 @@
-# 0030. Rides V1: rider, captain and Operations API
+# 0031. Rides V1: rider, captain and Operations API
 
 - Status: Proposed. The endpoints marked ✅ are Published at contract 1.111.0 (1.99.0 before the 22 November merge of `main`); the rest is proposed.
 - Date: 2026-11-07 · Revised: 2026-11-10 (brief revision 2, and the endpoints built since)

@@ -1,4 +1,4 @@
-"""The idempotency behaviour the Rides start-OTP design depends on (proposal 0030, *Start OTP*).
+"""The idempotency behaviour the Rides start-OTP design depends on (proposal 0031, *Start OTP*).
 
 A wrong OTP must count exactly once even when the phone retries. That is safe only if
 `execute_idempotent` keeps a write made by a command that *returns* a refusal, replays that refusal

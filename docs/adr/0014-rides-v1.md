@@ -141,7 +141,8 @@ the Partner app Rides workspace and the Operations console are the agreed design
     when the first Rides endpoints were published. The contract version moves by one minor for the
     whole branch; later Rides endpoints join the 1.99.0 changelog entry. On 22 November `main` was
     merged in after it had taken 1.99.0 to 1.110.0, so the Rides entry became **1.111.0**, and this
-    record became ADR 0014 (the AI booking assistant had merged as 0013).
+    record became ADR 0014 (the AI booking assistant had merged as 0013) and the proposal became
+    **0031** (`main` had merged `0030-partner-area-requests.md`).
 
 ### Decided while building pricing, supply, dispatch and the revision 2 rework
 
@@ -302,6 +303,6 @@ Redis GEO uses the existing Redis client and the OTP HMAC uses the standard libr
 - `backend/apps/mobile/`: the layout copied for `apps/rides`.
 - `backend/apps/locations/geocoding.py`: address search and reverse geocoding, reused as is.
 - `common/throttling.py`: `ThrottledWriteMixin`, used for the quote limit.
-- `contracts/proposals/0030-rides-v1.md`: the API surface.
+- `contracts/proposals/0031-rides-v1.md`: the API surface.
 - Android location permissions and foreground service types, Expo TaskManager and Location, Don't
   Kill My App, Redis `GEOSEARCH`, Google Routes `computeRoutes`: the sources listed in brief §10.
