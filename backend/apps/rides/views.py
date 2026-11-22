@@ -53,6 +53,7 @@ from apps.rides.serializers import (
     OpsRideDetailSerializer,
     OpsRideRowSerializer,
     OpsSosSerializer,
+    ParcelPreferenceSerializer,
     RateCardCreateSerializer,
     RateCardUpdateSerializer,
     RatingSerializer,
@@ -109,6 +110,7 @@ __all__ = [
     "OpsRidesView",
     "OpsSosResolveView",
     "OpsSosView",
+    "ParcelPreferenceView",
     "PaymentReceivedView",
     "RideDetailView",
     "RiderCancelView",
@@ -159,6 +161,26 @@ class CaptainVehicleView(APIView):
             colour=data["colour"],
         )
         return Response(CaptainVehicleSerializer(vehicle).data)
+
+
+class ParcelPreferenceView(APIView):
+    """The "Take parcel orders" switch. Bike and Auto captains only."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rides_parcel_preference_update",
+        request=ParcelPreferenceSerializer,
+        responses=ParcelPreferenceSerializer,
+    )
+    def put(self, request: Any) -> Response:
+        serializer = ParcelPreferenceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vehicle = services.set_parcel_preference(
+            partner=_partner(request.user),
+            takes_parcels=serializer.validated_data["takes_parcels"],
+        )
+        return Response(ParcelPreferenceSerializer({"takes_parcels": vehicle.takes_parcels}).data)
 
 
 def _required_idempotency_key(request: Any) -> str:

@@ -30,6 +30,7 @@ from apps.rides.exceptions import (
     RateCardInactiveError,
     RegistrationAlreadyUsedError,
     RoutingUnavailableApiError,
+    VehicleNotEligibleError,
 )
 from apps.rides.fares import trip_fare_paise
 from apps.rides.models import (
@@ -63,6 +64,7 @@ __all__ = [
     "expire_passes",
     "record_location",
     "save_captain_vehicle",
+    "set_parcel_preference",
     "start_duty",
     "stop_duty",
     "sweep_stale_captains",
@@ -138,6 +140,26 @@ def save_captain_vehicle(
 
 
 # --- Fare quotes ------------------------------------------------------------------------------
+
+
+def set_parcel_preference(*, partner: PartnerProfile, takes_parcels: bool) -> CaptainVehicle:
+    """The "Take parcel orders" switch (D17). Bike and Auto captains only.
+
+    Repeating the same value changes nothing. A captain with no vehicle yet is refused the same
+    way as a cab: there is nothing to take parcels with.
+    """
+    vehicle = CaptainVehicle.objects.filter(partner=partner).first()
+    if vehicle is None or vehicle.vehicle_type == VehicleType.CAB:
+        raise VehicleNotEligibleError
+    if vehicle.takes_parcels != takes_parcels:
+        vehicle.takes_parcels = takes_parcels
+        vehicle.save(update_fields=("takes_parcels", "updated_at"))
+        logger.info(
+            "captain_parcel_preference_set",
+            extra={"partner_id": str(partner.pk), "takes_parcels": takes_parcels},
+        )
+    return vehicle
+
 
 #: The order the rider sees: cheapest kind of vehicle first.
 _VEHICLE_ORDER = {VehicleType.BIKE: 0, VehicleType.AUTO: 1, VehicleType.CAB: 2}

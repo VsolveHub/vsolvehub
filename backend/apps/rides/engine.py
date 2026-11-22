@@ -243,8 +243,12 @@ def _eligible_captains(ride: Ride, *, candidate_ids: list[str], now: datetime) -
 
     Locked rows another dispatch is holding are skipped: that captain is about to get an offer.
     A captain is offered a ride once per search; after a captain cancels, a new search may offer
-    it again to the others, but never to a captain who cancelled it.
+    it again to the others, but never to a captain who cancelled it. A parcel goes only to
+    captains who take parcel orders (D17).
     """
+    vehicle_match: dict[str, Any] = {"vehicle_type": ride.vehicle_type}
+    if ride.kind == RideKind.PARCEL:
+        vehicle_match["takes_parcels"] = True
     cancelled_by = RideTransition.objects.filter(
         ride=ride, actor_kind=ActorKind.CAPTAIN, to_state=RideState.SEARCHING
     ).values("actor_id")
@@ -269,9 +273,7 @@ def _eligible_captains(ride: Ride, *, candidate_ids: list[str], now: datetime) -
                     status=PartnerApplication.Status.APPROVED,
                 )
             ),
-            models.Exists(
-                CaptainVehicle.objects.filter(partner=partner, vehicle_type=ride.vehicle_type)
-            ),
+            models.Exists(CaptainVehicle.objects.filter(partner=partner, **vehicle_match)),
         )
         .exclude(models.Exists(Ride.objects.filter(captain=partner, state__in=OPEN_RIDE_STATES)))
         .exclude(
@@ -420,7 +422,7 @@ def redrive_dispatch() -> int:
 def current_offer(partner: PartnerProfile) -> RideOffer | None:
     """The offer to show the captain now: unanswered, in time, on a ride still searching."""
     return (
-        RideOffer.objects.select_related("ride__quote")
+        RideOffer.objects.select_related("ride__quote", "ride__parcel")
         .filter(
             captain=partner,
             status=RideOffer.Status.PENDING,

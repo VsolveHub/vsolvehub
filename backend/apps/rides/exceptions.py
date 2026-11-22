@@ -146,6 +146,16 @@ class VehicleUnavailableError(RidesApiError):
         )
 
 
+class VehicleNotEligibleError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="vehicle_not_eligible",
+            message="Pick up & Drop is for bike and auto captains.",
+        )
+
+
 class ParcelDetailsRequiredError(RidesApiError):
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 

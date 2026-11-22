@@ -11,8 +11,8 @@ from django.utils import timezone
 from apps.identity.models import User
 from apps.locations.geocoding import GeocodedAddress
 from apps.locations.models import PostalCode, ServiceArea, ServiceAreaPostalCode
-from apps.rides import services
-from apps.rides.models import FareQuote, RideKind, RideRateCard
+from apps.rides import engine, services
+from apps.rides.models import FareQuote, Ride, RideKind, RideRateCard
 from tests.rides.ride_world import PICKUP
 
 SERVED_PIN = "500032"
@@ -142,3 +142,14 @@ def book_parcel(client: Any, quote: FareQuote, parcel: Any = None, key: str = "k
     if parcel is not None:
         body["parcel"] = parcel
     return client.post(RIDES, body, format="json", HTTP_IDEMPOTENCY_KEY=key)
+
+
+def new_parcel(
+    rider: User, area: ServiceArea, *, vehicle: str = "BIKE", parcel: dict[str, Any] | None = None
+) -> Ride:
+    """Book a parcel straight through the engine, making the area's parcel card if it has none."""
+    card = RideRateCard.objects.filter(
+        service_area=area, vehicle_type=vehicle, kind=RideKind.PARCEL, is_active=True
+    ).first() or make_card(area, vehicle, RideKind.PARCEL)
+    quote = parcel_quote(rider, card)
+    return engine.create_ride(rider=rider, quote_id=quote.id, parcel=parcel or parcel_body())
