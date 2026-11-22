@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from freezegun import freeze_time
 from pytest_django.fixtures import SettingsWrapper
@@ -13,7 +14,7 @@ from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
 from apps.rides import engine
 from apps.rides.fares import trip_fare_paise
-from apps.rides.models import ParcelDetails, Ride, RideState, RideTransition
+from apps.rides.models import ParcelDetails, Ride, RideState, RideTrackPoint, RideTransition
 from apps.rides.routing import RoutingUnavailableError, get_route
 from tests.rides.helpers import customer_client, make_user, partner_client, ready_captain
 from tests.rides.parcel_world import (
@@ -384,3 +385,45 @@ def test_the_captain_stays_busy_until_the_parcel_is_back(rider: User, area: Serv
 
     assert ride.captain_id == driver.id
     assert not second.offers.filter(captain=driver).exists()  # a returning captain gets no offer
+
+
+# --- the captain is tracked on the way back ---------------------------------------------------
+
+
+def send_ping(driver: PartnerProfile, point: tuple[Any, Any]) -> Any:
+    """The phone's GPS ping through the real endpoint, as the app sends it."""
+    return partner_client(driver.user).post(
+        f"{CAPTAIN}/location/",
+        {
+            "latitude": str(point[0]),
+            "longitude": str(point[1]),
+            "accuracy_m": 8,
+            "captured_at": timezone.now().isoformat(),
+        },
+        format="json",
+    )
+
+
+def test_the_way_back_is_recorded_and_the_booker_sees_the_captain(
+    rider: User, area: ServiceArea
+) -> None:
+    ride, driver = returning(rider, area)
+    assert RideTrackPoint.objects.filter(ride=ride).count() == 0
+
+    assert send_ping(driver, DROP).status_code == 204
+
+    assert RideTrackPoint.objects.filter(ride=ride).count() == 1  # proof of the paid return leg
+    seen = customer_client(rider).get(f"{RIDES}{ride.id}/").json()["captain"]["position"]
+    assert seen is not None and float(seen["latitude"]) == pytest.approx(float(DROP[0]))
+
+
+def test_tracking_stops_once_the_parcel_is_back(rider: User, area: ServiceArea) -> None:
+    ride, driver = returning(rider, area)
+    send_ping(driver, DROP)
+    hand_back(driver, ride)
+    recorded = RideTrackPoint.objects.filter(ride=ride).count()
+
+    send_ping(driver, PICKUP)
+
+    assert RideTrackPoint.objects.filter(ride=ride).count() == recorded
+    assert customer_client(rider).get(f"{RIDES}{ride.id}/").json()["captain"]["position"] is None

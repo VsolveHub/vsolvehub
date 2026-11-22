@@ -38,6 +38,7 @@ from apps.rides.models import (
     OPEN_RIDE_STATES,
     PARCEL_LIMIT_FIELDS,
     RATE_FIELDS,
+    TRACKED_RIDE_STATES,
     CaptainDutySession,
     CaptainPass,
     CaptainPassPlan,
@@ -46,7 +47,6 @@ from apps.rides.models import (
     Ride,
     RideKind,
     RideRateCard,
-    RideState,
     RideTrackPoint,
     VehicleType,
     normalise_registration_number,
@@ -547,7 +547,6 @@ def stop_duty(*, partner: PartnerProfile) -> None:
 PING_MAX_AHEAD = timedelta(seconds=5)
 
 #: Ride states in which each ping also becomes a point on the ride's GPS trail.
-_TRACKED_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED, RideState.IN_TRIP)
 
 
 @dataclass(frozen=True, slots=True)
@@ -604,7 +603,7 @@ def record_location(*, partner: PartnerProfile, ping: LocationPing) -> None:
         raise NotOnDutyError
     listed_in: str | None = None
     keep_listing = False
-    if ride is not None and ride.state in _TRACKED_STATES:
+    if ride is not None and ride.state in TRACKED_RIDE_STATES:
         RideTrackPoint.objects.create(
             ride=ride,
             latitude=ping.latitude,

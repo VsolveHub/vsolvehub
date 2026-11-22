@@ -25,6 +25,7 @@ from django.utils import timezone
 from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.rides import location
 from apps.rides.models import (
+    TRACKED_RIDE_STATES,
     CaptainDutySession,
     CaptainPass,
     CaptainVehicle,
@@ -140,8 +141,6 @@ def captain_status(partner: PartnerProfile) -> CaptainStatus:
 
 # --- The rider's live ride (brief §5.7) -------------------------------------------------------
 
-#: While the ride is in these states, the rider sees where the captain is.
-_TRACKED_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED, RideState.IN_TRIP)
 #: The pickup ETA is a Routes call, so it is worked out at most this often per ride.
 ETA_CACHE_SECONDS = 30
 
@@ -158,7 +157,7 @@ def captain_live(ride: Ride) -> CaptainLive:
     Either is None rather than guessed: no fresh ping, Redis down, or Routes down. The ETA is
     only for a captain still on the way.
     """
-    if ride.captain_id is None or ride.state not in _TRACKED_STATES:
+    if ride.captain_id is None or ride.state not in TRACKED_RIDE_STATES:
         return CaptainLive(position=None, eta_s=None)
     try:
         ping = location.last_position(ride.captain_id)

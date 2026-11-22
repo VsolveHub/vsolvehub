@@ -16,6 +16,7 @@ __all__ = [
     "OPEN_RIDE_STATES",
     "PARCEL_LIMIT_FIELDS",
     "RATE_FIELDS",
+    "TRACKED_RIDE_STATES",
     "ActorKind",
     "CaptainDutySession",
     "CaptainPass",
@@ -408,6 +409,15 @@ class RideState(models.TextChoices):
 #: States in which the ride still needs someone: the rider or captain cannot start another one.
 OPEN_RIDE_STATES = (
     RideState.SEARCHING,
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.IN_TRIP,
+    RideState.RETURNING,
+)
+
+#: States in which the captain's GPS is recorded as the ride's track and shown on the rider's map:
+#: from the moment they are assigned until the trip ends, including a parcel coming back.
+TRACKED_RIDE_STATES = (
     RideState.CAPTAIN_ASSIGNED,
     RideState.CAPTAIN_ARRIVED,
     RideState.IN_TRIP,
