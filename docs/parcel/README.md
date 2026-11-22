@@ -75,12 +75,12 @@ payment, no parcel photos, no SMS to the receiver, no tracking web link, no phon
 | D5 | **What are you sending:** Documents, Food, Clothes, Electronics, Medicines, Keys, Other. Chips only. No free-text description. |
 | D6 | **Declaration (required tick):** "My item is worth ₹5,000 or less, is packed, and is not on the prohibited list." Items are **not insured**. The value cap (₹5,000) and the prohibited list come from the server. |
 | D7 | **Send or Receive.** Send: the customer is at the pickup and sends the item. Receive: the customer is at the drop and gets an item picked up from someone else. The customer's own end is prefilled with their account name and phone (editable); the other end is typed in. |
-| D8 | **Who pays: the customer who booked (the booker).** Cash or UPI to the captain, the same as Rides. Payment is collected at the **booker's end**: at the pickup when sending, at the drop when receiving. |
+| D8 | **Who pays is a toggle: Sender or Receiver**, as in Rapido, on the Choose vehicle screen. **Sender** pays at the pickup; **Receiver** pays at the drop. It starts on the booker's side (Send → Sender, Receive → Receiver) and the booker can switch it. Cash or UPI to the captain, the same as Rides. When the Receiver pays, the captain collects **before** handing the item over; a receiver who will not pay does not get the item, and after the free waiting minutes the captain uses Receiver not available (D11). |
 | D9 | **Two codes, both shown only in the booker's app.** The **pickup code** is the Rides start code, given to the captain at the pickup. The **delivery PIN** is new, given to the captain at the drop. The booker taps **Share** to send a code to whoever is at the other end. |
 | D10 | **Fare:** the Rides fare engine with a **parcel rate card** per area and vehicle (same fields as a ride card). Waiting at the pickup is charged exactly as in Rides. **No waiting charge at the drop.** |
 | D11 | **Receiver not available:** after the captain marks "Arrived at drop", the card's free waiting minutes run. When they are over (or the PIN is locked after five wrong tries), the captain may press **Receiver not available**. The parcel then goes back to the pickup. |
 | D12 | **Return leg:** priced by the same fare engine, from the drop back to the pickup, with the same parcel rate card version. It is added to the booker's fare. The person at the pickup gives the **pickup code** again to take the item back. |
-| D13 | **Payment after a return.** Send: the booker paid the fare at pickup and pays the return leg when the item comes back. Receive: fare and return leg are both due when the item comes back to the pickup; the captain marks **Payment received** if the person there pays, otherwise **Not paid**. Not paid parcels show in Operations as **Unpaid** for follow-up. |
+| D13 | **Payment after a return.** The item comes back to the pickup, so everything still due is collected there from the sender: the return leg, plus the fare when the Receiver was to pay. The captain marks **Payment received** if the sender pays, otherwise **Not paid**. Not paid parcels show in Operations as **Unpaid** for follow-up. |
 | D14 | **Cancelling:** the booker can cancel for free until the pickup code is entered. After pickup, the booker and the captain cannot cancel; only a return (D11) or an Operations cancel ends it. |
 | D15 | **Captain refusal at pickup:** "Can't take this item" (prohibited, over the weight, or not packed). Allowed only at the pickup, before the code. The parcel ends cancelled with reason `ITEM_NOT_ALLOWED`, no charge to anyone, and it is **not** offered to another captain. |
 | D16 | **Captain opt-in:** "Take parcel orders" switch on the captain's Rides Home, **on by default**, Bike and Auto captains only. Parcels are offered only to captains with it on. |
@@ -88,7 +88,7 @@ payment, no parcel photos, no SMS to the receiver, no tracking web link, no phon
 | D18 | **Proof:** pickup code, delivery PIN, the GPS track and the timestamps. **No photos.** |
 | D19 | **Contacts:** the captain sees both contacts' names and phones (tap to call) only while the parcel is open. History never shows them. Operations always can. |
 | D20 | **One off switch:** the server's `GET /rides/availability/` decides. The Pick up & Drop tile shows only where a parcel rate card is active, and the Rides card shows only where a ride rate card is active. Operations switches either off per area by deactivating its rate cards. |
-| D21 | **Legal:** a "Pick up & Drop" section on the customer terms page: not insured, ₹5,000 value cap, the prohibited list, the booker pays including any return leg, the captain may refuse an item. |
+| D21 | **Legal:** a "Pick up & Drop" section on the customer terms page: not insured, ₹5,000 value cap, the prohibited list, the sender or the receiver pays as chosen at booking, any return leg is paid at the pickup, the captain may refuse an item. |
 | D22 | **Prohibited items (server list):** weapons and ammunition; fireworks and explosives; gas cylinders, fuel and other flammable or hazardous chemicals; drugs and narcotics; alcohol; cash, currency, cheques and securities; gold, silver, jewellery and precious stones; live animals; anything illegal. |
 
 ---
@@ -122,10 +122,12 @@ The delivery PIN has its own counter (`pin_attempts`, at most 5).
 
 ### 3.3 Money
 
-| Mode | Delivered | Returned |
+Who pays is the D8 toggle (`payer`), not Send or Receive.
+
+| Payer | Delivered | Returned |
 |---|---|---|
-| **Send** | fare + pickup waiting, collected **at the pickup** right after the pickup code | the return leg, collected at the pickup when the item comes back, or **Not paid** |
-| **Receive** | fare + pickup waiting, collected **at the drop** after the delivery PIN | fare + pickup waiting + return leg, at the pickup: **Payment received** or **Not paid** |
+| **Sender** | fare + pickup waiting, collected **at the pickup** right after the pickup code | the return leg, collected at the pickup when the item comes back: **Payment received** or **Not paid** |
+| **Receiver** | fare + pickup waiting, collected **at the drop before the delivery PIN** | fare + pickup waiting + return leg, all at the pickup from the sender: **Payment received** or **Not paid** |
 
 `final_fare_paise` is fixed at pickup (fare + pickup waiting) and grows by `return_fare_paise` when a
 return starts. Not paid sets the due amounts to the new payment status `UNPAID`.
@@ -149,6 +151,7 @@ All of it lives in `backend/apps/rides/` and `backend/tests/rides/`. One new mig
 - `RideState` gains `RETURNING` and `RETURNED`.
 - New `ParcelDetails`, one-to-one with `Ride` (primary key):
   - `mode`: `SEND` or `RECEIVE`
+  - `payer`: `SENDER` or `RECEIVER` (D8)
   - `item_category`: `DOCUMENTS`, `FOOD`, `CLOTHES`, `ELECTRONICS`, `MEDICINES`, `KEYS`, `OTHER`
   - `weight_band`: `UP_TO_1_KG`, `KG_1_TO_5`, `KG_5_TO_10`, `KG_10_TO_20`, `KG_20_TO_50`
   - `pickup_contact_name`, `pickup_contact_phone`, `pickup_instructions` (flat, floor, landmark; up to 120 characters)
@@ -168,8 +171,8 @@ Customer:
 |---|---|
 | `GET /rides/availability/` | adds `parcel`: a list of `{vehicle_type, max_weight_grams}` with an active parcel card at that place (empty when Pick up & Drop does not run there), and `parcel_rules`: `{value_cap_paise, prohibited_items}`. |
 | `POST /rides/quotes/` | optional `kind` (default `RIDE`). With `PARCEL`: one quote per vehicle with an active parcel card, each with `max_weight_grams`. |
-| `POST /rides/` | when the quote is a parcel quote, `parcel` is required: `mode`, `item_category`, `weight_band`, `pickup_contact` and `drop_contact` (each `name`, `phone`, `instructions`), `declared: true`. Errors: `422 parcel_details_required`, `422 weight_over_limit`, `422 declaration_required`, `400` for a phone that is not a 10-digit Indian mobile. |
-| `GET /rides/{id}/` and history | add `kind` and, for parcels, `parcel`: the details above, `payment_point` (`PICKUP` or `DROP`), `delivery_pin` (only to the booker, only in the D9 window), `return_fare_paise`, `return_payment_status`. |
+| `POST /rides/` | when the quote is a parcel quote, `parcel` is required: `mode`, `item_category`, `weight_band`, `payer`, `pickup_contact` and `drop_contact` (each `name`, `phone`, `instructions`), `declared: true`. Errors: `422 parcel_details_required`, `422 weight_over_limit`, `422 declaration_required`, `400` for a phone that is not a 10-digit Indian mobile. |
+| `GET /rides/{id}/` and history | add `kind` and, for parcels, `parcel`: the details above, `payment_point` (`PICKUP` when the Sender pays, `DROP` when the Receiver pays), `delivery_pin` (only to the booker, only in the D9 window), `return_fare_paise`, `return_payment_status`. |
 | `POST /rides/{id}/cancel/` | for a parcel, allowed only in `SEARCHING`, `CAPTAIN_ASSIGNED`, `CAPTAIN_ARRIVED`; otherwise `409 invalid_transition`. |
 
 Captain:
@@ -178,12 +181,12 @@ Captain:
 |---|---|
 | `PUT /partner/rides/parcel-preference/` | `{takes_parcels}`. Bike and Auto captains only (`409 vehicle_not_eligible` for Cab). `CaptainStatus` adds `takes_parcels`. |
 | offers | a parcel offer adds `kind`, `item_category`, `weight_band`, the drop address and `payment_point`. Dispatch offers a parcel only to on-duty captains with the same vehicle type and `takes_parcels`. |
-| `POST /partner/rides/{id}/start/` | for a parcel this is **picked up** (`IN_TRIP`). Sets `final_fare_paise`. In Send mode `payment_status` becomes `DUE` here. |
+| `POST /partner/rides/{id}/start/` | for a parcel this is **picked up** (`IN_TRIP`). Sets `final_fare_paise`. When the Sender pays, `payment_status` becomes `DUE` here. |
 | `POST /partner/rides/{id}/cancel/` | adds reason `ITEM_NOT_ALLOWED`: parcels only, only from `CAPTAIN_ARRIVED`; ends `CANCELLED`, no re-dispatch (D15). |
-| `POST /partner/rides/{id}/arrived-at-drop/` | new. `IN_TRIP` only. Same rule as `arrived`: last ping under 30 s old and within 200 m of the drop (`409 not_at_drop`). Sets `arrived_at_drop_at`. Repeating it returns the ride. |
-| `POST /partner/rides/{id}/deliver/` | new. `{pin}`, required `Idempotency-Key`. Needs `arrived_at_drop_at` (`409 not_at_drop`). Wrong PIN `400 pin_invalid` with `attempts_left`, the fifth `423 pin_locked`. Success: `COMPLETED`, `delivered_at`; in Receive mode `payment_status` becomes `DUE`. |
+| `POST /partner/rides/{id}/arrived-at-drop/` | new. `IN_TRIP` only. Same rule as `arrived`: last ping under 30 s old and within 200 m of the drop (`409 not_at_drop`). Sets `arrived_at_drop_at`. When the Receiver pays, `payment_status` becomes `DUE` here. Repeating it returns the ride. |
+| `POST /partner/rides/{id}/deliver/` | new. `{pin}`, required `Idempotency-Key`. Needs `arrived_at_drop_at` (`409 not_at_drop`) and, when the Receiver pays, the payment collected first (`409 payment_not_collected`). Wrong PIN `400 pin_invalid` with `attempts_left`, the fifth `423 pin_locked`. Success: `COMPLETED`, `delivered_at`. |
 | `POST /partner/rides/{id}/receiver-unavailable/` | new. Allowed when the free waiting minutes after `arrived_at_drop_at` are over, or the PIN is locked; else `409 wait_not_over`. Prices the return leg (drop to pickup) with the fare engine; `503 routing_unavailable` (retryable) if the route cannot be worked out, and nothing changes. Sets `RETURNING`, `return_fare_paise`, `return_payment_status = DUE`. `CaptainRide` carries `receiver_unavailable_allowed_at` (server time) for the countdown. |
-| `POST /partner/rides/{id}/returned/` | new. `{otp}` (the pickup code), required `Idempotency-Key`, within 200 m of the pickup (`409 not_at_pickup`). Sets `RETURNED`, `returned_at`. In Receive mode `payment_status` becomes `DUE`. Wrong codes count on the existing `otp_attempts`. |
+| `POST /partner/rides/{id}/returned/` | new. `{otp}` (the pickup code), required `Idempotency-Key`, within 200 m of the pickup (`409 not_at_pickup`). Sets `RETURNED`, `returned_at`. A fare still `DUE` (the Receiver was to pay) is collected here with the return leg. Wrong codes count on the existing `otp_attempts`. |
 | `POST /partner/rides/{id}/payment-received/` | for a parcel, marks every amount that is `DUE` as `COLLECTED`. |
 | `POST /partner/rides/{id}/payment-not-received/` | new. `RETURNED` parcels only. Marks every amount that is `DUE` as `UNPAID`. |
 | `GET /partner/rides/current/` | also returns a `RETURNING` parcel, and a delivered or returned parcel with an amount still `DUE`. |
@@ -241,14 +244,16 @@ Rides search, map and ride screen components.
    flat/floor/landmark for each end, the D6 tick, "See prohibited items" (a sheet from
    `parcel_rules`), and "Items are not insured."
 4. **Choose vehicle** (`parcel/choose`): Bike and Auto cards with the fare and max weight. A vehicle
-   whose max weight is below the chosen band is shown disabled with "Up to {n} kg". Under the button:
-   "Pay ₹{fare} in cash or UPI to the captain at the pickup" (Send) or "at the drop" (Receive).
-   Button: **Book Pick up & Drop**.
+   whose max weight is below the chosen band is shown disabled with "Up to {n} kg". Then the
+   **Who pays?** toggle, **Sender | Receiver** (D8), starting on the booker's side. Under it:
+   "Sender pays ₹{fare} in cash or UPI to the captain at the pickup" or "Receiver pays ₹{fare} in
+   cash or UPI to the captain at the drop". Button: **Book Pick up & Drop**.
 5. **Tracking**: the Rides ride screen, with parcel stage labels (Finding a captain, Captain on the
    way, At pickup, Picked up, At drop, Delivered, Returning, Returned) and a **codes card**: the
    pickup code and delivery PIN, each with who it is for and a **Share** button. Share text:
    "V Solve Hub Pick up & Drop: {captain name}, {vehicle} {plate}. Pickup code {code}" or "Delivery
-   PIN {pin}".
+   PIN {pin}". When the Receiver pays, the delivery PIN text adds "Please pay ₹{fare} in cash or UPI
+   to the captain before you take the item."
 6. **History**: parcels in the Rides history with a parcel icon and Delivered or Returned.
 
 ## 6. Partner app (captain)
@@ -260,8 +265,8 @@ All inside `src/features/rides/` and the existing rides routes.
    "Collect at pickup" or "Collect at drop".
 3. **Trip screen**, parcel stages:
    to pickup (call the pickup contact) → at pickup: **Enter pickup code**, or **Can't take this item**
-   → Send: **Collect ₹{amount}** → to drop (Navigate, call the drop contact) → **Arrived at drop**
-   → **Enter delivery PIN** → Receive: **Collect ₹{amount}** → done.
+   → Sender pays: **Collect ₹{amount}** → to drop (Navigate, call the drop contact) → **Arrived at
+   drop** → Receiver pays: **Collect ₹{amount}** first → **Enter delivery PIN** → done.
    After the wait (server countdown from `receiver_unavailable_allowed_at`): **Receiver not
    available** → returning (Navigate to the pickup) → **Enter pickup code** → **Collect
    ₹{amount}**, with **Payment received** or **Not paid**.
@@ -399,11 +404,11 @@ pnpm contract:check
 Tests you must write (in `backend/tests/rides/`, one file each):
 
 - `test_parcel_quotes.py`: availability `parcel`, parcel quotes per vehicle, Cab never offered, max weight.
-- `test_parcel_booking.py`: required details, weight over limit, declaration, phone format, Send and Receive prefill rules.
+- `test_parcel_booking.py`: required details, `payer` required, weight over limit, declaration, phone format.
 - `test_parcel_dispatch.py`: only `takes_parcels` captains of the same vehicle; Cab cannot opt in.
 - `test_parcel_trip.py`: pickup, arrived at drop (200 m, stale ping), deliver, wrong PIN counted once per key, lock at five.
 - `test_parcel_return.py`: wait not over, wait over, PIN locked, return price from the fare engine, routing down changes nothing, returned with the pickup code.
-- `test_parcel_payment.py`: Send and Receive, delivered and returned, payment received, not paid, `UNPAID`.
+- `test_parcel_payment.py`: Sender pays and Receiver pays, each with Send and Receive; `deliver` refused with `409 payment_not_collected` until a Receiver-pays parcel is collected; delivered and returned; payment received, not paid, `UNPAID`.
 - `test_parcel_cancel.py`: booker before and after pickup, `ITEM_NOT_ALLOWED` only at pickup and never re-dispatched, Operations cancel in `IN_TRIP` and `RETURNING`.
 - `test_parcel_codes.py`: code windows (D9), PIN never in captain payloads, never logged.
 - `test_parcel_operations.py`: filters, detail block, parcel rate cards.
@@ -418,13 +423,14 @@ Phone A: partner app, Bike captain. Phone B: partner app, Auto captain. Phone C:
 
 - [ ] The Pick up & Drop tile shows only in an area with a parcel card; switching the card off in Operations hides it.
 - [ ] The Rides card follows the same rule for ride cards.
-- [ ] Send, Bike: book, captain A accepts, pickup code, collect at pickup, arrived at drop, delivery PIN, delivered.
-- [ ] Receive, Bike: the code is shared from phone C to someone else's WhatsApp, collect at the drop.
+- [ ] Send, Bike, Sender pays: book, captain A accepts, pickup code, collect at pickup, arrived at drop, delivery PIN, delivered.
+- [ ] Receive, Bike, Receiver pays: the pickup code is shared from phone C to someone else's WhatsApp, collect at the drop, then the PIN.
+- [ ] Send, Receiver pays: the shared PIN text says how much to pay; the PIN is refused until the captain marks payment received.
 - [ ] Auto: a 20–50 kg parcel is offered only to Auto; Bike shows "Up to 10 kg".
 - [ ] "Take parcel orders" off: captain A gets no parcel offers but still gets rides.
 - [ ] Wrong delivery PIN five times locks it; "Receiver not available" then works.
 - [ ] Return: the wait countdown, Receiver not available, the return fare shown on both phones, returned with the pickup code, Payment received.
-- [ ] Return in Receive mode with Not paid: the parcel shows as Unpaid in Operations.
+- [ ] Return when the Receiver was to pay, with Not paid: the parcel shows as Unpaid in Operations.
 - [ ] "Can't take this item" at the pickup: the booker is told, nothing is charged, no other captain gets it.
 - [ ] The booker cannot cancel after pickup.
 - [ ] Contacts are callable during the parcel and absent from history.
@@ -433,7 +439,8 @@ Phone A: partner app, Bike captain. Phone B: partner app, Auto captain. Phone C:
 
 ### 11.3 Road test (Day 5)
 
-Four real deliveries: Bike Send, Bike Receive, Auto Send, and one Bike parcel that is returned.
+Four real deliveries: Bike Send with Sender pays, Bike Receive with Receiver pays, Auto Send with
+Receiver pays, and one Bike parcel that is returned.
 
 ### 11.4 Test report
 
