@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   categoryLabel,
   draftFrom,
+  newTaxCategory,
   percentToBps,
   priceExample,
   rateRows,
@@ -129,6 +130,49 @@ describe("tax categories come from the services, not from typing", () => {
     expect(toActivateBody(draft, { required: ["labour"] })).toEqual({
       error:
         "Crew and project services use Labour, which has no tax rate. Those jobs could not be priced.",
+    });
+  });
+});
+
+describe("a category no service uses yet can still be given a rate", () => {
+  it("turns what Operations types into a code services could carry", () => {
+    expect(newTaxCategory("  Building Materials ", ["labour"])).toEqual({
+      code: "building-materials",
+    });
+    expect(newTaxCategory("transport_charges", [])).toEqual({ code: "transport_charges" });
+  });
+
+  it("refuses an empty, malformed or repeated category", () => {
+    expect(newTaxCategory("   ", [])).toEqual({ error: "Type a name for the category." });
+    expect(newTaxCategory("goods & services", [])).toEqual({
+      error: "Use letters, numbers, - and _ only (at most 100).",
+    });
+    expect(newTaxCategory("x".repeat(101), [])).toEqual({
+      error: "Use letters, numbers, - and _ only (at most 100).",
+    });
+    expect(newTaxCategory("Labour", ["labour"])).toEqual({
+      error: "That category is already in the table.",
+    });
+  });
+
+  it("is listed and priced like any other once added with a rate", () => {
+    const draft = {
+      ...draftFrom(active),
+      approvalReference: "FIN-4",
+      effectiveFrom: "2026-10-15",
+      taxRates: [...draftFrom(active).taxRates, { category: "building-materials", percent: "28" }],
+      materialTaxCategory: "building-materials",
+    };
+
+    expect(rateRows(draft, usage).at(-1)).toEqual({
+      category: "building-materials",
+      percent: "28",
+      usage: null,
+    });
+    const result = toActivateBody(draft, { required: requiredCategories(usage) });
+    expect("body" in result && result.body).toMatchObject({
+      tax_rates_bps: { labour: 1800, goods: 1200, "building-materials": 2800 },
+      material_tax_category: "building-materials",
     });
   });
 });

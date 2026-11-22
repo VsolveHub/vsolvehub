@@ -13,6 +13,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { partnerActivityKey } from "@/features/partners/queries";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
@@ -283,8 +284,12 @@ export function useUnpayablePartners(
  *
  * `net_paise` is signed: positive pays the Partner more, negative recovers an overpayment.
  * Step-up, because it changes what the next payout run sends.
+ *
+ * The Partner's balance is refreshed once it is saved: the dialog's "available now / after"
+ * preview reads it, and a second correction must be weighed against the new balance.
  */
 export function useLedgerAdjustment() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       idempotencyKey,
@@ -303,6 +308,13 @@ export function useLedgerAdjustment() {
         }),
       ),
     retry: false,
+    onSuccess: (_entry, { partner_id }) => {
+      void queryClient.invalidateQueries({ queryKey: partnerActivityKey(partner_id) });
+      // A recovery can leave a Partner with nothing to pay, which this list explains.
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "unpayable-partners"],
+      });
+    },
   });
 }
 

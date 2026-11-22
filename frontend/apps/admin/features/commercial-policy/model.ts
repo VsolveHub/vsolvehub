@@ -138,6 +138,27 @@ export function rateRows(
   return [...used, ...unused];
 }
 
+/** A tax category code as services carry it (a slug): letters, digits, `-` and `_`. */
+const TAX_CATEGORY_CODE = /^[a-z0-9][a-z0-9_-]{0,99}$/;
+
+/**
+ * A category no service uses yet, typed by Operations: materials or transport usually need a
+ * rate of their own. Spaces become hyphens and letters lowercase, so "Building materials" is
+ * `building-materials`.
+ */
+export function newTaxCategory(
+  typed: string,
+  existing: readonly string[],
+): { code: string; error?: undefined } | { code?: undefined; error: string } {
+  const code = typed.trim().toLowerCase().replace(/\s+/g, "-");
+  if (!code) return { error: "Type a name for the category." };
+  if (!TAX_CATEGORY_CODE.test(code)) {
+    return { error: "Use letters, numbers, - and _ only (at most 100)." };
+  }
+  if (existing.includes(code)) return { error: "That category is already in the table." };
+  return { code };
+}
+
 /** The categories crew and project services are priced under: each must have a rate. */
 export function requiredCategories(usage: readonly TaxCategoryUsage[]): string[] {
   return usage.filter((row) => row.crew_and_project_service_count > 0).map((row) => row.code);

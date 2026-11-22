@@ -14,7 +14,7 @@ import {
   Spinner,
   formatMoney,
 } from "@vsolve/ui";
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import {
@@ -23,6 +23,7 @@ import {
   bpsToPercent,
   categoryLabel,
   draftFrom,
+  newTaxCategory,
   priceExample,
   rateRows,
   requiredCategories,
@@ -296,71 +297,123 @@ function RateTable({
   onRemove: (category: string) => void;
 }) {
   const rows = rateRows(draft, usage);
+  const [typed, setTyped] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const addCategory = () => {
+    const result = newTaxCategory(
+      typed,
+      rows.map((row) => row.category),
+    );
+    if (result.error !== undefined) {
+      setAddError(result.error);
+      return;
+    }
+    // A blank rate adds the row; the operator types the percent in it.
+    onRate(result.code, "");
+    setTyped("");
+    setAddError(null);
+  };
   return (
-    <div className="overflow-hidden rounded-control border border-line">
-      <table className="w-full table-fixed border-collapse text-left text-sm">
-        <thead className="bg-surface-sunken text-xs text-text-secondary">
-          <tr>
-            <th className="w-[34%] px-3 py-2 font-semibold">Tax category</th>
-            <th className="px-3 py-2 font-semibold">Used by</th>
-            <th className="w-40 px-3 py-2 font-semibold">GST rate</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {rows.map((row) => (
-            <tr key={row.category} className="align-middle">
-              <td className="px-3 py-2">
-                <span className="block font-semibold text-text">{categoryLabel(row.category)}</span>
-                <span className="block break-all font-mono text-xs text-text-muted">{row.category}</span>
-              </td>
-              <td className="px-3 py-2 text-text-secondary">
-                {row.usage ? (
-                  <>
-                    {row.usage.service_count} {row.usage.service_count === 1 ? "service" : "services"}
-                    {row.usage.crew_and_project_service_count > 0 ? (
-                      <Badge tone="info" className="ml-1.5">
-                        Crew &amp; projects
-                      </Badge>
-                    ) : null}
-                    <span className="mt-0.5 block line-clamp-2 text-xs text-text-muted">
-                      e.g. {row.usage.example_services.join(", ")}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-text-muted">No service uses this</span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                <div className="flex items-center gap-1">
-                  <div className="relative w-24">
-                    <Input
-                      aria-label={`GST rate for ${categoryLabel(row.category)}`}
-                      inputMode="decimal"
-                      value={row.percent}
-                      placeholder="—"
-                      className="pr-7"
-                      onChange={(event) => onRate(row.category, event.target.value)}
-                    />
-                    <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-text-muted">
-                      %
-                    </span>
-                  </div>
-                  {row.usage ? null : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove ${categoryLabel(row.category)}`}
-                      onClick={() => onRemove(row.category)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
-                </div>
-              </td>
+    <div className="flex flex-col gap-2">
+      <div className="overflow-hidden rounded-control border border-line">
+        <table className="w-full table-fixed border-collapse text-left text-sm">
+          <thead className="bg-surface-sunken text-xs text-text-secondary">
+            <tr>
+              <th className="w-[34%] px-3 py-2 font-semibold">Tax category</th>
+              <th className="px-3 py-2 font-semibold">Used by</th>
+              <th className="w-40 px-3 py-2 font-semibold">GST rate</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((row) => (
+              <tr key={row.category} className="align-middle">
+                <td className="px-3 py-2">
+                  <span className="block font-semibold text-text">{categoryLabel(row.category)}</span>
+                  <span className="block break-all font-mono text-xs text-text-muted">{row.category}</span>
+                </td>
+                <td className="px-3 py-2 text-text-secondary">
+                  {row.usage ? (
+                    <>
+                      {row.usage.service_count} {row.usage.service_count === 1 ? "service" : "services"}
+                      {row.usage.crew_and_project_service_count > 0 ? (
+                        <Badge tone="info" className="ml-1.5">
+                          Crew &amp; projects
+                        </Badge>
+                      ) : null}
+                      <span className="mt-0.5 block line-clamp-2 text-xs text-text-muted">
+                        e.g. {row.usage.example_services.join(", ")}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-text-muted">No service uses this</span>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-1">
+                    <div className="relative w-24">
+                      <Input
+                        aria-label={`GST rate for ${categoryLabel(row.category)}`}
+                        inputMode="decimal"
+                        value={row.percent}
+                        placeholder="—"
+                        className="pr-7"
+                        onChange={(event) => onRate(row.category, event.target.value)}
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-text-muted">
+                        %
+                      </span>
+                    </div>
+                    {row.usage ? null : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${categoryLabel(row.category)}`}
+                        onClick={() => onRemove(row.category)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-3 py-3 text-text-muted">
+                  No tax categories yet. Add one below.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field
+          label="Add a category no service uses yet"
+          description="For example materials or transport, when they need a rate of their own."
+          showOptional={false}
+          error={addError ?? undefined}
+        >
+          <Input
+            value={typed}
+            placeholder="materials"
+            className="w-56"
+            onChange={(event) => {
+              setTyped(event.target.value);
+              setAddError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addCategory();
+              }
+            }}
+          />
+        </Field>
+        <Button size="sm" variant="outline" onClick={addCategory}>
+          <Plus className="size-4" /> Add
+        </Button>
+      </div>
     </div>
   );
 }

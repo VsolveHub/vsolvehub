@@ -39,6 +39,10 @@ from apps.commerce.models import Booking
 from apps.partners.models import PartnerProfile
 from apps.rental.models import RentalBooking
 
+#: One bank account is live for at most one Partner. `apps.payouts.services` turns a violation
+#: into `payout_account_in_use`, so the name is shared rather than repeated.
+ONE_LIVE_PARTNER_PER_BANK_ACCOUNT = "payouts_one_live_partner_per_bank_account"
+
 
 class PartnerPayoutAccount(models.Model):
     """Where a Partner's money goes, with a cooling period on changes.
@@ -50,7 +54,9 @@ class PartnerPayoutAccount(models.Model):
     payout; it applies to the batch flow too, at no cost.
 
     Only the last four digits are stored in a readable field. The full number lives with the
-    payout provider, which is the only party that needs it.
+    payout provider, which is the only party that needs it. `account_fingerprint` is a keyed
+    hash of it, kept so the same bank account cannot be live for two Partners whatever ids the
+    provider hands out.
     """
 
     class Status(models.TextChoices):
@@ -69,6 +75,9 @@ class PartnerPayoutAccount(models.Model):
     provider_fund_account_id = models.CharField(max_length=128, blank=True)
     account_last4 = models.CharField(max_length=4)
     ifsc = models.CharField(max_length=16, blank=True)
+    #: `services.bank_account_fingerprint`: names the bank account without storing its number.
+    #: Empty on accounts added before it existed, which the unique constraint leaves out.
+    account_fingerprint = models.CharField(max_length=64, blank=True)
     holder_name = models.CharField(max_length=140)
     verified_at = models.DateTimeField(null=True, blank=True)
     #: The Operations user who verified or rejected it. Never the person who registered it.
@@ -111,6 +120,14 @@ class PartnerPayoutAccount(models.Model):
                 fields=("partner",),
                 condition=models.Q(status__in=("PENDING", "VERIFIED")),
                 name="payouts_one_live_account_per_partner",
+            ),
+            # The service refuses an account another Partner holds before it calls anyone; this
+            # is what stops two Partners who submit the same account at the same moment.
+            models.UniqueConstraint(
+                fields=("account_fingerprint",),
+                condition=models.Q(status__in=("PENDING", "VERIFIED"))
+                & ~models.Q(account_fingerprint=""),
+                name=ONE_LIVE_PARTNER_PER_BANK_ACCOUNT,
             ),
         ]
 

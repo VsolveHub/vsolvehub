@@ -15,13 +15,14 @@ from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.commerce.models import Booking
 from apps.foundation.services import enqueue_outbox_event
 from apps.fulfilment.models import WorkOutcome, WorkTask
+from apps.identity.hashing import keyed_hash
 from apps.identity.models import User
 from apps.notifications.models import KillSwitch
 from apps.notifications.services import is_engaged
@@ -43,6 +44,7 @@ from apps.payouts.exceptions import (
     WithdrawalRefusedApiError,
 )
 from apps.payouts.models import (
+    ONE_LIVE_PARTNER_PER_BANK_ACCOUNT,
     PartnerEarningHold,
     PartnerLedgerEntry,
     PartnerPayoutAccount,
@@ -1029,6 +1031,10 @@ def partner_balance_paise(partner: PartnerProfile) -> dict[str, int]:
     }
 
 
+#: An account money can go to, or will once Operations verifies it.
+_LIVE_ACCOUNT_STATUSES = (PartnerPayoutAccount.Status.PENDING, PartnerPayoutAccount.Status.VERIFIED)
+
+
 @transaction.atomic
 def register_payout_account(
     *,
@@ -1041,28 +1047,63 @@ def register_payout_account(
     provider_fund_account_id: str = "",
     bank_check: BankAccountCheck | None = None,
     bank_check_provider: str = "",
+    account_fingerprint: str = "",
 ) -> PartnerPayoutAccount:
     """Replace a Partner's account, starting the cooling clock.
 
     The previous account is marked `REPLACED` rather than deleted: a payout that already went
     through it must stay explicable.
+
+    Raises `PayoutAccountInUseApiError` when another Partner's live account has the same
+    `account_fingerprint`, and then nothing is replaced either.
     """
 
     PartnerPayoutAccount.objects.select_for_update().filter(
         partner_id=partner_id,
-        status__in=(PartnerPayoutAccount.Status.PENDING, PartnerPayoutAccount.Status.VERIFIED),
+        status__in=_LIVE_ACCOUNT_STATUSES,
     ).update(status=PartnerPayoutAccount.Status.REPLACED)
 
-    return PartnerPayoutAccount.objects.create(
-        partner_id=partner_id,
-        account_last4=account_last4,
-        ifsc=ifsc,
-        holder_name=holder_name,
-        provider_contact_id=provider_contact_id,
-        provider_fund_account_id=provider_fund_account_id,
-        effective_from=timezone.now() + timedelta(hours=settings.PAYOUT_ACCOUNT_COOLING_HOURS),
-        created_by=actor,
-        **_bank_check_fields(bank_check, bank_check_provider),
+    try:
+        # A savepoint, so a refused insert can be turned into the API error below.
+        with transaction.atomic():
+            return PartnerPayoutAccount.objects.create(
+                partner_id=partner_id,
+                account_last4=account_last4,
+                ifsc=ifsc,
+                account_fingerprint=account_fingerprint,
+                holder_name=holder_name,
+                provider_contact_id=provider_contact_id,
+                provider_fund_account_id=provider_fund_account_id,
+                effective_from=timezone.now()
+                + timedelta(hours=settings.PAYOUT_ACCOUNT_COOLING_HOURS),
+                created_by=actor,
+                **_bank_check_fields(bank_check, bank_check_provider),
+            )
+    except IntegrityError as exc:
+        # Two Partners who submit one account at the same moment both pass the check in
+        # `submit_partner_payout_account`; the database lets only one of them hold it.
+        if ONE_LIVE_PARTNER_PER_BANK_ACCOUNT in str(exc):
+            raise PayoutAccountInUseApiError() from exc
+        raise
+
+
+def bank_account_fingerprint(*, ifsc: str, account_number: str) -> str:
+    """A keyed hash that names one bank account without storing its number.
+
+    The provider's ids cannot do this job: RazorpayX makes a new fund account for every contact,
+    so one bank account has a different id for each Partner who adds it. Without the server's
+    secret key the hash cannot be turned back into the number. Rotating `SECRET_KEY` changes
+    every fingerprint, so accounts added before a rotation are only matched by provider id.
+    """
+
+    return keyed_hash(f"payout-account:{ifsc.strip().upper()}:{account_number.strip()}")
+
+
+def _held_by_another_partner(*, partner_id: UUID, **match: str) -> bool:
+    return (
+        PartnerPayoutAccount.objects.filter(status__in=_LIVE_ACCOUNT_STATUSES, **match)
+        .exclude(partner_id=partner_id)
+        .exists()
     )
 
 
@@ -1092,7 +1133,7 @@ def submit_partner_payout_account(
     The provider is called before anything is written, and outside a transaction: a slow
     provider must not hold row locks, and a refused or unreachable provider leaves nothing
     behind. The full account number goes to the provider and nowhere else — only its last four
-    digits and the provider's ids are stored.
+    digits, a keyed hash of it and the provider's ids are stored.
 
     Replacing a verified account makes the Partner unpayable until the new one is verified and
     out of its cooling period. That is the takeover control working, not a side effect.
@@ -1103,6 +1144,11 @@ def submit_partner_payout_account(
         verifier = get_bank_account_verifier()
     except PayoutProviderError as exc:
         raise PayoutAccountsUnavailableApiError() from exc
+    fingerprint = bank_account_fingerprint(ifsc=ifsc, account_number=account_number)
+    # Refused before the bank is asked or the provider is told about an account that another
+    # Partner already holds: neither call should happen for it.
+    if _held_by_another_partner(partner_id=partner.id, account_fingerprint=fingerprint):
+        raise PayoutAccountInUseApiError()
     check = _check_with_bank(
         verifier, account_number=account_number, ifsc=ifsc, holder_name=holder_name
     )
@@ -1118,14 +1164,9 @@ def submit_partner_payout_account(
         raise PayoutAccountRejectedApiError() from exc
     except PayoutProviderAmbiguousError as exc:
         raise PayoutAccountProviderApiError() from exc
-    if (
-        PartnerPayoutAccount.objects.filter(
-            provider_fund_account_id=fund_account_id,
-            status__in=(PartnerPayoutAccount.Status.PENDING, PartnerPayoutAccount.Status.VERIFIED),
-        )
-        .exclude(partner_id=partner.id)
-        .exists()
-    ):
+    # Accounts added before fingerprints existed have none, so they are matched by the provider's
+    # id instead: Cashfree hands back the existing beneficiary for an account it already holds.
+    if _held_by_another_partner(partner_id=partner.id, provider_fund_account_id=fund_account_id):
         raise PayoutAccountInUseApiError()
 
     return register_payout_account(
@@ -1138,6 +1179,7 @@ def submit_partner_payout_account(
         provider_fund_account_id=fund_account_id,
         bank_check=check,
         bank_check_provider=verifier.code if verifier is not None else "",
+        account_fingerprint=fingerprint,
     )
 
 

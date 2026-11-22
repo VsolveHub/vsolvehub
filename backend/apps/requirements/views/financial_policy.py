@@ -10,7 +10,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.catalog.models import ServiceVariant
+from apps.catalog.models import Service, ServiceVariant
 from apps.identity.models import User
 from apps.partners.permissions import IsOperationsUser
 from apps.requirements import financials
@@ -109,24 +109,33 @@ class OperationsTaxCategoryListView(APIView):
         responses={200: TaxCategoryUsageSerializer(many=True)},
     )
     def get(self, _request: Request) -> Response:
-        services: dict[str, set[str]] = defaultdict(set)
-        crew_and_project: dict[str, set[str]] = defaultdict(set)
+        # Service id → name, so two services that share a name are still counted twice.
+        services: dict[str, dict[Any, str]] = defaultdict(dict)
+        crew_and_project: dict[str, set[Any]] = defaultdict(set)
         variants = (
-            ServiceVariant.objects.filter(is_active=True)
+            ServiceVariant.objects.filter(
+                is_active=True,
+                # Bookable services only, by the catalogue's own rule (`apps.catalog.selectors`).
+                # A draft, paused or retired service, or one under a hidden subcategory or
+                # category, is priced by no policy, so it must not make Operations add a rate.
+                service__status=Service.Status.ACTIVE,
+                service__subcategory__is_active=True,
+                service__subcategory__category__is_active=True,
+            )
             .exclude(tax_category_code="")
-            .values_list("tax_category_code", "booking_archetype", "service__name")
+            .values_list("tax_category_code", "booking_archetype", "service_id", "service__name")
         )
-        for code, archetype, service_name in variants:
-            services[code].add(service_name)
+        for code, archetype, service_id, service_name in variants:
+            services[code][service_id] = service_name
             if archetype in CREW_AND_PROJECT_ARCHETYPES:
-                crew_and_project[code].add(service_name)
+                crew_and_project[code].add(service_id)
         rows = [
             {
                 "code": code,
-                "service_count": len(names),
+                "service_count": len(named),
                 "crew_and_project_service_count": len(crew_and_project[code]),
-                "example_services": sorted(names)[:TAX_CATEGORY_EXAMPLES],
+                "example_services": sorted(set(named.values()))[:TAX_CATEGORY_EXAMPLES],
             }
-            for code, names in sorted(services.items())
+            for code, named in sorted(services.items())
         ]
         return Response(TaxCategoryUsageSerializer(cast(Any, rows), many=True).data)
