@@ -35,11 +35,14 @@ describe("chrome", () => {
     expect(focusedHeaderTitle("/work/offers/1", null)).toBe("Work Offer");
     expect(focusedHeaderTitle("/work/enquiries/1/arrival", null)).toBe("Arrival code");
     expect(focusedHeaderTitle("/work/jobs/1", "Custom")).toBe("Custom");
+    expect(focusedHeaderTitle("/me/profile", null)).toBe("Profile");
   });
 
   it("keeps tabs off apply and on home", () => {
     expect(getPartnerChromeMode("/apply/about")).toBe("onboarding");
     expect(getPartnerChromeMode("/home")).toBe("full");
+    expect(getPartnerChromeMode("/me")).toBe("full");
+    expect(getPartnerChromeMode("/me/profile")).toBe("focused");
     expect(getPartnerChromeMode("/work/offers/1")).toBe("focused");
     expect(routeRequiresPartnerRole("/home")).toBe(false);
     expect(routeRequiresPartnerRole("/money")).toBe(true);

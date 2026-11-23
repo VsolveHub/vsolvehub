@@ -4,7 +4,6 @@ import { Badge, Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
-import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
 import { Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -91,23 +90,11 @@ export function PartnerDocumentsView() {
     }
   }
 
-  const back = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Back to profile"
-      onPress={() => (router.canGoBack() ? router.back() : router.replace("/me" as never))}
-      className="flex-row items-center gap-1.5 self-start"
-    >
-      <ChevronLeft size={18} color="#00112e" />
-      <Text className="text-sm font-semibold text-text-secondary">Back to Profile</Text>
-    </Pressable>
-  );
-
   const container = (children: React.ReactNode) => (
     <ScrollView
       className="flex-1 bg-canvas"
       contentContainerClassName="gap-4 px-4"
-      contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 32 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -121,7 +108,6 @@ export function PartnerDocumentsView() {
         />
       }
     >
-      {back}
       {children}
     </ScrollView>
   );

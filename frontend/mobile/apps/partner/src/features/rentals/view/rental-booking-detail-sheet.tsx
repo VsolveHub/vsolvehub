@@ -154,22 +154,29 @@ export function RentalBookingDetailSheet({
           <Text className="text-xs font-bold uppercase tracking-wider text-text-secondary">
             Renter Details
           </Text>
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2">
-              <User size={15} color={COLOR_TOKENS.text} />
-              <Text className="text-sm font-bold text-navy-900">
-                {booking.customer_name || "Customer"}
-              </Text>
+          <View className="flex-row items-center justify-between gap-3">
+            <View className="flex-1 min-w-0 flex-col gap-0.5">
+              <View className="flex-row items-center gap-2">
+                <User size={15} color={COLOR_TOKENS.text} />
+                <Text className="flex-1 text-sm font-bold text-navy-900" numberOfLines={1}>
+                  {booking.customer_name || "Customer"}
+                </Text>
+              </View>
+              {booking.customer_phone ? (
+                <Text className="pl-6 text-xs font-medium text-text-secondary">
+                  {booking.customer_phone}
+                </Text>
+              ) : null}
             </View>
             {booking.customer_phone ? (
               <Button
                 variant="secondary"
                 size="sm"
                 onPress={handleCall}
-                className="h-7 flex-row items-center gap-1.5 px-3"
+                className="h-8 shrink-0 flex-row items-center gap-1.5 px-3"
               >
                 <Phone size={12} color={COLOR_TOKENS.action} />
-                <Text className="text-xs font-semibold text-brand">{booking.customer_phone}</Text>
+                <Text className="text-xs font-semibold text-white">Call</Text>
               </Button>
             ) : null}
           </View>

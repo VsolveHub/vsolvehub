@@ -41,17 +41,17 @@ export function RentalBookingCard({
       onPress={() => onViewDetails?.(booking)}
       className="active:scale-[0.99]"
     >
-      <Card className="border border-line bg-surface p-4 shadow-sm active:border-line-strong active:shadow-raised">
-        <View className="flex-row items-center justify-between border-b border-line/60 pb-3">
-          <View>
+      <Card padding="md" className="border border-line bg-surface shadow-sm active:border-line-strong active:shadow-raised">
+        <View className="border-b border-line/60 pb-3">
+          <View className="flex-row items-center justify-between gap-2">
             <Text className="text-xs font-semibold text-text-muted">
               Order #{booking.booking_code || booking.id.slice(0, 8).toUpperCase()}
             </Text>
-            <Text className="mt-0.5 text-base font-bold text-text">
-              {booking.asset?.title || "Rental Equipment"}
-            </Text>
+            <Badge tone={badge.tone}>{badge.label}</Badge>
           </View>
-          <Badge tone={badge.tone}>{badge.label}</Badge>
+          <Text className="mt-1.5 text-base font-bold text-text">
+            {booking.asset?.title || "Rental Equipment"}
+          </Text>
         </View>
 
         <View className="mt-3 flex-col gap-2">
@@ -68,10 +68,10 @@ export function RentalBookingCard({
                 variant="secondary"
                 size="sm"
                 onPress={handleCall}
-                className="h-7 flex-row items-center gap-1.5 px-2.5"
+                className="h-8 flex-row items-center gap-1.5 px-3"
               >
                 <Phone size={12} color={COLOR_TOKENS.action} />
-                <Text className="text-xs font-semibold text-brand">Call Renter</Text>
+                <Text className="text-xs font-semibold text-white">Call Renter</Text>
               </Button>
             ) : null}
           </View>
@@ -100,17 +100,17 @@ export function RentalBookingCard({
           </View>
         </View>
 
-        {/* D1: Single summary row action matching web parity */}
-        <View className="mt-3 flex-row items-center justify-end pt-1">
-          <Button
-            variant="ghost"
-            size="sm"
+        {/* Action Footer */}
+        <View className="mt-3.5 border-t border-line/60 pt-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="View booking details"
             onPress={() => onViewDetails?.(booking)}
-            className="h-8 flex-row items-center gap-1 px-2"
+            className="h-10 w-full flex-row items-center justify-center gap-1.5 rounded-xl border border-line bg-surface active:bg-surface-sunken"
           >
-            <Text className="text-xs font-semibold text-navy-900">View booking</Text>
-            <ChevronRight size={14} color={COLOR_TOKENS.text} />
-          </Button>
+            <Text className="text-xs font-bold text-navy-900">View booking</Text>
+            <ChevronRight size={14} color="#00112e" />
+          </Pressable>
         </View>
       </Card>
     </Pressable>
