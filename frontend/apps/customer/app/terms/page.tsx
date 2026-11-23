@@ -151,6 +151,61 @@ const SECTIONS: LegalSection[] = [
     ),
   },
   {
+    id: "pick-up-and-drop",
+    title: "Pick up & Drop",
+    body: (
+      <>
+        <p>
+          Pick up &amp; Drop lets you send or receive a package by bike or auto: a captain takes it
+          from one place to another. These rules apply to it as well as the rest of these terms.
+        </p>
+        <ul>
+          <li>
+            <strong>Not insured.</strong> Items are not insured. Please do not send anything worth
+            more than ₹5,000.
+          </li>
+          <li>
+            <strong>Package guidelines.</strong> Your package must be securely sealed and ready for
+            pickup, and must fit the vehicle you choose. The most each vehicle takes, in weight and
+            size, is shown on the review screen before you confirm. By confirming, you agree your
+            package follows these guidelines and is not on the prohibited list.
+          </li>
+          <li>
+            <strong>Prohibited items.</strong> We do not carry:
+            <ul>
+              <li>weapons and ammunition;</li>
+              <li>fireworks and explosives;</li>
+              <li>gas cylinders, fuel and other flammable or hazardous chemicals;</li>
+              <li>drugs and narcotics;</li>
+              <li>alcohol;</li>
+              <li>cash, currency, cheques and securities;</li>
+              <li>gold, silver, jewellery and precious stones;</li>
+              <li>live animals; and</li>
+              <li>anything illegal.</li>
+            </ul>
+          </li>
+          <li>
+            <strong>The captain may refuse an item.</strong> At the pickup, a captain may refuse a
+            package that is too heavy or too big for the vehicle, is not sealed, or is on the
+            prohibited list. The booking is then cancelled, you are not charged, and the package is
+            not offered to another captain.
+          </li>
+          <li>
+            <strong>Who pays.</strong> When you book, you choose whether the sender or the receiver
+            pays. The sender pays the captain at the pickup, and the receiver pays the captain at
+            the drop, in cash or by UPI. A package is not handed to a receiver who has not paid.
+          </li>
+          <li>
+            <strong>If the receiver is not available.</strong> After a short wait, the captain may
+            bring the package back to the pickup. The return trip is charged, and everything still
+            due, including the return trip and the fare if the receiver was to pay, is paid by the
+            sender to the captain at the pickup. Amounts left unpaid may be followed up by us.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
     id: "liability",
     title: "Our responsibility to you",
     body: (

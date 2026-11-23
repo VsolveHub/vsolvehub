@@ -41,10 +41,10 @@ describe("rides model", () => {
     expect(cancelReasonError("Rider called support")).toBeNull();
   });
 
-  it("asks the server for all four open states on the Live filter", () => {
+  it("asks the server for every open state on the Live filter, including a parcel coming back", () => {
     expect(RIDE_FILTERS[0]).toMatchObject({
       key: "live",
-      states: "SEARCHING,CAPTAIN_ASSIGNED,CAPTAIN_ARRIVED,IN_TRIP",
+      states: "SEARCHING,CAPTAIN_ASSIGNED,CAPTAIN_ARRIVED,IN_TRIP,RETURNING",
     });
   });
 
