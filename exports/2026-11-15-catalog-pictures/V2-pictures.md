@@ -79,143 +79,143 @@ Show one worker doing the job on a real building site.
 
 ### Event & Media › Photography (17)
 
-- [ ] **Event Photography**: `catalog-v2/event-media/photography/event-photography.jpeg`
-- [ ] **Birthday Photography**: `catalog-v2/event-media/photography/birthday-photography.jpeg`
-- [ ] **Wedding Photography**: `catalog-v2/event-media/photography/wedding-photography.jpeg`
-- [ ] **Pre-Wedding Shoot**: `catalog-v2/event-media/photography/pre-wedding-shoot.jpeg`
-- [ ] **Engagement Photography**: `catalog-v2/event-media/photography/engagement-photography.jpeg`
-- [ ] **Reception Photography**: `catalog-v2/event-media/photography/reception-photography.jpeg`
-- [ ] **Baby Shoot**: `catalog-v2/event-media/photography/baby-shoot.jpeg`
-- [ ] **Kids Photography**: `catalog-v2/event-media/photography/kids-photography.jpeg`
-- [ ] **Maternity Shoot**: `catalog-v2/event-media/photography/maternity-shoot.jpeg`
-- [ ] **Family Shoot**: `catalog-v2/event-media/photography/family-shoot.jpeg`
-- [ ] **Portfolio Shoot**: `catalog-v2/event-media/photography/portfolio-shoot.jpeg`
-- [ ] **Product Photography**: `catalog-v2/event-media/photography/product-photography.jpeg`
-- [ ] **Food Photography**: `catalog-v2/event-media/photography/food-photography.jpeg`
-- [ ] **Real Estate Photography**: `catalog-v2/event-media/photography/real-estate-photography.jpeg`
-- [ ] **Corporate Event Photography**: `catalog-v2/event-media/photography/corporate-event-photography.jpeg`
-- [ ] **Candid Photography**: `catalog-v2/event-media/photography/candid-photography.jpeg`
-- [ ] **Traditional Photography**: `catalog-v2/event-media/photography/traditional-photography.jpeg`
+- [x] **Event Photography**: `catalog-v2/event-media/photography/event-photography.jpeg`
+- [x] **Birthday Photography**: `catalog-v2/event-media/photography/birthday-photography.jpeg`
+- [x] **Wedding Photography**: `catalog-v2/event-media/photography/wedding-photography.jpeg`
+- [x] **Pre-Wedding Shoot**: `catalog-v2/event-media/photography/pre-wedding-shoot.jpeg`
+- [x] **Engagement Photography**: `catalog-v2/event-media/photography/engagement-photography.jpeg`
+- [x] **Reception Photography**: `catalog-v2/event-media/photography/reception-photography.jpeg`
+- [x] **Baby Shoot**: `catalog-v2/event-media/photography/baby-shoot.jpeg`
+- [x] **Kids Photography**: `catalog-v2/event-media/photography/kids-photography.jpeg`
+- [x] **Maternity Shoot**: `catalog-v2/event-media/photography/maternity-shoot.jpeg`
+- [x] **Family Shoot**: `catalog-v2/event-media/photography/family-shoot.jpeg`
+- [x] **Portfolio Shoot**: `catalog-v2/event-media/photography/portfolio-shoot.jpeg`
+- [x] **Product Photography**: `catalog-v2/event-media/photography/product-photography.jpeg`
+- [x] **Food Photography**: `catalog-v2/event-media/photography/food-photography.jpeg`
+- [x] **Real Estate Photography**: `catalog-v2/event-media/photography/real-estate-photography.jpeg`
+- [x] **Corporate Event Photography**: `catalog-v2/event-media/photography/corporate-event-photography.jpeg`
+- [x] **Candid Photography**: `catalog-v2/event-media/photography/candid-photography.jpeg`
+- [x] **Traditional Photography**: `catalog-v2/event-media/photography/traditional-photography.jpeg`
 
 ### Event & Media › Videography (15)
 
-- [ ] **Event Videography**: `catalog-v2/event-media/videography/event-videography.jpeg`
-- [ ] **Wedding Videography**: `catalog-v2/event-media/videography/wedding-videography.jpeg`
-- [ ] **Pre-Wedding Video**: `catalog-v2/event-media/videography/pre-wedding-video.jpeg`
-- [ ] **Engagement Video**: `catalog-v2/event-media/videography/engagement-video.jpeg`
-- [ ] **Birthday Videography**: `catalog-v2/event-media/videography/birthday-videography.jpeg`
-- [ ] **Drone Videography**: `catalog-v2/event-media/videography/drone-videography.jpeg`
-- [ ] **Corporate Video Shoot**: `catalog-v2/event-media/videography/corporate-video-shoot.jpeg`
-- [ ] **YouTube Video Shoot**: `catalog-v2/event-media/videography/youtube-video-shoot.jpeg`
-- [ ] **Instagram Reels Shoot**: `catalog-v2/event-media/videography/instagram-reels-shoot.jpeg`
-- [ ] **Short Film Shoot**: `catalog-v2/event-media/videography/short-film-shoot.jpeg`
-- [ ] **Documentary Video**: `catalog-v2/event-media/videography/documentary-video.jpeg`
-- [ ] **Promotional Video**: `catalog-v2/event-media/videography/promotional-video.jpeg`
-- [ ] **Real Estate Video**: `catalog-v2/event-media/videography/real-estate-video.jpeg`
-- [ ] **Product Video Shoot**: `catalog-v2/event-media/videography/product-video-shoot.jpeg`
-- [ ] **Cinematic Video Shoot**: `catalog-v2/event-media/videography/cinematic-video-shoot.jpeg`
+- [x] **Event Videography**: `catalog-v2/event-media/videography/event-videography.jpeg`
+- [x] **Wedding Videography**: `catalog-v2/event-media/videography/wedding-videography.jpeg`
+- [x] **Pre-Wedding Video**: `catalog-v2/event-media/videography/pre-wedding-video.jpeg`
+- [x] **Engagement Video**: `catalog-v2/event-media/videography/engagement-video.jpeg`
+- [x] **Birthday Videography**: `catalog-v2/event-media/videography/birthday-videography.jpeg`
+- [x] **Drone Videography**: `catalog-v2/event-media/videography/drone-videography.jpeg`
+- [x] **Corporate Video Shoot**: `catalog-v2/event-media/videography/corporate-video-shoot.jpeg`
+- [x] **YouTube Video Shoot**: `catalog-v2/event-media/videography/youtube-video-shoot.jpeg`
+- [x] **Instagram Reels Shoot**: `catalog-v2/event-media/videography/instagram-reels-shoot.jpeg`
+- [x] **Short Film Shoot**: `catalog-v2/event-media/videography/short-film-shoot.jpeg`
+- [x] **Documentary Video**: `catalog-v2/event-media/videography/documentary-video.jpeg`
+- [x] **Promotional Video**: `catalog-v2/event-media/videography/promotional-video.jpeg`
+- [x] **Real Estate Video**: `catalog-v2/event-media/videography/real-estate-video.jpeg`
+- [x] **Product Video Shoot**: `catalog-v2/event-media/videography/product-video-shoot.jpeg`
+- [x] **Cinematic Video Shoot**: `catalog-v2/event-media/videography/cinematic-video-shoot.jpeg`
 
 ### Event & Media › Video Editing (10)
 
-- [ ] **Basic Video Editing**: `catalog-v2/event-media/video-editing/basic-video-editing.jpeg`
-- [ ] **Advanced Editing**: `catalog-v2/event-media/video-editing/advanced-editing.jpeg`
-- [ ] **Wedding Highlight Video**: `catalog-v2/event-media/video-editing/wedding-highlight-video.jpeg`
-- [ ] **Full Wedding Film Editing**: `catalog-v2/event-media/video-editing/full-wedding-film-editing.jpeg`
-- [ ] **Reels Editing**: `catalog-v2/event-media/video-editing/reels-editing.jpeg`
-- [ ] **YouTube Editing**: `catalog-v2/event-media/video-editing/youtube-editing.jpeg`
-- [ ] **Color Grading**: `catalog-v2/event-media/video-editing/color-grading.jpeg`
-- [ ] **Motion Graphics Editing**: `catalog-v2/event-media/video-editing/motion-graphics-editing.jpeg`
-- [ ] **Subtitle Editing**: `catalog-v2/event-media/video-editing/subtitle-editing.jpeg`
-- [ ] **Promo Video Editing**: `catalog-v2/event-media/video-editing/promo-video-editing.jpeg`
+- [x] **Basic Video Editing**: `catalog-v2/event-media/video-editing/basic-video-editing.jpeg`
+- [x] **Advanced Editing**: `catalog-v2/event-media/video-editing/advanced-editing.jpeg`
+- [x] **Wedding Highlight Video**: `catalog-v2/event-media/video-editing/wedding-highlight-video.jpeg`
+- [x] **Full Wedding Film Editing**: `catalog-v2/event-media/video-editing/full-wedding-film-editing.jpeg`
+- [x] **Reels Editing**: `catalog-v2/event-media/video-editing/reels-editing.jpeg`
+- [x] **YouTube Editing**: `catalog-v2/event-media/video-editing/youtube-editing.jpeg`
+- [x] **Color Grading**: `catalog-v2/event-media/video-editing/color-grading.jpeg`
+- [x] **Motion Graphics Editing**: `catalog-v2/event-media/video-editing/motion-graphics-editing.jpeg`
+- [x] **Subtitle Editing**: `catalog-v2/event-media/video-editing/subtitle-editing.jpeg`
+- [x] **Promo Video Editing**: `catalog-v2/event-media/video-editing/promo-video-editing.jpeg`
 
 ### Event & Media › Photo Editing (8)
 
-- [ ] **Basic Photo Editing**: `catalog-v2/event-media/photo-editing/basic-photo-editing.jpeg`
-- [ ] **Advanced Editing**: `catalog-v2/event-media/photo-editing/advanced-editing.jpeg`
-- [ ] **Wedding Album Editing**: `catalog-v2/event-media/photo-editing/wedding-album-editing.jpeg`
-- [ ] **Skin Retouching**: `catalog-v2/event-media/photo-editing/skin-retouching.jpeg`
-- [ ] **Color Correction**: `catalog-v2/event-media/photo-editing/color-correction.jpeg`
-- [ ] **Background Removal**: `catalog-v2/event-media/photo-editing/background-removal.jpeg`
-- [ ] **Photo Enhancement**: `catalog-v2/event-media/photo-editing/photo-enhancement.jpeg`
-- [ ] **AI Photo Restoration**: `catalog-v2/event-media/photo-editing/ai-photo-restoration.jpeg`
+- [x] **Basic Photo Editing**: `catalog-v2/event-media/photo-editing/basic-photo-editing.jpeg`
+- [x] **Advanced Editing**: `catalog-v2/event-media/photo-editing/advanced-editing.jpeg`
+- [x] **Wedding Album Editing**: `catalog-v2/event-media/photo-editing/wedding-album-editing.jpeg`
+- [x] **Skin Retouching**: `catalog-v2/event-media/photo-editing/skin-retouching.jpeg`
+- [x] **Color Correction**: `catalog-v2/event-media/photo-editing/color-correction.jpeg`
+- [x] **Background Removal**: `catalog-v2/event-media/photo-editing/background-removal.jpeg`
+- [x] **Photo Enhancement**: `catalog-v2/event-media/photo-editing/photo-enhancement.jpeg`
+- [x] **AI Photo Restoration**: `catalog-v2/event-media/photo-editing/ai-photo-restoration.jpeg`
 
 ### Event & Media › Album & Printing (8)
 
-- [ ] **Wedding Album Design**: `catalog-v2/event-media/album-printing/wedding-album-design.jpeg`
-- [ ] **Birthday Album**: `catalog-v2/event-media/album-printing/birthday-album.jpeg`
-- [ ] **Premium Album Printing**: `catalog-v2/event-media/album-printing/premium-album-printing.jpeg`
-- [ ] **Digital Album**: `catalog-v2/event-media/album-printing/digital-album.jpeg`
-- [ ] **Photo Printing**: `catalog-v2/event-media/album-printing/photo-printing.jpeg`
-- [ ] **Frame Printing**: `catalog-v2/event-media/album-printing/frame-printing.jpeg`
-- [ ] **Canvas Printing**: `catalog-v2/event-media/album-printing/canvas-printing.jpeg`
-- [ ] **Photo Book Design**: `catalog-v2/event-media/album-printing/photo-book-design.jpeg`
+- [x] **Wedding Album Design**: `catalog-v2/event-media/album-printing/wedding-album-design.jpeg`
+- [x] **Birthday Album**: `catalog-v2/event-media/album-printing/birthday-album.jpeg`
+- [x] **Premium Album Printing**: `catalog-v2/event-media/album-printing/premium-album-printing.jpeg`
+- [x] **Digital Album**: `catalog-v2/event-media/album-printing/digital-album.jpeg`
+- [x] **Photo Printing**: `catalog-v2/event-media/album-printing/photo-printing.jpeg`
+- [x] **Frame Printing**: `catalog-v2/event-media/album-printing/frame-printing.jpeg`
+- [x] **Canvas Printing**: `catalog-v2/event-media/album-printing/canvas-printing.jpeg`
+- [x] **Photo Book Design**: `catalog-v2/event-media/album-printing/photo-book-design.jpeg`
 
 ### Event & Media › Decoration (15)
 
 *This tile is already in the app. Only the service photos are needed.*
 
-- [ ] **Site Visit & Consultation**: `catalog-v2/event-media/decoration/site-visit-consultation.jpeg`
-- [ ] **Birthday Decoration**: `catalog-v2/event-media/decoration/birthday-decoration.jpeg`
-- [ ] **Balloon Decoration**: `catalog-v2/event-media/decoration/balloon-decoration.jpeg`
-- [ ] **Wedding Decoration**: `catalog-v2/event-media/decoration/wedding-decoration.jpeg`
-- [ ] **Engagement Decoration**: `catalog-v2/event-media/decoration/engagement-decoration.jpeg`
-- [ ] **Reception Decoration**: `catalog-v2/event-media/decoration/reception-decoration.jpeg`
-- [ ] **Haldi Decoration**: `catalog-v2/event-media/decoration/haldi-decoration.jpeg`
-- [ ] **Sangeet Decoration**: `catalog-v2/event-media/decoration/sangeet-decoration.jpeg`
-- [ ] **Stage Decoration**: `catalog-v2/event-media/decoration/stage-decoration.jpeg`
-- [ ] **Flower Decoration**: `catalog-v2/event-media/decoration/flower-decoration.jpeg`
-- [ ] **Theme Decoration**: `catalog-v2/event-media/decoration/theme-decoration.jpeg`
-- [ ] **Baby Shower Decoration**: `catalog-v2/event-media/decoration/baby-shower-decoration.jpeg`
-- [ ] **Anniversary Decoration**: `catalog-v2/event-media/decoration/anniversary-decoration.jpeg`
-- [ ] **Naming Ceremony Decoration**: `catalog-v2/event-media/decoration/naming-ceremony-decoration.jpeg`
-- [ ] **Corporate Event Decoration**: `catalog-v2/event-media/decoration/corporate-event-decoration.jpeg`
+- [x] **Site Visit & Consultation**: `catalog-v2/event-media/decoration/site-visit-consultation.jpeg`
+- [x] **Birthday Decoration**: `catalog-v2/event-media/decoration/birthday-decoration.jpeg`
+- [x] **Balloon Decoration**: `catalog-v2/event-media/decoration/balloon-decoration.jpeg`
+- [x] **Wedding Decoration**: `catalog-v2/event-media/decoration/wedding-decoration.jpeg`
+- [x] **Engagement Decoration**: `catalog-v2/event-media/decoration/engagement-decoration.jpeg`
+- [x] **Reception Decoration**: `catalog-v2/event-media/decoration/reception-decoration.jpeg`
+- [x] **Haldi Decoration**: `catalog-v2/event-media/decoration/haldi-decoration.jpeg`
+- [x] **Sangeet Decoration**: `catalog-v2/event-media/decoration/sangeet-decoration.jpeg`
+- [x] **Stage Decoration**: `catalog-v2/event-media/decoration/stage-decoration.jpeg`
+- [x] **Flower Decoration**: `catalog-v2/event-media/decoration/flower-decoration.jpeg`
+- [x] **Theme Decoration**: `catalog-v2/event-media/decoration/theme-decoration.jpeg`
+- [x] **Baby Shower Decoration**: `catalog-v2/event-media/decoration/baby-shower-decoration.jpeg`
+- [x] **Anniversary Decoration**: `catalog-v2/event-media/decoration/anniversary-decoration.jpeg`
+- [x] **Naming Ceremony Decoration**: `catalog-v2/event-media/decoration/naming-ceremony-decoration.jpeg`
+- [x] **Corporate Event Decoration**: `catalog-v2/event-media/decoration/corporate-event-decoration.jpeg`
 
 ### Event & Media › Catering (8)
 
 *This tile is already in the app. Only the service photos are needed.*
 
-- [ ] **Veg Catering**: `catalog-v2/event-media/catering/veg-catering.jpeg`
-- [ ] **Non-Veg Catering**: `catalog-v2/event-media/catering/non-veg-catering.jpeg`
-- [ ] **Buffet Setup**: `catalog-v2/event-media/catering/buffet-setup.jpeg`
-- [ ] **Snacks Catering**: `catalog-v2/event-media/catering/snacks-catering.jpeg`
-- [ ] **Full Meal Catering**: `catalog-v2/event-media/catering/full-meal-catering.jpeg`
-- [ ] **Live Food Counter**: `catalog-v2/event-media/catering/live-food-counter.jpeg`
-- [ ] **Outdoor Catering**: `catalog-v2/event-media/catering/outdoor-catering.jpeg`
-- [ ] **Corporate Catering**: `catalog-v2/event-media/catering/corporate-catering.jpeg`
+- [x] **Veg Catering**: `catalog-v2/event-media/catering/veg-catering.jpeg`
+- [x] **Non-Veg Catering**: `catalog-v2/event-media/catering/non-veg-catering.jpeg`
+- [x] **Buffet Setup**: `catalog-v2/event-media/catering/buffet-setup.jpeg`
+- [x] **Snacks Catering**: `catalog-v2/event-media/catering/snacks-catering.jpeg`
+- [x] **Full Meal Catering**: `catalog-v2/event-media/catering/full-meal-catering.jpeg`
+- [x] **Live Food Counter**: `catalog-v2/event-media/catering/live-food-counter.jpeg`
+- [x] **Outdoor Catering**: `catalog-v2/event-media/catering/outdoor-catering.jpeg`
+- [x] **Corporate Catering**: `catalog-v2/event-media/catering/corporate-catering.jpeg`
 
 ### Event & Media › DJ & Sound (10)
 
-- [ ] **Site Visit & Consultation**: `catalog-v2/event-media/dj-sound/site-visit-consultation.jpeg`
-- [ ] **DJ Setup**: `catalog-v2/event-media/dj-sound/dj-setup.jpeg`
-- [ ] **Sound System Setup**: `catalog-v2/event-media/dj-sound/sound-system-setup.jpeg`
-- [ ] **Stage Sound Setup**: `catalog-v2/event-media/dj-sound/stage-sound-setup.jpeg`
-- [ ] **Lighting Setup**: `catalog-v2/event-media/dj-sound/lighting-setup.jpeg`
-- [ ] **DJ Lights Setup**: `catalog-v2/event-media/dj-sound/dj-lights-setup.jpeg`
-- [ ] **Smoke Machine Setup**: `catalog-v2/event-media/dj-sound/smoke-machine-setup.jpeg`
-- [ ] **Live Band Setup**: `catalog-v2/event-media/dj-sound/live-band-setup.jpeg`
-- [ ] **LED Wall Setup**: `catalog-v2/event-media/dj-sound/led-wall-setup.jpeg`
-- [ ] **Laser Show Setup**: `catalog-v2/event-media/dj-sound/laser-show-setup.jpeg`
+- [x] **Site Visit & Consultation**: `catalog-v2/event-media/dj-sound/site-visit-consultation.jpeg`
+- [x] **DJ Setup**: `catalog-v2/event-media/dj-sound/dj-setup.jpeg`
+- [x] **Sound System Setup**: `catalog-v2/event-media/dj-sound/sound-system-setup.jpeg`
+- [x] **Stage Sound Setup**: `catalog-v2/event-media/dj-sound/stage-sound-setup.jpeg`
+- [x] **Lighting Setup**: `catalog-v2/event-media/dj-sound/lighting-setup.jpeg`
+- [x] **DJ Lights Setup**: `catalog-v2/event-media/dj-sound/dj-lights-setup.jpeg`
+- [x] **Smoke Machine Setup**: `catalog-v2/event-media/dj-sound/smoke-machine-setup.jpeg`
+- [x] **Live Band Setup**: `catalog-v2/event-media/dj-sound/live-band-setup.jpeg`
+- [x] **LED Wall Setup**: `catalog-v2/event-media/dj-sound/led-wall-setup.jpeg`
+- [x] **Laser Show Setup**: `catalog-v2/event-media/dj-sound/laser-show-setup.jpeg`
 
 ### Event & Media › Event Management (9)
 
-- [ ] **Event Consultation**: `catalog-v2/event-media/event-management/event-consultation.jpeg`
-- [ ] **Full Event Management**: `catalog-v2/event-media/event-management/full-event-management.jpeg`
-- [ ] **Wedding Planning**: `catalog-v2/event-media/event-management/wedding-planning.jpeg`
-- [ ] **Birthday Planning**: `catalog-v2/event-media/event-management/birthday-planning.jpeg`
-- [ ] **Corporate Event Management**: `catalog-v2/event-media/event-management/corporate-event-management.jpeg`
-- [ ] **Event Coordination**: `catalog-v2/event-media/event-management/event-coordination.jpeg`
-- [ ] **Anchor / Host**: `catalog-v2/event-media/event-management/anchor-host.jpeg`
-- [ ] **Celebrity Management**: `catalog-v2/event-media/event-management/celebrity-management.jpeg`
-- [ ] **Destination Wedding Planning**: `catalog-v2/event-media/event-management/destination-wedding-planning.jpeg`
+- [x] **Event Consultation**: `catalog-v2/event-media/event-management/event-consultation.jpeg`
+- [x] **Full Event Management**: `catalog-v2/event-media/event-management/full-event-management.jpeg`
+- [x] **Wedding Planning**: `catalog-v2/event-media/event-management/wedding-planning.jpeg`
+- [x] **Birthday Planning**: `catalog-v2/event-media/event-management/birthday-planning.jpeg`
+- [x] **Corporate Event Management**: `catalog-v2/event-media/event-management/corporate-event-management.jpeg`
+- [x] **Event Coordination**: `catalog-v2/event-media/event-management/event-coordination.jpeg`
+- [x] **Anchor / Host**: `catalog-v2/event-media/event-management/anchor-host.jpeg`
+- [x] **Celebrity Management**: `catalog-v2/event-media/event-management/celebrity-management.jpeg`
+- [x] **Destination Wedding Planning**: `catalog-v2/event-media/event-management/destination-wedding-planning.jpeg`
 
 ### Event & Media › Entertainment Services (9)
 
-- [ ] **Magician Show**: `catalog-v2/event-media/entertainment-services/magician-show.jpeg`
-- [ ] **Dance Performance**: `catalog-v2/event-media/entertainment-services/dance-performance.jpeg`
-- [ ] **Live Singer**: `catalog-v2/event-media/entertainment-services/live-singer.jpeg`
-- [ ] **Anchor / MC**: `catalog-v2/event-media/entertainment-services/anchor-mc.jpeg`
-- [ ] **Kids Entertainment**: `catalog-v2/event-media/entertainment-services/kids-entertainment.jpeg`
-- [ ] **Fireworks Show**: `catalog-v2/event-media/entertainment-services/fireworks-show.jpeg`
-- [ ] **Game Organizer**: `catalog-v2/event-media/entertainment-services/game-organizer.jpeg`
-- [ ] **Mimicry Show**: `catalog-v2/event-media/entertainment-services/mimicry-show.jpeg`
-- [ ] **Stand-up Comedy**: `catalog-v2/event-media/entertainment-services/stand-up-comedy.jpeg`
+- [x] **Magician Show**: `catalog-v2/event-media/entertainment-services/magician-show.jpeg`
+- [x] **Dance Performance**: `catalog-v2/event-media/entertainment-services/dance-performance.jpeg`
+- [x] **Live Singer**: `catalog-v2/event-media/entertainment-services/live-singer.jpeg`
+- [x] **Anchor / MC**: `catalog-v2/event-media/entertainment-services/anchor-mc.jpeg`
+- [x] **Kids Entertainment**: `catalog-v2/event-media/entertainment-services/kids-entertainment.jpeg`
+- [x] **Fireworks Show**: `catalog-v2/event-media/entertainment-services/fireworks-show.jpeg`
+- [x] **Game Organizer**: `catalog-v2/event-media/entertainment-services/game-organizer.jpeg`
+- [x] **Mimicry Show**: `catalog-v2/event-media/entertainment-services/mimicry-show.jpeg`
+- [x] **Stand-up Comedy**: `catalog-v2/event-media/entertainment-services/stand-up-comedy.jpeg`
