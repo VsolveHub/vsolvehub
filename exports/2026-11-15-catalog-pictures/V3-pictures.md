@@ -55,7 +55,7 @@ There are 3 kinds of picture in this file. Open the example links to see the sty
 
 ## Category icon
 
-- [ ] **Man Power & Support Staff** (show a group of workers, or a worker's ID card with a hard hat): `catalog-v2/categories/manpower.png`
+- [x] **Man Power & Support Staff** (show a group of workers, or a worker's ID card with a hard hat): `catalog-v2/categories/manpower.png`
 
 ## Tile pictures
 
@@ -63,44 +63,44 @@ These are the squares customers tap first, so do them first.
 
 ### Construction Labour (8)
 
-- [ ] **Architect** (show rolled house blueprints with a ruler): `tiles-v2/construction-labour/architect.jpeg`
-- [ ] **Civil Engineer** (show a hard hat resting on building drawings): `tiles-v2/construction-labour/civil-engineer.jpeg`
-- [ ] **Quantity Surveyor** (show a measuring tape, calculator and cost sheet): `tiles-v2/construction-labour/quantity-surveyor.jpeg`
-- [ ] **Site Supervisor** (show a hard hat with a clipboard): `tiles-v2/construction-labour/site-supervisor.jpeg`
-- [ ] **Project Manager** (show a project schedule board with a hard hat): `tiles-v2/construction-labour/project-manager.jpeg`
-- [ ] **False Ceiling Worker** (show a gypsum false-ceiling panel with recessed lights): `tiles-v2/construction-labour/false-ceiling-worker.jpeg`
-- [ ] **Glass & Aluminium Worker** (show an aluminium window frame with glass): `tiles-v2/construction-labour/glass-aluminium-worker.jpeg`
-- [ ] **UPVC Worker** (show a white UPVC window): `tiles-v2/construction-labour/upvc-worker.jpeg`
+- [x] **Architect** (show rolled house blueprints with a ruler): `tiles-v2/construction-labour/architect.jpeg`
+- [x] **Civil Engineer** (show a hard hat resting on building drawings): `tiles-v2/construction-labour/civil-engineer.jpeg`
+- [x] **Quantity Surveyor** (show a measuring tape, calculator and cost sheet): `tiles-v2/construction-labour/quantity-surveyor.jpeg`
+- [x] **Site Supervisor** (show a hard hat with a clipboard): `tiles-v2/construction-labour/site-supervisor.jpeg`
+- [x] **Project Manager** (show a project schedule board with a hard hat): `tiles-v2/construction-labour/project-manager.jpeg`
+- [x] **False Ceiling Worker** (show a gypsum false-ceiling panel with recessed lights): `tiles-v2/construction-labour/false-ceiling-worker.jpeg`
+- [x] **Glass & Aluminium Worker** (show an aluminium window frame with glass): `tiles-v2/construction-labour/glass-aluminium-worker.jpeg`
+- [x] **UPVC Worker** (show a white UPVC window): `tiles-v2/construction-labour/upvc-worker.jpeg`
 
 ### Technician (3)
 
-- [ ] **Watch Repair & Services** (show an open wristwatch with tiny repair tools): `tiles-v2/technician/watch-repair-services.jpeg`
-- [ ] **Solar Technician** (show a rooftop solar panel): `tiles-v2/technician/solar-technician.jpeg`
-- [ ] **Lift Technician** (show lift doors with call buttons): `tiles-v2/technician/lift-technician.jpeg`
+- [x] **Watch Repair & Services** (show an open wristwatch with tiny repair tools): `tiles-v2/technician/watch-repair-services.jpeg`
+- [x] **Solar Technician** (show a rooftop solar panel): `tiles-v2/technician/solar-technician.jpeg`
+- [x] **Lift Technician** (show lift doors with call buttons): `tiles-v2/technician/lift-technician.jpeg`
 
 ### Home Services (3)
 
-- [ ] **Borewell Services** (show a borewell pipe with a submersible pump): `tiles-v2/home-services/borewell-services.jpeg`
-- [ ] **Home Shifting** (show a moving truck with packed boxes): `tiles-v2/home-services/home-shifting.jpeg`
-- [ ] **Storage Services** (show a storage unit with stacked boxes): `tiles-v2/home-services/storage-services.jpeg`
+- [x] **Borewell Services** (show a borewell pipe with a submersible pump): `tiles-v2/home-services/borewell-services.jpeg`
+- [x] **Home Shifting** (show a moving truck with packed boxes): `tiles-v2/home-services/home-shifting.jpeg`
+- [x] **Storage Services** (show a storage unit with stacked boxes): `tiles-v2/home-services/storage-services.jpeg`
 
 ### Pet Services (5)
 
-- [ ] **Pet Boarding** (show a dog bed inside a clean kennel): `tiles-v2/pet-services/pet-boarding.jpeg`
-- [ ] **Pet Taxi** (show a small car with a pet carrier): `tiles-v2/pet-services/pet-taxi.jpeg`
-- [ ] **Pet Adoption** (show a puppy wearing a heart-shaped tag): `tiles-v2/pet-services/pet-adoption.jpeg`
-- [ ] **Pet Shop** (show a bag of pet food with toys): `tiles-v2/pet-services/pet-shop.jpeg`
-- [ ] **Pet Insurance** (show a paw print on a shield): `tiles-v2/pet-services/pet-insurance.jpeg`
+- [x] **Pet Boarding** (show a dog bed inside a clean kennel): `tiles-v2/pet-services/pet-boarding.jpeg`
+- [x] **Pet Taxi** (show a small car with a pet carrier): `tiles-v2/pet-services/pet-taxi.jpeg`
+- [x] **Pet Adoption** (show a puppy wearing a heart-shaped tag): `tiles-v2/pet-services/pet-adoption.jpeg`
+- [x] **Pet Shop** (show a bag of pet food with toys): `tiles-v2/pet-services/pet-shop.jpeg`
+- [x] **Pet Insurance** (show a paw print on a shield): `tiles-v2/pet-services/pet-insurance.jpeg`
 
 ### Man Power & Support Staff (7)
 
-- [ ] **Cleaning & Maintenance Staff** (show a cleaning cart with mop and bucket): `tiles-v2/manpower/cleaning-maintenance-staff.jpeg`
-- [ ] **Logistics & Handling** (show stacked cartons on a hand trolley): `tiles-v2/manpower/logistics-handling.jpeg`
-- [ ] **Drivers & Transport Staff** (show a steering wheel with a car key): `tiles-v2/manpower/drivers-transport-staff.jpeg`
-- [ ] **Office Support Staff** (show an office desk with files and a phone): `tiles-v2/manpower/office-support-staff.jpeg`
-- [ ] **Security Staff** (show a security guard cap with a whistle): `tiles-v2/manpower/security-staff.jpeg`
-- [ ] **Retail Support Staff** (show a shopping basket on a store counter): `tiles-v2/manpower/retail-support-staff.jpeg`
-- [ ] **Industrial Support Staff** (show a hard hat and gloves beside factory gears): `tiles-v2/manpower/industrial-support-staff.jpeg`
+- [x] **Cleaning & Maintenance Staff** (show a cleaning cart with mop and bucket): `tiles-v2/manpower/cleaning-maintenance-staff.jpeg`
+- [x] **Logistics & Handling** (show stacked cartons on a hand trolley): `tiles-v2/manpower/logistics-handling.jpeg`
+- [x] **Drivers & Transport Staff** (show a steering wheel with a car key): `tiles-v2/manpower/drivers-transport-staff.jpeg`
+- [x] **Office Support Staff** (show an office desk with files and a phone): `tiles-v2/manpower/office-support-staff.jpeg`
+- [x] **Security Staff** (show a security guard cap with a whistle): `tiles-v2/manpower/security-staff.jpeg`
+- [x] **Retail Support Staff** (show a shopping basket on a store counter): `tiles-v2/manpower/retail-support-staff.jpeg`
+- [x] **Industrial Support Staff** (show a hard hat and gloves beside factory gears): `tiles-v2/manpower/industrial-support-staff.jpeg`
 
 ## Service photos
 
@@ -313,7 +313,7 @@ Same rules as above: one tile picture, then one photo per service.
 
 ### Home Services › Elder Care (7)
 
-- [ ] **Tile picture: Elder Care** (show a walking stick beside a cushioned chair): `tiles-v2/home-services/elder-care.jpeg`
+- [x] **Tile picture: Elder Care** (show a walking stick beside a cushioned chair): `tiles-v2/home-services/elder-care.jpeg`
 - [ ] **Elder Care Attendant**: `catalog-v2/home-services/elder-care/elder-care-attendant.jpeg`
 - [ ] **Companion Care**: `catalog-v2/home-services/elder-care/companion-care.jpeg`
 - [ ] **Bedridden Patient Care**: `catalog-v2/home-services/elder-care/bedridden-patient-care.jpeg`
@@ -323,7 +323,7 @@ Same rules as above: one tile picture, then one photo per service.
 
 ### Home Services › Maid Services (6)
 
-- [ ] **Tile picture: Maid Services** (show a laundry basket with a broom and dustpan): `tiles-v2/home-services/maid-services.jpeg`
+- [x] **Tile picture: Maid Services** (show a laundry basket with a broom and dustpan): `tiles-v2/home-services/maid-services.jpeg`
 - [ ] **Full Time Maid**: `catalog-v2/home-services/maid-services/full-time-maid.jpeg`
 - [ ] **Part Time Maid**: `catalog-v2/home-services/maid-services/part-time-maid.jpeg`
 - [ ] **Cook**: `catalog-v2/home-services/maid-services/cook.jpeg`
@@ -332,7 +332,7 @@ Same rules as above: one tile picture, then one photo per service.
 
 ### Man Power & Support Staff › Event & Catering Staff (8)
 
-- [ ] **Tile picture: Event & Catering Staff** (show a serving tray with glasses): `tiles-v2/manpower/event-catering-staff.jpeg`
+- [x] **Tile picture: Event & Catering Staff** (show a serving tray with glasses): `tiles-v2/manpower/event-catering-staff.jpeg`
 - [ ] **Catering Boys**: `catalog-v2/manpower/event-catering-staff/catering-boys.jpeg`
 - [ ] **Catering Girls**: `catalog-v2/manpower/event-catering-staff/catering-girls.jpeg`
 - [ ] **Waiters**: `catalog-v2/manpower/event-catering-staff/waiters.jpeg`
@@ -343,7 +343,7 @@ Same rules as above: one tile picture, then one photo per service.
 
 ### Man Power & Support Staff › Domestic Staff (7)
 
-- [ ] **Tile picture: Domestic Staff** (show a kitchen apron with a cooking pot): `tiles-v2/manpower/domestic-staff.jpeg`
+- [x] **Tile picture: Domestic Staff** (show a kitchen apron with a cooking pot): `tiles-v2/manpower/domestic-staff.jpeg`
 - [ ] **Maids**: `catalog-v2/manpower/domestic-staff/maids.jpeg`
 - [ ] **Cooks**: `catalog-v2/manpower/domestic-staff/cooks.jpeg`
 - [ ] **Babysitters**: `catalog-v2/manpower/domestic-staff/babysitters.jpeg`
