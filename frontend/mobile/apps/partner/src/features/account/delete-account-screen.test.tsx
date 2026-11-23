@@ -95,7 +95,7 @@ describe("DeleteAccountScreen back", () => {
   it("stops steering the shell's back bar once it closes", async () => {
     const view = await open(false);
     await goToConfirmStep(view);
-    view.unmount();
+    await view.unmount();
     const leave = jest.fn();
 
     handleFocusedBack(leave);
