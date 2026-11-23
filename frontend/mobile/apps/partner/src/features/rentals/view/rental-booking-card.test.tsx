@@ -12,6 +12,7 @@ describe("RentalBookingCard", () => {
       title: "Waterproof Pagoda Tent 20×20 ft (Outdoor Events)",
       daily_rate_paise: 249900,
       deposit_paise: 800000,
+      quantity_available: 1,
       status: "ACTIVE",
     },
     customer_name: "Demo Rental Customer",

@@ -1,6 +1,5 @@
 import { Text, type Locale } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
-import { ArrowLeft, Check, Globe } from "lucide-react-native";
+import { Check, Globe } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -39,7 +38,6 @@ const OPTIONS: readonly LanguageOption[] = [
 ];
 
 export function LanguagePicker() {
-  const router = useRouter();
   const currentLocale = useLocaleStore((s) => s.locale);
   const setLocale = useLocaleStore((s) => s.setLocale);
   const [selected, setSelected] = useState<Locale>(currentLocale);
