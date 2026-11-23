@@ -4,6 +4,7 @@ import { Wallet, Clock, LineChart, Headset, ArrowRight, ShieldCheck, CheckCircle
 import { type Tone } from "@/components/graphics";
 import { Faq, faqJsonLd } from "@/components/faq";
 import { PartnerHero } from "@/components/hero/partner-hero";
+import { PartnerLiveOfferShowcase } from "@/components/hero/partner-live-offer-showcase";
 
 export const dynamic = "force-static";
 
@@ -324,6 +325,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Live In-App Dispatch & Offer Interactive Showcase */}
+      <PartnerLiveOfferShowcase />
 
       {/* Why Partner With Us / Platform Advantages */}
       <section id="benefits" className="relative border-t border-line bg-surface-sunken/50 px-4 py-24 sm:px-6 overflow-hidden">

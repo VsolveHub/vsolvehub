@@ -41,7 +41,11 @@ from django.conf import settings
 
 from apps.catalog.models import Category, Service, Subcategory
 
-CANONICAL_R2_BASE = settings.R2_PUBLIC_BASE_URL
+CANONICAL_R2_BASE = (
+    settings.R2_PUBLIC_BASE_URL.rstrip("/")
+    if getattr(settings, "R2_PUBLIC_BASE_URL", "")
+    else "https://pub-32e84da8140449ddbc61c13539728e0e.r2.dev"
+)
 
 # Canonical category icon overrides in Cloudflare R2 (`catalog/tiles/`)
 CATEGORY_ICON_OVERRIDES = {
@@ -94,7 +98,7 @@ ALLOWED_SERVICES = {
 }
 
 
-def sync_deployed_services():
+def sync_deployed_services() -> None:
     print("Syncing portal services and Cloudflare R2 icons...")
     for cat_slug, icon_url in CATEGORY_ICON_OVERRIDES.items():
         try:
