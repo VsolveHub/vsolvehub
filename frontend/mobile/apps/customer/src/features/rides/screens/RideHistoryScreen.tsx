@@ -3,6 +3,8 @@ import { describeError } from "@vsolve/query/native";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
 
+import { Package } from "lucide-react-native";
+
 import { useRideHistory, type RideHistoryRow } from "../queries";
 import { VEHICLES } from "../vehicles";
 
@@ -14,9 +16,16 @@ const STATE_LABEL: Record<string, string> = {
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
   NO_CAPTAIN_FOUND: "No captain found",
+  RETURNING: "Returning",
+  RETURNED: "Returned",
 };
 
+/** A parcel is Delivered where a ride is Completed. */
+const PARCEL_STATE_LABEL: Record<string, string> = { ...STATE_LABEL, COMPLETED: "Delivered" };
+
 function Row({ ride, onPress }: { ride: RideHistoryRow; onPress: () => void }) {
+  const parcel = ride.kind === "PARCEL";
+  const labels = parcel ? PARCEL_STATE_LABEL : STATE_LABEL;
   return (
     <Pressable
       accessibilityRole="button"
@@ -24,9 +33,13 @@ function Row({ ride, onPress }: { ride: RideHistoryRow; onPress: () => void }) {
       className="gap-1 rounded-2xl border border-line bg-surface p-4 active:opacity-80"
     >
       <View className="flex-row justify-between">
-        <Text className="text-sm font-semibold text-slate-900">
-          {VEHICLES[ride.vehicle_type]?.name ?? ride.vehicle_type} · {STATE_LABEL[ride.state] ?? ride.state}
-        </Text>
+        <View className="flex-1 flex-row items-center gap-1.5">
+          {parcel ? <Package size={16} color="#f87000" /> : null}
+          <Text className="text-sm font-semibold text-slate-900">
+            {parcel ? "Pick up & Drop" : (VEHICLES[ride.vehicle_type]?.name ?? ride.vehicle_type)} ·{" "}
+            {labels[ride.state] ?? ride.state}
+          </Text>
+        </View>
         <Text className="text-sm font-bold text-slate-900">{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</Text>
       </View>
       <Text className="text-sm text-slate-700" numberOfLines={1}>

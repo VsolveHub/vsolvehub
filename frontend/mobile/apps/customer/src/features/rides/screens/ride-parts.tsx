@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Alert, Linking, Pressable, Share, View } from "react-native";
 
 import { rateCaptain, raiseRiderSos, type Place, type Ride } from "../queries";
+import { paymentNote } from "../parcel/model";
 import { firstName, shareTripText } from "../ride-stage";
 import { VEHICLES } from "../vehicles";
 
@@ -52,6 +53,7 @@ export function StartCode({ code }: { code: string }) {
 
 /** Where from, where to, and what to pay. The fare is paid to the captain, in cash or UPI. */
 export function TripSummary({ ride }: { ride: Ride }) {
+  const parcel = ride.kind === "PARCEL" ? ride.parcel : null;
   return (
     <View className="gap-2 rounded-2xl border border-line bg-surface p-3">
       <View className="flex-row items-start gap-3">
@@ -62,10 +64,18 @@ export function TripSummary({ ride }: { ride: Ride }) {
         <View className="mt-1.5 h-2.5 w-2.5 bg-text" />
         <Text className="flex-1 text-sm text-text">{ride.drop.address}</Text>
       </View>
-      <View className="flex-row items-center justify-between border-t border-line pt-2">
-        <Text className="text-xs text-text-muted">Cash or UPI to your captain</Text>
+      <View className="flex-row items-center justify-between gap-3 border-t border-line pt-2">
+        <Text className="flex-1 text-xs text-text-muted">
+          {parcel ? paymentNote(parcel.payer) : "Cash or UPI to your captain"}
+        </Text>
         <Text className="text-base font-bold text-text">{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</Text>
       </View>
+      {parcel?.return_fare_paise != null ? (
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xs text-text-muted">Includes the return trip</Text>
+          <Text className="text-sm font-bold text-text">{formatMoney(parcel.return_fare_paise)}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -83,7 +93,7 @@ async function lastKnownPlace(): Promise<Place | null> {
 }
 
 /** Call the captain, share the trip, and SOS. Call shows only while the server sends the number. */
-export function SafetyRow({ ride }: { ride: Ride }) {
+export function SafetyRow({ ride, hideShare = false }: { ride: Ride; hideShare?: boolean }) {
   const phone = ride.captain?.phone_number ?? null;
   const sos = useMutation({
     mutationFn: async () => raiseRiderSos(ride.id, await lastKnownPlace()),
@@ -106,9 +116,11 @@ export function SafetyRow({ ride }: { ride: Ride }) {
           Call {firstName(ride.captain.name)}
         </Button>
       ) : null}
-      <Button variant="outline" className="flex-1" onPress={() => void Share.share({ message: shareTripText(ride) })}>
-        Share
-      </Button>
+      {hideShare ? null : (
+        <Button variant="outline" className="flex-1" onPress={() => void Share.share({ message: shareTripText(ride) })}>
+          Share
+        </Button>
+      )}
       <Button
         variant="outline"
         className="flex-1"
@@ -135,10 +147,13 @@ export function ReviewSheet({
   ride,
   onRated,
   onDone,
+  parcel = false,
 }: {
   ride: Ride;
   onRated: (stars: number) => void;
   onDone: () => void;
+  /** A parcel: the payment was between the captain and the sender or receiver, so only rating. */
+  parcel?: boolean;
 }) {
   const [stars, setStars] = useState(0);
   const [thanked, setThanked] = useState(false);
@@ -163,8 +178,14 @@ export function ReviewSheet({
       onOpenChange={(next) => {
         if (!next) leave();
       }}
-      title={thanked ? "Thanks for rating!" : "Pay your captain"}
-      description={thanked ? "Your feedback helps keep rides safe and friendly." : "Cash or UPI, straight to your captain."}
+      title={thanked ? "Thanks for rating!" : parcel ? "Rate your captain" : "Pay your captain"}
+      description={
+        thanked
+          ? "Your feedback helps keep rides safe and friendly."
+          : parcel
+            ? "How was the delivery?"
+            : "Cash or UPI, straight to your captain."
+      }
       footer={
         thanked ? (
           <Button size="lg" block onPress={leave}>
@@ -190,9 +211,15 @@ export function ReviewSheet({
         </View>
       ) : (
         <View className="items-center gap-4 py-2">
-          <Text className="text-5xl font-extrabold text-text">{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</Text>
-          <View className="h-px w-full bg-line" />
-          <Text className="text-base font-semibold text-text">How was your ride with {name}?</Text>
+          {parcel ? null : (
+            <>
+              <Text className="text-5xl font-extrabold text-text">{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</Text>
+              <View className="h-px w-full bg-line" />
+            </>
+          )}
+          <Text className="text-base font-semibold text-text">
+            {parcel ? `How was ${name}?` : `How was your ride with ${name}?`}
+          </Text>
           <View className="flex-row gap-3">
             {[1, 2, 3, 4, 5].map((value) => (
               <Pressable

@@ -11,6 +11,7 @@ import { CategoryArtwork } from "@/features/catalog/category-artwork";
 import { useCategories, usePromoBanners, type Category } from "@/features/catalog/client-queries";
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
+import { PickupDropEntry } from "@/features/rides/pickup-drop-entry";
 import { RidesEntry } from "@/features/rides/rides-entry";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { DesktopHeroCarousel, HeroBannerCarousel } from "@/features/catalog/view/hero-banner-carousel";
@@ -277,6 +278,7 @@ function MobileHomeScreen() {
       <SafetyStoriesTray />
 
       <RidesEntry />
+      <PickupDropEntry />
 
       <View className="gap-3.5">
         <View className="flex-row items-center justify-between">

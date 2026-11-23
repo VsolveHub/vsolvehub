@@ -23,6 +23,12 @@ export default function RidesLayout() {
         }}
       />
       <Stack.Screen
+        name="parcel"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="history"
         options={{
           headerTitle: "Your rides",

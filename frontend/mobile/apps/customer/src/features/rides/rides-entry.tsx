@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 
 import { findOpenRide } from "./queries";
+import { useHomeAvailability } from "./use-home-availability";
 import { VEHICLES, type VehicleType } from "./vehicles";
 
 /** Every vehicle Rides offers, cheapest first. Which ones run at the pickup is told on booking. */
@@ -45,15 +46,17 @@ export function resetOpenRideCheck() {
 }
 
 /**
- * The Rides card on Home: always there for a signed-in customer, like the "Where to?" bar of a
- * ride app. Location is asked for on the next screen, and a pickup where Rides does not run is
- * told so there ("Rides isn't available here yet"), not hidden here.
+ * The Rides card on Home, for a signed-in customer, shown only where the server says a ride can be
+ * booked (D21; this reverses ADR-0014 decision 38, where it was always shown). Where that is not
+ * known yet, it stays: location is asked for on the next screen, which says "Rides isn't available
+ * here yet" if need be. The open-ride check runs either way, so a ride still going is found.
  */
 export function RidesEntry() {
   const router = useRouter();
   const signedIn = useAuthStore((state) => state.status) === "signedIn";
   useLandOnOpenRide();
-  if (!signedIn) return null;
+  const { rides } = useHomeAvailability(signedIn);
+  if (!signedIn || !rides) return null;
 
   return (
     <Pressable

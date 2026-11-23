@@ -9,6 +9,7 @@ import {
 import { getApiClient } from "@vsolve/mobile-core";
 
 export type FareQuote = Schemas["FareQuote"];
+export type RideKind = "RIDE" | "PARCEL";
 export type TripPoint = Schemas["TripPointRequest"];
 
 export interface Trip {
@@ -25,10 +26,11 @@ export interface Trip {
  */
 const QUOTES_KEPT_MS = 4 * 60 * 1000;
 
-export function useFareQuotes(trip: Trip | null, enabled: boolean) {
+export function useFareQuotes(trip: Trip | null, enabled: boolean, kind: RideKind = "RIDE") {
   return useQuery({
-    queryKey: ["rides", "quotes", trip],
-    queryFn: () => request(() => getApiClient().POST("/api/v1/rides/quotes/", { body: trip! })),
+    // A parcel's prices are kept apart from a ride's for the same trip: different cards.
+    queryKey: kind === "RIDE" ? ["rides", "quotes", trip] : ["rides", "quotes", kind, trip],
+    queryFn: () => request(() => getApiClient().POST("/api/v1/rides/quotes/", { body: { ...trip!, kind } })),
     enabled: enabled && trip !== null,
     staleTime: Infinity,
     gcTime: QUOTES_KEPT_MS,
@@ -46,8 +48,11 @@ export interface Place {
 
 export type Ride = Schemas["Ride"];
 
-/** States in which the ride is still going: the screen keeps checking it. */
-export const OPEN_RIDE_STATES = ["SEARCHING", "CAPTAIN_ASSIGNED", "CAPTAIN_ARRIVED", "IN_TRIP"] as const;
+/**
+ * States in which the ride is still going: the screen keeps checking it. `RETURNING` is a parcel
+ * coming back to the pickup: it is not over until it is handed back.
+ */
+export const OPEN_RIDE_STATES = ["SEARCHING", "CAPTAIN_ASSIGNED", "CAPTAIN_ARRIVED", "IN_TRIP", "RETURNING"] as const;
 
 export function isOpenRide(state: string): boolean {
   return (OPEN_RIDE_STATES as readonly string[]).includes(state);
@@ -76,6 +81,57 @@ export async function bookRide(quoteId: string): Promise<Ride> {
     if (isApiRequestError(error) && !error.retryable) clearIdempotencyKey(scope);
     throw error;
   }
+}
+
+/**
+ * Book a Pick up & Drop parcel from a parcel quote, with both ends' details. The key is per quote
+ * and per set of details, so a retry after a timeout books once, while details corrected after a
+ * refusal are a new request, not a conflicting one.
+ */
+export async function bookParcel(quoteId: string, parcel: Schemas["ParcelRequestRequest"]): Promise<Ride> {
+  const scope = `rides.book.${quoteId}.${fingerprint(JSON.stringify(parcel))}`;
+  try {
+    const ride = await request(() =>
+      getApiClient().POST("/api/v1/rides/", {
+        body: { quote_id: quoteId, parcel },
+        params: { header: { "Idempotency-Key": getStableIdempotencyKey(scope) } },
+      }),
+    );
+    clearIdempotencyKey(scope);
+    return ride;
+  } catch (error) {
+    if (isApiRequestError(error) && !error.retryable) clearIdempotencyKey(scope);
+    throw error;
+  }
+}
+
+/** A short stand-in for the details, so no name or phone is written into the key itself. */
+function fingerprint(text: string): string {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+  return hash.toString(36);
+}
+
+/**
+ * What can be booked at a place (`GET rides/availability/`): which rides, which parcels, and the
+ * parcel rules (the value cap and the prohibited list). A parcel's Review screen reads the rules
+ * from here, so they come from the server and are never typed into the app.
+ */
+export function useAvailability(place: { latitude: number; longitude: number } | null) {
+  const latitude = place?.latitude.toFixed(6);
+  const longitude = place?.longitude.toFixed(6);
+  return useQuery({
+    queryKey: ["rides", "availability", latitude, longitude],
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/rides/availability/", {
+          params: { query: { latitude: latitude!, longitude: longitude! } },
+        }),
+      ),
+    enabled: place !== null,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 }
 
 /** The live ride, checked every 3 s while it is still going (brief §5.7). */

@@ -19,6 +19,8 @@ import {
 import MapView, { Marker, type MapPressEvent } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import type { RideKind } from "../queries";
+
 interface Place {
   latitude: number;
   longitude: number;
@@ -46,9 +48,12 @@ function splitLabel(label: string): { title: string; subtitle: string } {
 
 /**
  * Where to: opens as a search list, like a ride app does, not as a map. The map is one tap away
- * ("Set location on map") and only used to drop a pin.
+ * ("Set location on map") and only used to drop a pin. For Pick up & Drop it is the same screen,
+ * destination first, asking "Where should it go?" and going on to the parcel's vehicle choice.
  */
-export function WhereToScreen() {
+export function WhereToScreen({ kind = "RIDE" }: { kind?: RideKind } = {}) {
+  const parcel = kind === "PARCEL";
+  const question = parcel ? "Where should it go?" : "Where to?";
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -143,7 +148,7 @@ export function WhereToScreen() {
   function next() {
     if (!pickup || !drop) return;
     router.push({
-      pathname: "/rides/choose-ride",
+      pathname: parcel ? "/rides/parcel/choose" : "/rides/choose-ride",
       params: {
         pickupLat: String(pickup.latitude),
         pickupLng: String(pickup.longitude),
@@ -241,7 +246,7 @@ export function WhereToScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => router.back()}>
           <ArrowLeft size={24} color={NAVY} />
         </Pressable>
-        <Text className="flex-1 text-xl font-extrabold text-text">Where to?</Text>
+        <Text className="flex-1 text-xl font-extrabold text-text">{question}</Text>
         <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push("/rides/history" as never)}>
           <Text className="text-sm font-semibold text-text-link">Your rides</Text>
         </Pressable>
@@ -263,7 +268,7 @@ export function WhereToScreen() {
           ) : (
             renderField("pickup", pickup, "Pickup location")
           )}
-          {renderField("drop", drop, "Where to?")}
+          {renderField("drop", drop, question)}
         </View>
       </View>
 
