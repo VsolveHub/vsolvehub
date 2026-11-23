@@ -1,62 +1,62 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, Zap, Navigation, Clock, MapPin, Signal, Wifi, BatteryFull, Star, Briefcase, Wallet, Bell, User, Home as HomeIcon, type LucideIcon } from "lucide-react";
+import { Sparkles, Zap, Droplets, Clock, CalendarClock, MapPin, Signal, Wifi, BatteryFull, Star, Briefcase, Wallet, Bell, User, Home as HomeIcon, type LucideIcon } from "lucide-react";
 import { inr } from "@/lib/format";
 
+/**
+ * A sample of the real offer card (features/offers/view/offer-card.tsx): the area only, never the
+ * address; the start time and length; job total, commission and what the partner receives.
+ */
 type DemoOffer = {
   icon: LucideIcon;
   title: string;
   area: string;
-  fare: number;
-  surge: number;
-  travelKm: number;
-  etaMin: number;
+  when: string;
   durationMin: number;
-  drop: string;
+  jobTotal: number;
+  commission: number;
 };
 
 const OFFERS: DemoOffer[] = [
   {
     icon: Sparkles,
     title: "AC Deep Cleaning · 2 Units",
-    area: "Kukatpally, Hyderabad",
-    fare: 850,
-    surge: 1.2,
-    travelKm: 7.2,
-    etaMin: 16,
-    durationMin: 55,
-    drop: "Flat 402, Sunshine Apartments, KPHB",
+    area: "KPHB Colony, Kukatpally",
+    when: "Today, 4:30 PM",
+    durationMin: 90,
+    jobTotal: 1200,
+    commission: 144,
   },
   {
     icon: Zap,
-    title: "Electrical Repair · On-site",
-    area: "Gachibowli, Hyderabad",
-    fare: 1450,
-    surge: 1,
-    travelKm: 4.2,
-    etaMin: 11,
-    durationMin: 50,
-    drop: "24, Green Valley Estate, Phase 3",
+    title: "Switchboard & Wiring Repair",
+    area: "Gachibowli",
+    when: "Tomorrow, 10:00 AM",
+    durationMin: 60,
+    jobTotal: 650,
+    commission: 78,
   },
   {
-    icon: Navigation,
-    title: "Airport Drop · Sedan",
-    area: "Jubilee Hills, Hyderabad",
-    fare: 640,
-    surge: 1.4,
-    travelKm: 3.1,
-    etaMin: 6,
-    durationMin: 38,
-    drop: "RGIA Terminal 1, Shamshabad",
+    icon: Droplets,
+    title: "Tap & Leak Repair",
+    area: "Madhapur",
+    when: "Today, 6:00 PM",
+    durationMin: 45,
+    jobTotal: 450,
+    commission: 54,
   },
 ];
 
-const OFFER_WINDOW = 30;
+/** Seconds a partner has to answer a real offer (M1_PARTNER_OFFER_TIMEOUT_SECONDS). */
+const OFFER_WINDOW = 45;
+/** Seconds each sample offer stays on screen before the next one; the timer counts real seconds. */
+const SHOW_FOR = 8;
 
 export function PartnerLiveOfferShowcase() {
   const [index, setIndex] = useState(0);
-  const [left, setLeft] = useState(OFFER_WINDOW);
+  const [shownFor, setShownFor] = useState(0);
+  const left = OFFER_WINDOW - shownFor;
   const [isPaused, setIsPaused] = useState(false);
   const showcaseRef = useRef<HTMLElement>(null);
 
@@ -76,14 +76,14 @@ export function PartnerLiveOfferShowcase() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const id = setInterval(() => {
-      setLeft((prev) => {
-        if (prev <= 1) {
+      setShownFor((prev) => {
+        if (prev + 1 >= SHOW_FOR) {
           setIndex((i) => (i + 1) % OFFERS.length);
-          return OFFER_WINDOW;
+          return 0;
         }
-        return prev - 1;
+        return prev + 1;
       });
-    }, 300);
+    }, 1000);
     return () => clearInterval(id);
   }, [isPaused]);
 
@@ -98,13 +98,13 @@ export function PartnerLiveOfferShowcase() {
           {/* Left Description */}
           <div className="lg:col-span-6 space-y-6">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-signal-50 px-3.5 py-1 text-xs font-extrabold text-signal-700 border border-signal-200 shadow-xs">
-              <Zap className="h-3.5 w-3.5" /> In-App Live Dispatch
+              <Zap className="h-3.5 w-3.5" /> Live job offers
             </span>
             <h2 className="text-3xl font-extrabold tracking-tight text-navy-900 sm:text-4xl">
-              See How You Receive Jobs & Instant Payouts
+              See the Job Before You Say Yes
             </h2>
             <p className="text-base text-text-secondary leading-relaxed">
-              When a customer requests a service in your area, your phone rings with a live offer card showing the exact address, distance, estimated duration, and guaranteed fare before you accept.
+              When a customer near you books a service you do, your phone rings with an offer: the area, the time, how long the job takes and what you will receive. Accept or decline before the timer runs out.
             </p>
             
             <div className="space-y-3 pt-2">
@@ -113,8 +113,8 @@ export function PartnerLiveOfferShowcase() {
                   ✓
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-navy-900">Zero Guesswork Pricing</h4>
-                  <p className="text-xs text-text-secondary">Know exactly what you earn before accepting. Surge fares and travel allowances are calculated upfront.</p>
+                  <h4 className="text-sm font-bold text-navy-900">Know Your Earnings First</h4>
+                  <p className="text-xs text-text-secondary">Every offer shows the job total, the commission and what you receive. The final amount follows the work actually done.</p>
                 </div>
               </div>
 
@@ -123,8 +123,8 @@ export function PartnerLiveOfferShowcase() {
                   ✓
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-navy-900">Direct Navigation & Contact</h4>
-                  <p className="text-xs text-text-secondary">One-tap turn-by-turn Google Maps routing to the customer doorstep and direct in-app masked calling.</p>
+                  <h4 className="text-sm font-bold text-navy-900">Directions and a Call Button</h4>
+                  <p className="text-xs text-text-secondary">The exact address and the customer&apos;s phone number appear 2 hours before the visit, with one-tap Google Maps directions and calling.</p>
                 </div>
               </div>
             </div>
@@ -204,42 +204,51 @@ export function PartnerLiveOfferShowcase() {
                         </span>
                         <div className="flex items-center gap-1 text-[10px] font-extrabold text-slate-800 tabular-nums">
                           <Clock className="h-3 w-3 text-signal-600" />
-                          <span>{left}s left</span>
+                          <span>{left}s to respond</span>
                         </div>
                       </div>
 
-                      {/* Offer details */}
+                      {/* Offer details: the area only, never the address */}
                       <div className="mt-2 flex items-start gap-2">
                         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-signal-50 text-signal-700 border border-signal-200">
                           <Icon className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-bold text-slate-900 leading-tight">{offer.title}</p>
-                          <p className="truncate text-[9px] text-slate-500 mt-0.5">{offer.area}</p>
+                          <p className="mt-0.5 flex items-center gap-0.5 truncate text-[9px] text-slate-500">
+                            <MapPin className="h-2.5 w-2.5 shrink-0 text-signal-600" />
+                            {offer.area}
+                          </p>
                         </div>
-                        <span className="shrink-0 text-right">
-                          <span className="text-xs font-extrabold text-slate-900 tabular-nums block">{inr(offer.fare)}</span>
-                          <span className="text-[8px] text-slate-500">~{offer.durationMin}m</span>
-                        </span>
                       </div>
 
-                      {/* Stats pills */}
+                      {/* When + how long */}
                       <div className="mt-2 grid grid-cols-2 gap-1.5">
                         <div className="flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 border border-slate-100 text-[9px]">
-                          <Navigation className="h-2.5 w-2.5 text-slate-400" />
-                          <span className="font-bold text-slate-700">{offer.travelKm} km away</span>
+                          <CalendarClock className="h-2.5 w-2.5 shrink-0 text-slate-400" />
+                          <span className="truncate font-bold text-slate-700">{offer.when}</span>
                         </div>
                         <div className="flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 border border-slate-100 text-[9px]">
-                          <Clock className="h-2.5 w-2.5 text-slate-400" />
-                          <span className="font-bold text-slate-700">{offer.etaMin} min ETA</span>
+                          <Clock className="h-2.5 w-2.5 shrink-0 text-slate-400" />
+                          <span className="font-bold text-slate-700">About {offer.durationMin} min</span>
                         </div>
                       </div>
 
-                      {/* Location strip */}
-                      <div className="mt-2 flex items-start gap-1 rounded-lg bg-slate-50 p-1.5 text-[8.5px] text-slate-600 border border-slate-100">
-                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-signal-600" />
-                        <p className="truncate">{offer.drop}</p>
-                      </div>
+                      {/* Money: job total, commission, what the partner receives */}
+                      <dl className="mt-2 space-y-0.5 rounded-lg bg-slate-50 p-1.5 text-[9px] border border-slate-100">
+                        <div className="flex justify-between text-slate-500">
+                          <dt>Job total</dt>
+                          <dd className="tabular-nums">{inr(offer.jobTotal)}</dd>
+                        </div>
+                        <div className="flex justify-between text-slate-500">
+                          <dt>Commission</dt>
+                          <dd className="tabular-nums text-rose-600">−{inr(offer.commission)}</dd>
+                        </div>
+                        <div className="flex justify-between border-t border-slate-200 pt-0.5 font-extrabold text-slate-900">
+                          <dt>You receive</dt>
+                          <dd className="tabular-nums">{inr(offer.jobTotal - offer.commission)}</dd>
+                        </div>
+                      </dl>
 
                       {/* Action buttons */}
                       <div className="mt-auto grid grid-cols-3 gap-1.5 pt-2">
@@ -247,7 +256,7 @@ export function PartnerLiveOfferShowcase() {
                           Decline
                         </div>
                         <div className="col-span-2 rounded-xl bg-emerald-600 py-1.5 text-center text-[10px] font-extrabold text-white shadow-md">
-                          Accept · {inr(offer.fare)}
+                          Accept
                         </div>
                       </div>
                     </div>
