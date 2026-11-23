@@ -41,7 +41,9 @@ from django.conf import settings
 
 from apps.catalog.models import Category, Service, Subcategory
 
-CANONICAL_R2_BASE = settings.R2_PUBLIC_BASE_URL
+# Locally R2_PUBLIC_BASE_URL is often blank; the pictures are the same ones the media domain serves
+# (as in import_catalog_v1/v2). Never the r2.dev address: it is rate limited and HTTP/1.1.
+CANONICAL_R2_BASE = settings.R2_PUBLIC_BASE_URL or "https://media.vsolvehub.com"
 
 # Canonical category icon overrides in Cloudflare R2 (`catalog/tiles/`)
 CATEGORY_ICON_OVERRIDES = {
@@ -94,7 +96,7 @@ ALLOWED_SERVICES = {
 }
 
 
-def sync_deployed_services():
+def sync_deployed_services() -> None:
     print("Syncing portal services and Cloudflare R2 icons...")
     for cat_slug, icon_url in CATEGORY_ICON_OVERRIDES.items():
         try:
