@@ -97,8 +97,6 @@ export {
 } from "./otp-flow";
 export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase } from "./otp-flow";
 
-export { mapFirebaseError, formatToE164 } from "./firebase-errors";
-
 // --- M2 customer surface (session A) ---
 export {
   readRequirementList,

@@ -109,51 +109,6 @@ class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
         return value
 
 
-class FirebasePrecheckSerializer(serializers.Serializer[dict[str, object]]):
-    phone_number = PhoneNumberField(max_length=32, trim_whitespace=True)
-    intended_role = serializers.ChoiceField(
-        choices=["customer", "partner", "operations"],
-        required=False,
-        allow_blank=True,
-        default="",
-        write_only=True,
-    )
-
-
-class FirebaseVerifySerializer(serializers.Serializer[dict[str, object]]):
-    id_token = serializers.CharField(
-        write_only=True,
-        trim_whitespace=True,
-        help_text="Firebase ID token issued after client-side Phone Auth.",
-    )
-    intended_role = serializers.ChoiceField(
-        choices=["customer", "partner", "operations"],
-        required=False,
-        allow_blank=True,
-        default="",
-        write_only=True,
-    )
-    referral_code = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=32,
-        write_only=True,
-        help_text="Applied only when this verification creates a new account.",
-    )
-    device_identifier = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=128,
-        write_only=True,
-    )
-    device_label = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=100,
-        write_only=True,
-    )
-
-
 class UserSerializer(serializers.ModelSerializer[User]):
     display_name = serializers.CharField(
         source="customer_profile.display_name",
@@ -341,17 +296,6 @@ class StepUpVerifySerializer(serializers.Serializer[dict[str, object]]):
 
 class StepUpSessionSerializer(serializers.Serializer[dict[str, object]]):
     stepped_up_at = serializers.DateTimeField(read_only=True)
-
-
-class FirebaseStepUpSerializer(serializers.Serializer[dict[str, object]]):
-    id_token = serializers.CharField(
-        write_only=True,
-        trim_whitespace=True,
-        help_text=(
-            "Firebase ID token from a phone verification just completed for the signed-in "
-            "person's own number."
-        ),
-    )
 
 
 class ConsentReceiptCreateSerializer(serializers.Serializer[dict[str, object]]):

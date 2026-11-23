@@ -94,24 +94,6 @@ export function useConfirmStepUp() {
   });
 }
 
-/**
- * The Firebase counterpart of `useConfirmStepUp` (contract 1.77.0), for deployments whose
- * codes Firebase sends. Exchanges a fresh ID token — from a verification just completed for
- * the operator's own number — for the same session stamp.
- */
-export function useConfirmFirebaseStepUp() {
-  return useMutation({
-    mutationFn: (idToken: string): Promise<StepUpSession> =>
-      request(() =>
-        getApiClient().POST("/api/v1/auth/firebase/step-up/", {
-          body: { id_token: idToken },
-        }),
-      ),
-    // Never retried. The ID token is single-use.
-    retry: false,
-  });
-}
-
 /** The confirmation was for a number other than the signed-in operator's own. */
 export function isStepUpIdentityMismatch(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "step_up_identity_mismatch";

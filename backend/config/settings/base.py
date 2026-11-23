@@ -242,7 +242,6 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.errors.handler.api_exception_handler",
     "NON_FIELD_ERRORS_KEY": "non_field_errors",
     "DEFAULT_THROTTLE_RATES": {
-        "firebase_verify": "30/minute",
         # The public Contact form opens an Operations case per message. A person writes a few;
         # a script writes hundreds. Keyed per IP, since most senders are signed out.
         "contact_message": "5/hour",
@@ -424,7 +423,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.116.0",
+    "VERSION": "1.117.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -720,11 +719,6 @@ OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", defau
 # erased. Signing in again inside it keeps the account. 30 days is the common platform window and
 # what the public deletion pages promise; change both together.
 ACCOUNT_DELETION_GRACE_DAYS = env.int("ACCOUNT_DELETION_GRACE_DAYS", default=30)
-
-FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
-FIREBASE_CREDENTIALS_JSON = env("FIREBASE_CREDENTIALS_JSON", default="")
-FIREBASE_AUTH_ENABLED = env.bool("FIREBASE_AUTH_ENABLED", default=False)
-FIREBASE_TOKEN_MAX_AGE_SECONDS = env.int("FIREBASE_TOKEN_MAX_AGE_SECONDS", default=300)
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")

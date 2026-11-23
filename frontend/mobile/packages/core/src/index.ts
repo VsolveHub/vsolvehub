@@ -7,7 +7,6 @@ export { installationId } from "./auth/installation-id";
 export { deviceLabel } from "./auth/device-label";
 export { readSessionToken, writeSessionToken, deleteSessionToken } from "./auth/token-store";
 export { useMobileOtpFlow } from "./auth/use-mobile-otp-flow";
-export { phoneAuthProvider } from "./auth/firebase-module";
 export type { MobileOtpFlow } from "./auth/use-mobile-otp-flow";
 export { useMobileLogout } from "./auth/use-mobile-logout";
 

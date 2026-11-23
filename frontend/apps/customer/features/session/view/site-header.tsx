@@ -5,7 +5,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useLogout, useAuthGuard, usePhoneAuthFlow, queryKeys } from "@vsolve/query";
+import { useLogout, useAuthGuard, useOtpFlow, queryKeys } from "@vsolve/query";
 import { Button, Logo, Dialog, OtpForm, cn, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -40,7 +40,7 @@ export function SiteHeader() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const queryClient = useQueryClient();
   const guard = useAuthGuard(getApiClient());
-  const flow = usePhoneAuthFlow(getApiClient(), {
+  const flow = useOtpFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     onAuthenticated: () => {
       setIsLoginOpen(false);
@@ -255,9 +255,6 @@ export function SiteHeader() {
         onOpenChange={handleOpenChange}
         title="Log in to V Solve Hub"
         description="Verify your mobile number to view bookings and checkout"
-        // Firebase phone login can raise a reCAPTCHA picture challenge, which
-        // has to sit above this dialog to be solved.
-        topLayer={false}
       >
         <div className="py-2 flex flex-col gap-4">
           <Logo className="h-8 w-auto self-start" />

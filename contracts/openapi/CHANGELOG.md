@@ -1,5 +1,23 @@
 # API Contract Changelog
 
+## 1.117.0 - Firebase sign-in removed
+
+Breaking, with no live caller. Sign-in and the Operations step-up use the MSG91 codes Django sends
+(`/auth/otp/*`, `/auth/mobile/otp/verify/`, `/auth/finance/step-up/*`). Production switched every
+client over on 23 November 2026: the three websites build with the OTP flow, the Partner app's
+minimum version is 1.2.0 (the first OTP build), the Customer app never shipped with Firebase, and
+`FIREBASE_AUTH_ENABLED` was already off, so these paths answered `404` before this release.
+
+- **Removed** `POST /auth/firebase/precheck/` (`FirebasePrecheckRequest`).
+- **Removed** `POST /auth/firebase/verify/` (`FirebaseVerifyRequest`).
+- **Removed** `POST /auth/firebase/step-up/` (`FirebaseStepUpRequest`). The step-up is
+  `POST /auth/finance/step-up/code/` then `POST /auth/finance/step-up/`.
+- **Removed** `POST /auth/mobile/firebase/verify/` (`MobileFirebaseVerifyRequest`).
+- Migration: none. Settings `FIREBASE_AUTH_ENABLED`, `FIREBASE_PROJECT_ID`,
+  `FIREBASE_CREDENTIALS_JSON` and `FIREBASE_TOKEN_MAX_AGE_SECONDS` are no longer read and can be
+  deleted from the server's `.env`. Audit rows already written as `identity.firebase_login` and
+  `identity.firebase_step_up` stay as history.
+
 ## 1.116.0 - Tax categories for the commercial policy form
 
 Additive.

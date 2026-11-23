@@ -31,10 +31,6 @@ jest.mock("./device-label", () => ({
   deviceLabel: () => "Test Phone",
 }));
 
-jest.mock("./firebase-module", () => ({
-  phoneAuthProvider: () => "server",
-}));
-
 describe("useMobileOtpFlow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
