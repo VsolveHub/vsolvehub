@@ -36,6 +36,7 @@ describe("chrome", () => {
     expect(focusedHeaderTitle("/work/enquiries/1/arrival", null)).toBe("Arrival code");
     expect(focusedHeaderTitle("/work/jobs/1", "Custom")).toBe("Custom");
     expect(focusedHeaderTitle("/me/profile", null)).toBe("Profile");
+    expect(focusedHeaderTitle("/me/delete-account", null)).toBe("Delete Account");
   });
 
   it("keeps tabs off apply and on home", () => {
