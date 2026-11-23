@@ -56,25 +56,29 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
-    associatedDomains: ["applinks:vsolvehub.com"],
+    // www only: the bare vsolvehub.com redirects to www, and Apple will not follow a redirect
+    // when it fetches apple-app-site-association. Backend links use www too (CUSTOMER_SITE_URL).
+    associatedDomains: ["applinks:www.vsolvehub.com"],
     ...(googleServiceInfoPlist ? { googleServicesFile: googleServiceInfoPlist } : {}),
   },
   android: {
     package: "com.vsolvehub.customer",
+    // www only, never also the bare vsolvehub.com: it redirects to www, so Android cannot verify
+    // it, and on Android 11 and older one unverified host switches app links off for every host.
     intentFilters: [
       {
         action: "VIEW",
         autoVerify: true,
         data: [
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/bookings" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/requests" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/engagements" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/jobs" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/activity" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/account" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/catalog" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/book" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/cart" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/bookings" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/requests" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/engagements" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/jobs" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/activity" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/account" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/catalog" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/book" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/cart" },
         ],
         category: ["BROWSABLE", "DEFAULT"],
       },
