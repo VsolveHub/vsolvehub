@@ -1,5 +1,5 @@
-import { TripScreen } from "@/features/rides/view/trip-screen";
+import { TripRouter } from "@/features/rides/view/trip-router";
 
 export default function RidesTripRoute() {
-  return <TripScreen />;
+  return <TripRouter />;
 }

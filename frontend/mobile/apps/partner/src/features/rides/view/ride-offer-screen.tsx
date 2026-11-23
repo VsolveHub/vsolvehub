@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { shouldRing, useOfferRingtone } from "@/features/notifications/use-offer-ringtone";
 
+import { collectAtText, meetText } from "../model/parcel-trip";
 import { vehicleTypeName } from "../model/shell";
 import {
   acceptOffer,
@@ -22,11 +23,12 @@ function km(metres: number): string {
   return `${(metres / 1000).toFixed(1)} km`;
 }
 
-function Place({ label, address }: { label: string; address: string }) {
+function Place({ label, address, note }: { label: string; address: string; note?: string }) {
   return (
     <View className="gap-0.5">
       <Text className="text-xs font-semibold uppercase text-white/60">{label}</Text>
       <Text className="text-base text-white">{address}</Text>
+      {note ? <Text className="text-sm text-white/60">{note}</Text> : null}
     </View>
   );
 }
@@ -88,7 +90,9 @@ export function RideOfferScreen({ offerId }: { offerId: string }) {
 
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, gap: 20 }}>
         <View className="flex-row items-center justify-between">
-          <Text className="text-sm font-semibold uppercase tracking-wider text-[#f87000]">New ride request</Text>
+          <Text className="text-sm font-semibold uppercase tracking-wider text-[#f87000]">
+            {offer?.kind === "PARCEL" ? "New parcel request" : "New ride request"}
+          </Text>
           {live ? (
             <Text accessibilityLabel={`${seconds} seconds left`} className="text-base font-bold text-white">
               {`${seconds} s`}
@@ -110,13 +114,20 @@ export function RideOfferScreen({ offerId }: { offerId: string }) {
         ) : offer ? (
           <>
             <View className="items-center gap-2">
+              {offer.parcel ? (
+                <View className="rounded-full bg-[#f87000] px-3 py-1">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-white">Pick up &amp; Drop</Text>
+                </View>
+              ) : null}
               <View className="rounded-full bg-white/10 px-3 py-1">
                 <Text className="text-xs font-bold uppercase tracking-wider text-white">
                   {vehicleTypeName(offer.vehicle_type)}
                 </Text>
               </View>
               <Text className="text-5xl font-extrabold text-white">{formatMoney(offer.fare_paise)}</Text>
-              <Text className="text-sm text-white/60">Cash or UPI from the rider</Text>
+              <Text className="text-sm text-white/60">
+                {offer.parcel ? collectAtText(offer.parcel.payment_point) : "Cash or UPI from the rider"}
+              </Text>
             </View>
 
             <View className="flex-row gap-3">
@@ -135,8 +146,16 @@ export function RideOfferScreen({ offerId }: { offerId: string }) {
                 <View className="h-2.5 w-2.5 bg-white" />
               </View>
               <View className="flex-1 gap-4">
-                <Place label="Pickup" address={offer.pickup.address} />
-                <Place label="Drop" address={offer.drop.address} />
+                <Place
+                  label="Pickup"
+                  address={offer.pickup.address}
+                  note={offer.parcel ? meetText(offer.parcel.pickup_meet_at) : undefined}
+                />
+                <Place
+                  label="Drop"
+                  address={offer.drop.address}
+                  note={offer.parcel ? meetText(offer.parcel.drop_meet_at) : undefined}
+                />
               </View>
             </View>
 

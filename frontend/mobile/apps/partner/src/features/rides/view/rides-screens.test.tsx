@@ -302,3 +302,58 @@ describe("RideHistory", () => {
     expect(view.getByText("Gachibowli → Hitec City")).toBeTruthy();
   });
 });
+
+describe("RideHistory: parcels", () => {
+  const row = (id: string, kind: string, state: string) => ({
+    id,
+    kind,
+    state,
+    vehicle_type: "BIKE",
+    pickup_address: "Gachibowli",
+    drop_address: "Hitec City",
+    fare_paise: 5100,
+    final_fare_paise: 5100,
+    payment_status: "COLLECTED",
+    created_at: "2026-11-23T09:00:00+05:30",
+    completed_at: null,
+    cancelled_by: "",
+  });
+
+  it("calls a parcel Delivered or Returned, with its kind, and a ride still Completed", async () => {
+    mockHistory = {
+      isPending: false,
+      isError: false,
+      refetch: jest.fn(),
+      data: {
+        results: [
+          row("p1", "PARCEL", "COMPLETED"),
+          row("p2", "PARCEL", "RETURNED"),
+          row("p3", "PARCEL", "CANCELLED"),
+          row("r1", "RIDE", "COMPLETED"),
+        ],
+      },
+    };
+
+    const view = await render(<RideHistory />);
+
+    expect(view.getByText("Delivered")).toBeTruthy();
+    expect(view.getByText("Returned")).toBeTruthy();
+    expect(view.getByText("Cancelled")).toBeTruthy();
+    expect(view.getByText("Completed")).toBeTruthy(); // the ride
+    expect(view.getAllByText("Pick up & Drop")).toHaveLength(3);
+  });
+
+  it("shows no way to call anyone: the row carries no contact", async () => {
+    mockHistory = {
+      isPending: false,
+      isError: false,
+      refetch: jest.fn(),
+      data: { results: [row("p1", "PARCEL", "COMPLETED")] },
+    };
+
+    const view = await render(<RideHistory />);
+
+    expect(view.getByText("Gachibowli → Hitec City")).toBeTruthy();
+    expect(view.queryByLabelText(/^Call /)).toBeNull();
+  });
+});

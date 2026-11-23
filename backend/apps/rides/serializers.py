@@ -78,6 +78,7 @@ __all__ = [
     "OpsRideRowSerializer",
     "OpsSosSerializer",
     "OpsTransitionSerializer",
+    "ParcelContactSerializer",
     "ParcelEndSerializer",
     "ParcelLimitsSerializer",
     "ParcelRequestSerializer",
@@ -313,6 +314,7 @@ class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
     max_weight_grams = serializers.IntegerField(
         source="rate_card.max_parcel_weight_grams",
         read_only=True,
+        allow_null=True,
         help_text="Parcel quotes only; null for a ride.",
     )
     size_label = serializers.CharField(
@@ -361,6 +363,17 @@ class ParcelEndSerializer(serializers.Serializer[Any]):
         if value and not _MOBILE.fullmatch(value):
             raise serializers.ValidationError("Enter a 10-digit mobile number.")
         return value
+
+
+class ParcelContactSerializer(serializers.Serializer[Any]):
+    """One end of a parcel as the server sends it back: every field is always there."""
+
+    name = serializers.CharField()
+    phone = serializers.CharField(help_text="A 10-digit Indian mobile number, without +91.")
+    building = serializers.CharField(allow_blank=True)
+    unit = serializers.CharField(allow_blank=True)
+    meet_at = serializers.ChoiceField(choices=ParcelDetails.MeetAt.choices)
+    instructions = serializers.CharField(allow_blank=True)
 
 
 class ParcelRequestSerializer(serializers.Serializer[Any]):
@@ -539,18 +552,19 @@ class _ParcelBaseSerializer(serializers.Serializer[Any]):
     payment_point = serializers.SerializerMethodField(
         help_text="PICKUP when the sender pays, DROP when the receiver pays."
     )
-    arrived_at_drop_at = serializers.DateTimeField()
-    delivered_at = serializers.DateTimeField()
-    receiver_unavailable_at = serializers.DateTimeField()
-    returned_at = serializers.DateTimeField()
-    return_fare_paise = serializers.IntegerField()
-    return_payment_status = serializers.CharField()
+    # Each is null until that step happens.
+    arrived_at_drop_at = serializers.DateTimeField(allow_null=True)
+    delivered_at = serializers.DateTimeField(allow_null=True)
+    receiver_unavailable_at = serializers.DateTimeField(allow_null=True)
+    returned_at = serializers.DateTimeField(allow_null=True)
+    return_fare_paise = serializers.IntegerField(allow_null=True)
+    return_payment_status = serializers.CharField(allow_null=True)
 
-    @extend_schema_field(ParcelEndSerializer)
+    @extend_schema_field(ParcelContactSerializer)
     def get_pickup(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "pickup")
 
-    @extend_schema_field(ParcelEndSerializer)
+    @extend_schema_field(ParcelContactSerializer)
     def get_drop(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "drop")
 
@@ -586,11 +600,11 @@ class CaptainParcelSerializer(_ParcelBaseSerializer):
             return None
         return receiver_unavailable_allowed_at(obj.ride, obj)
 
-    @extend_schema_field(ParcelEndSerializer(allow_null=True))
+    @extend_schema_field(ParcelContactSerializer(allow_null=True))
     def get_pickup(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "pickup") if obj.ride.state in OPEN_RIDE_STATES else None
 
-    @extend_schema_field(ParcelEndSerializer(allow_null=True))
+    @extend_schema_field(ParcelContactSerializer(allow_null=True))
     def get_drop(self, obj: ParcelDetails) -> dict[str, Any] | None:
         return _end(obj, "drop") if obj.ride.state in OPEN_RIDE_STATES else None
 

@@ -14,6 +14,7 @@ import { blockedReasonTexts, vehicleTypeName, type CaptainStatus } from "../mode
 import { captainStatusKey, useCaptainStatus, useCurrentRide, type CaptainRide } from "../queries";
 import { readSetup } from "../setup-state";
 import { BatteryHelpSheet } from "./battery-help";
+import { ParcelPreferenceCard } from "./parcel-preference-card";
 
 function useAlertsOff() {
   return useQuery({ queryKey: ["rides", "push-permission"], queryFn: pushPermission }).data === "denied";
@@ -59,6 +60,9 @@ const RIDE_STATE: Record<string, string> = {
   CAPTAIN_ARRIVED: "At the pickup",
   IN_TRIP: "In trip",
   COMPLETED: "Collect the payment",
+  // Pick up & Drop only.
+  RETURNING: "Take it back to the pickup",
+  RETURNED: "Collect the payment",
 };
 
 /** Rides already opened full screen this session, so going back to Home never loops. */
@@ -76,7 +80,9 @@ function YourRide({ ride }: { ride: CaptainRide }) {
   }, [ride.id, router]);
   return (
     <View className="rounded-2xl bg-[#00112e] p-4 gap-2">
-      <Text className="text-xs font-semibold uppercase text-[#f87000]">Your ride</Text>
+      <Text className="text-xs font-semibold uppercase text-[#f87000]">
+        {ride.kind === "PARCEL" ? "Your parcel" : "Your ride"}
+      </Text>
       <Text className="text-lg font-bold text-white">{RIDE_STATE[ride.state] ?? ride.state}</Text>
       <Text className="text-sm text-white">Pickup: {ride.pickup.address}</Text>
       <Text className="text-sm text-white/80">Drop: {ride.drop.address}</Text>
@@ -84,7 +90,8 @@ function YourRide({ ride }: { ride: CaptainRide }) {
         {ride.rider.name} · {formatMoney(ride.fare_paise)}
       </Text>
       <Button onPress={() => router.push("/rides/trip")}>Open ride</Button>
-      {phone ? (
+      {/* A parcel's people are called from the trip screen: the booker may be neither end. */}
+      {phone && ride.kind !== "PARCEL" ? (
         <Button variant="outline" onPress={() => void Linking.openURL(`tel:${phone}`)}>
           Call rider
         </Button>
@@ -272,6 +279,8 @@ export function CaptainHome() {
           <Text className="text-sm text-text-muted">No vehicle saved</Text>
         )}
       </View>
+
+      <ParcelPreferenceCard status={data} />
     </ScrollView>
   );
 }

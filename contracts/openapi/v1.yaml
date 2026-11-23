@@ -27270,12 +27270,12 @@ components:
           type: boolean
         pickup:
           allOf:
-          - $ref: '#/components/schemas/ParcelEnd'
+          - $ref: '#/components/schemas/ParcelContact'
           nullable: true
           readOnly: true
         drop:
           allOf:
-          - $ref: '#/components/schemas/ParcelEnd'
+          - $ref: '#/components/schemas/ParcelContact'
           nullable: true
           readOnly: true
         payment_point:
@@ -27285,19 +27285,25 @@ components:
         arrived_at_drop_at:
           type: string
           format: date-time
+          nullable: true
         delivered_at:
           type: string
           format: date-time
+          nullable: true
         receiver_unavailable_at:
           type: string
           format: date-time
+          nullable: true
         returned_at:
           type: string
           format: date-time
+          nullable: true
         return_fare_paise:
           type: integer
+          nullable: true
         return_payment_status:
           type: string
+          nullable: true
         receiver_unavailable_allowed_at:
           type: string
           format: date-time
@@ -33324,6 +33330,7 @@ components:
         max_weight_grams:
           type: integer
           readOnly: true
+          nullable: true
           description: Parcel quotes only; null for a ride.
         size_label:
           type: string
@@ -39464,11 +39471,11 @@ components:
           type: boolean
         pickup:
           allOf:
-          - $ref: '#/components/schemas/ParcelEnd'
+          - $ref: '#/components/schemas/ParcelContact'
           readOnly: true
         drop:
           allOf:
-          - $ref: '#/components/schemas/ParcelEnd'
+          - $ref: '#/components/schemas/ParcelContact'
           readOnly: true
         payment_point:
           type: string
@@ -39477,19 +39484,25 @@ components:
         arrived_at_drop_at:
           type: string
           format: date-time
+          nullable: true
         delivered_at:
           type: string
           format: date-time
+          nullable: true
         receiver_unavailable_at:
           type: string
           format: date-time
+          nullable: true
         returned_at:
           type: string
           format: date-time
+          nullable: true
         return_fare_paise:
           type: integer
+          nullable: true
         return_payment_status:
           type: string
+          nullable: true
         pin_attempts:
           type: integer
           description: Wrong delivery PINs so far, out of 5.
@@ -40844,11 +40857,11 @@ components:
           type: boolean
         pickup:
           allOf:
-          - $ref: '#/components/schemas/ParcelEnd'
+          - $ref: '#/components/schemas/ParcelContact'
           readOnly: true
         drop:
           allOf:
-          - $ref: '#/components/schemas/ParcelEnd'
+          - $ref: '#/components/schemas/ParcelContact'
           readOnly: true
         payment_point:
           type: string
@@ -40857,19 +40870,25 @@ components:
         arrived_at_drop_at:
           type: string
           format: date-time
+          nullable: true
         delivered_at:
           type: string
           format: date-time
+          nullable: true
         receiver_unavailable_at:
           type: string
           format: date-time
+          nullable: true
         returned_at:
           type: string
           format: date-time
+          nullable: true
         return_fare_paise:
           type: integer
+          nullable: true
         return_payment_status:
           type: string
+          nullable: true
         delivery_pin:
           type: string
           nullable: true
@@ -40891,33 +40910,31 @@ components:
       - return_fare_paise
       - return_payment_status
       - returned_at
-    ParcelEnd:
+    ParcelContact:
       type: object
-      description: |-
-        One end of a parcel: who is there and how to meet them.
-
-        A missing name or phone is a 422 from the booking (`parcel_details_required`), not a 400, so
-        the app can send the customer back to the details screen. A malformed phone is a 400.
+      description: 'One end of a parcel as the server sends it back: every field is
+        always there.'
       properties:
         name:
           type: string
-          maxLength: 80
         phone:
           type: string
           description: A 10-digit Indian mobile number, without +91.
         building:
           type: string
-          maxLength: 120
         unit:
           type: string
-          maxLength: 60
         meet_at:
           $ref: '#/components/schemas/DropMeetAtEnum'
         instructions:
           type: string
-          maxLength: 120
       required:
+      - building
+      - instructions
       - meet_at
+      - name
+      - phone
+      - unit
     ParcelEndRequest:
       type: object
       description: |-

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.112.0)
- * Checksum: a0c4a3ecb5f38793
+ * Checksum: 3e6dfb9bc3f98ae9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11346,20 +11346,20 @@ export interface components {
             mode: string;
             payer: string;
             pin_required: boolean;
-            readonly pickup: components["schemas"]["ParcelEnd"] | null;
-            readonly drop: components["schemas"]["ParcelEnd"] | null;
+            readonly pickup: components["schemas"]["ParcelContact"] | null;
+            readonly drop: components["schemas"]["ParcelContact"] | null;
             /** @description PICKUP when the sender pays, DROP when the receiver pays. */
             readonly payment_point: string;
             /** Format: date-time */
-            arrived_at_drop_at: string;
+            arrived_at_drop_at: string | null;
             /** Format: date-time */
-            delivered_at: string;
+            delivered_at: string | null;
             /** Format: date-time */
-            receiver_unavailable_at: string;
+            receiver_unavailable_at: string | null;
             /** Format: date-time */
-            returned_at: string;
-            return_fare_paise: number;
-            return_payment_status: string;
+            returned_at: string | null;
+            return_fare_paise: number | null;
+            return_payment_status: string | null;
             /**
              * Format: date-time
              * @description When Receiver not available opens (server time); null before arriving at the drop and once the parcel is no longer at the drop.
@@ -13756,7 +13756,7 @@ export interface components {
             readonly id: string;
             readonly kind: components["schemas"]["Kind899Enum"];
             /** @description Parcel quotes only; null for a ride. */
-            readonly max_weight_grams: number;
+            readonly max_weight_grams: number | null;
             /** @description Parcel quotes only; empty for a ride. */
             readonly size_label: string;
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
@@ -16120,20 +16120,20 @@ export interface components {
             mode: string;
             payer: string;
             pin_required: boolean;
-            readonly pickup: components["schemas"]["ParcelEnd"];
-            readonly drop: components["schemas"]["ParcelEnd"];
+            readonly pickup: components["schemas"]["ParcelContact"];
+            readonly drop: components["schemas"]["ParcelContact"];
             /** @description PICKUP when the sender pays, DROP when the receiver pays. */
             readonly payment_point: string;
             /** Format: date-time */
-            arrived_at_drop_at: string;
+            arrived_at_drop_at: string | null;
             /** Format: date-time */
-            delivered_at: string;
+            delivered_at: string | null;
             /** Format: date-time */
-            receiver_unavailable_at: string;
+            receiver_unavailable_at: string | null;
             /** Format: date-time */
-            returned_at: string;
-            return_fare_paise: number;
-            return_payment_status: string;
+            returned_at: string | null;
+            return_fare_paise: number | null;
+            return_payment_status: string | null;
             /** @description Wrong delivery PINs so far, out of 5. */
             pin_attempts: number;
         };
@@ -16613,37 +16613,32 @@ export interface components {
             mode: string;
             payer: string;
             pin_required: boolean;
-            readonly pickup: components["schemas"]["ParcelEnd"];
-            readonly drop: components["schemas"]["ParcelEnd"];
+            readonly pickup: components["schemas"]["ParcelContact"];
+            readonly drop: components["schemas"]["ParcelContact"];
             /** @description PICKUP when the sender pays, DROP when the receiver pays. */
             readonly payment_point: string;
             /** Format: date-time */
-            arrived_at_drop_at: string;
+            arrived_at_drop_at: string | null;
             /** Format: date-time */
-            delivered_at: string;
+            delivered_at: string | null;
             /** Format: date-time */
-            receiver_unavailable_at: string;
+            receiver_unavailable_at: string | null;
             /** Format: date-time */
-            returned_at: string;
-            return_fare_paise: number;
-            return_payment_status: string;
+            returned_at: string | null;
+            return_fare_paise: number | null;
+            return_payment_status: string | null;
             /** @description The 4-digit PIN for the receiver. Only to the booker, only when PIN confirmation is on, and only until the parcel is delivered or goes back. */
             readonly delivery_pin: string | null;
         };
-        /**
-         * @description One end of a parcel: who is there and how to meet them.
-         *
-         *     A missing name or phone is a 422 from the booking (`parcel_details_required`), not a 400, so
-         *     the app can send the customer back to the details screen. A malformed phone is a 400.
-         */
-        ParcelEnd: {
-            name?: string;
+        /** @description One end of a parcel as the server sends it back: every field is always there. */
+        ParcelContact: {
+            name: string;
             /** @description A 10-digit Indian mobile number, without +91. */
-            phone?: string;
-            building?: string;
-            unit?: string;
+            phone: string;
+            building: string;
+            unit: string;
             meet_at: components["schemas"]["DropMeetAtEnum"];
-            instructions?: string;
+            instructions: string;
         };
         /**
          * @description One end of a parcel: who is there and how to meet them.

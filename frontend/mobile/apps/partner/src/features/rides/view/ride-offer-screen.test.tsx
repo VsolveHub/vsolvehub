@@ -121,3 +121,51 @@ test("an ended request stops ringing and says it has ended", async () => {
   mockRemainingMs = 12_000;
   expect((await renderOffer()).getByText("This ride request has ended.")).toBeTruthy();
 });
+
+describe("a Pick up & Drop request", () => {
+  const PARCEL_OFFER = {
+    ...OFFER,
+    kind: "PARCEL",
+    parcel: { pickup_meet_at: "CURB", drop_meet_at: "DOOR", payment_point: "DROP" },
+  };
+
+  test("says it is a parcel, how to meet at each end and where to collect", async () => {
+    mockOffer = PARCEL_OFFER;
+    const view = await renderOffer();
+
+    expect(view.getByText("New parcel request")).toBeTruthy();
+    expect(view.getByText("Pick up & Drop")).toBeTruthy();
+    expect(view.getByText("Collect at drop")).toBeTruthy();
+    expect(view.getByText("Meet at curb")).toBeTruthy();
+    expect(view.getByText("Meet at door")).toBeTruthy();
+    expect(view.queryByText("Cash or UPI from the rider")).toBeNull();
+    // The pickup, drop and fare are shown as for a ride, and there is still no name or phone.
+    expect(view.getByText("Gachibowli Stadium")).toBeTruthy();
+    expect(view.getByText("₹51")).toBeTruthy();
+  });
+
+  test("collects at the pickup when the sender pays", async () => {
+    mockOffer = { ...PARCEL_OFFER, parcel: { ...PARCEL_OFFER.parcel, payment_point: "PICKUP" } };
+
+    expect((await renderOffer()).getByText("Collect at pickup")).toBeTruthy();
+  });
+
+  test("a ride request has no parcel wording", async () => {
+    mockOffer = { ...OFFER, kind: "RIDE", parcel: null };
+    const view = await renderOffer();
+
+    expect(view.getByText("New ride request")).toBeTruthy();
+    expect(view.queryByText("Pick up & Drop")).toBeNull();
+    expect(view.getByText("Cash or UPI from the rider")).toBeTruthy();
+  });
+
+  test("accepting works the same", async () => {
+    mockOffer = PARCEL_OFFER;
+    mockAccept.mockResolvedValue({ id: "ride-1" });
+    const view = await renderOffer();
+
+    await fireEvent.press(view.getByText("Accept"));
+
+    await waitFor(() => expect(mockAccept).toHaveBeenCalledWith("offer-1"));
+  });
+});
