@@ -12,10 +12,8 @@ import { getApiClient } from "../api/client";
 import { getMobileQueryClient } from "../query/query-client";
 import { useAuthStore } from "./auth-store";
 import { deviceLabel } from "./device-label";
-import { phoneAuthProvider } from "./firebase-module";
 import { installationId } from "./installation-id";
 import { logAuthFailure } from "./log-auth-failure";
-import { useMobileFirebaseFlow } from "./use-mobile-firebase-flow";
 
 export interface MobileOtpFlowOptions {
   intendedRole?: "partner";
@@ -55,25 +53,10 @@ function digitsIn(value: string): number {
 }
 
 /**
- * Phone sign-in for both apps, switched like the web's `usePhoneAuthFlow`: Firebase when the
- * build sets `EXPO_PUBLIC_PHONE_AUTH_PROVIDER=firebase`, otherwise the server-sent code (MSG91),
- * which store and test builds use since 2026-11-21. The setting is fixed for the life of a build, so the hook order never
- * changes between renders.
+ * Phone sign-in for both apps: Django sends the code (MSG91). Same steps as the web OTP flow.
+ * Verify uses the mobile endpoint and stores the bearer token instead of relying on a cookie.
  */
 export function useMobileOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
-  if (phoneAuthProvider() === "firebase") {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useMobileFirebaseFlow(options);
-  }
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useServerOtpFlow(options);
-}
-
-/**
- * Same steps as the web OTP flow. Verify uses the mobile endpoint and stores
- * the bearer token instead of relying on a cookie.
- */
-function useServerOtpFlow(options?: MobileOtpFlowOptions): MobileOtpFlow {
   const [phase, setPhase] = useState<OtpPhase>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");

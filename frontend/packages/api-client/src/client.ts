@@ -92,21 +92,18 @@ const CSRF_BOOTSTRAP_PATH = "/api/v1/auth/csrf/";
 /** Django's stable code for a rejected or rotated CSRF token (contract 1.3.0). */
 const CSRF_FAILED_CODE = "csrf_failed";
 /** Endpoints whose success starts a new session (and so a new CSRF token). */
-const SIGN_IN_PATHS = new Set(["/api/v1/auth/otp/verify/", "/api/v1/auth/firebase/verify/"]);
+const SIGN_IN_PATHS = new Set(["/api/v1/auth/otp/verify/"]);
 
 /**
  * Bearer mode: calls that start a session from nothing. The stored token is never sent on
  * these. A dead token left from an earlier session (expired, revoked, a reset database)
  * would otherwise be refused by Django before the sign-in view runs, and the person could
- * not sign in at all. Firebase step-up is absent on purpose: it acts on the current session.
+ * not sign in at all. Step-up is absent on purpose: it acts on the current session.
  */
 const BEARER_SIGN_IN_PATHS = new Set([
   "/api/v1/auth/otp/request/",
   "/api/v1/auth/otp/verify/",
-  "/api/v1/auth/firebase/precheck/",
-  "/api/v1/auth/firebase/verify/",
   "/api/v1/auth/mobile/otp/verify/",
-  "/api/v1/auth/mobile/firebase/verify/",
 ]);
 
 /**

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.116.0)
- * Checksum: 3fbd9c6b8d251b3f
+ * Source:   contracts/openapi/v1.yaml (version 1.117.0)
+ * Checksum: b6eed6352eb065e9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -161,67 +161,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/firebase/precheck/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Pre-check rate limits and intended role gate before requesting Firebase SMS.
-         *
-         *     Note that this is a UX/rate-limit aid and verify is the real gate.
-         */
-        post: operations["auth_firebase_precheck_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/firebase/step-up/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description `FinanceStepUpView` for deployments whose codes are sent by Firebase (contract 1.77.0).
-         *
-         *     Same outcome, same stamp: the session's `stepped_up_at`, which `HasRecentOperationsStepUp`
-         *     reads. Only the proof differs — a fresh, single-use Firebase ID token for the signed-in
-         *     person's own number instead of a Django OTP challenge.
-         */
-        post: operations["auth_firebase_step_up_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/firebase/verify/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Verify Firebase ID token, provision the user session, and issue auth cookies. */
-        post: operations["auth_firebase_verify_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/logout/": {
         parameters: {
             query?: never;
@@ -232,29 +171,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth_logout_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/mobile/firebase/verify/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Firebase phone sign-in for the apps.
-         *
-         *     The web's Firebase check (`verify_firebase_login`), answered with a bearer token instead of
-         *     cookies, like `MobileOtpVerifyView`. The app sends the precheck to the shared
-         *     `POST /auth/firebase/precheck/` first, exactly as the web does.
-         */
-        post: operations["auth_mobile_firebase_verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12857,25 +12773,6 @@ export interface components {
         ExpectedVersionRequest: {
             expected_version: number;
         };
-        FirebasePrecheckRequest: {
-            phone_number: string;
-            /** @default  */
-            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
-        };
-        FirebaseStepUpRequest: {
-            /** @description Firebase ID token from a phone verification just completed for the signed-in person's own number. */
-            id_token: string;
-        };
-        FirebaseVerifyRequest: {
-            /** @description Firebase ID token issued after client-side Phone Auth. */
-            id_token: string;
-            /** @default  */
-            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
-            /** @description Applied only when this verification creates a new account. */
-            referral_code?: string;
-            device_identifier?: string;
-            device_label?: string;
-        };
         FulfilmentPlan: {
             /** Format: uuid */
             readonly id: string;
@@ -13721,17 +13618,6 @@ export interface components {
             /** Format: date-time */
             readonly session_expires_at: string;
             readonly session_token: string;
-        };
-        /** @description The web Firebase verify body, with a required installation id. */
-        MobileFirebaseVerifyRequest: {
-            /** @description Firebase ID token issued after client-side Phone Auth. */
-            id_token: string;
-            /** @default  */
-            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
-            /** @description Applied only when this verification creates a new account. */
-            referral_code?: string;
-            device_identifier: string;
-            device_label?: string;
         };
         /** @description Same OTP body as the web, with a required installation id. */
         MobileOtpVerifyRequest: {
@@ -22585,166 +22471,6 @@ export interface operations {
             };
         };
     };
-    auth_firebase_precheck_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FirebasePrecheckRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["FirebasePrecheckRequest"];
-                "multipart/form-data": components["schemas"]["FirebasePrecheckRequest"];
-            };
-        };
-        responses: {
-            /** @description Precheck allowed; client may proceed with Firebase SMS. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    auth_firebase_step_up_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FirebaseStepUpRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["FirebaseStepUpRequest"];
-                "multipart/form-data": components["schemas"]["FirebaseStepUpRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepUpSession"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `step_up_identity_mismatch`: the verified number is not the signed-in person's. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Firebase auth is disabled. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    auth_firebase_verify_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FirebaseVerifyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["FirebaseVerifyRequest"];
-                "multipart/form-data": components["schemas"]["FirebaseVerifyRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthenticatedSession"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
     auth_logout_create: {
         parameters: {
             query?: never;
@@ -22760,57 +22486,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    auth_mobile_firebase_verify_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MobileFirebaseVerifyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["MobileFirebaseVerifyRequest"];
-                "multipart/form-data": components["schemas"]["MobileFirebaseVerifyRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MobileAuthenticatedSession"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
             };
         };
     };

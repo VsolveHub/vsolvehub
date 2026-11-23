@@ -9,19 +9,17 @@ const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
 const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() ?? "";
 const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
 
-// Firebase phone sign-in. Its plugins read the Firebase config files, so they switch on only
-// when a build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST).
-// Expo Go and builds without the files are unaffected. iOS needs static frameworks for it.
-// Android needs Kotlin 2.3+: React Native Firebase 27 pulls in firebase-auth 25, compiled with
-// Kotlin 2.4, which React Native 0.88's default Kotlin 2.2 cannot read. Kotlin 2.3 reads it, and
-// Expo SDK 58 pairs Kotlin >= 2.3 with its version-independent KSP.
-// Crashlytics rides with them: it reports through the same Firebase app, so it is on only when
-// Firebase is.
+// Firebase, for Crashlytics crash reports only: sign-in is Django's own code (MSG91) since
+// 23 November 2026. The plugins read the Firebase config files, so they switch on only when a
+// build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST). Expo Go
+// and builds without the files are unaffected. iOS needs static frameworks for React Native
+// Firebase. The Kotlin 2.3 pin arrived with firebase-auth (built with Kotlin 2.4, which React
+// Native 0.88's default Kotlin 2.2 cannot read); it stays because every release so far was built
+// with it, and Expo SDK 58 pairs Kotlin >= 2.3 with its version-independent KSP.
 const firebasePlugins: NonNullable<ExpoConfig["plugins"]> =
   googleServicesFile || googleServiceInfoPlist
     ? [
         "@react-native-firebase/app",
-        "@react-native-firebase/auth",
         "@react-native-firebase/crashlytics",
         [
           "expo-build-properties",

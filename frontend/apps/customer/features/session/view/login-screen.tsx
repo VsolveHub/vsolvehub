@@ -1,6 +1,6 @@
 "use client";
 
-import { queryKeys, safeNextPath, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
+import { queryKeys, safeNextPath, useAuthGuard, useOtpFlow } from "@vsolve/query";
 import { ErrorState, Spinner } from "@vsolve/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -41,7 +41,7 @@ export function LoginScreen() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const guard = useAuthGuard(getApiClient());
-  const flow = usePhoneAuthFlow(getApiClient(), { getReferralCode: readPendingReferral });
+  const flow = useOtpFlow(getApiClient(), { getReferralCode: readPendingReferral });
 
   const isAuthenticated = guard.status === "authenticated";
   const next = safeNextPath(searchParams.get("next"));

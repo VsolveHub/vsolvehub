@@ -20,7 +20,9 @@ requests>=2.34,<3
 boto3>=1.40,<2
 django-storages[s3]>=1.14,<2
 structlog>=25,<26
-firebase-admin>=6.5,<7
+# Cashfree Payouts signs each token request with Cashfree's RSA public key
+# (apps/payouts/providers.py). Listed directly: it used to arrive only through firebase-admin.
+cryptography>=50,<51
 # Production WSGI server. Threaded (gthread) workers rather than ASGI: the partner offer
 # stream in apps/notifications/streaming.py is a synchronous generator that holds one
 # worker thread per open connection, and Django buffers a synchronous stream under ASGI.

@@ -1,24 +1,18 @@
 "use client";
 
-import { ApiRequestError, request } from "@vsolve/api-client";
 import {
   describeOtpFailure,
-  formatToE164,
-  isFirebasePhoneAuth,
-  mapFirebaseError,
   sanitizeCodeInput,
-  startFirebasePhoneVerification,
   useCurrentSession,
   type OtpFailure,
 } from "@vsolve/query";
 import { Button, Card, ErrorState, Field, Input } from "@vsolve/ui";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
 
 import {
   isStepUpIdentityMismatch,
-  useConfirmFirebaseStepUp,
   useConfirmStepUp,
   useRequestStepUpCode,
   type StepUpSession,
@@ -40,18 +34,11 @@ import {
  * them is what brings the operator back here. The server is asked; the client
  * does not keep its own copy of the answer.
  *
- * ## Two ways to send the code, one stamp
- *
- * Django's own OTP (MSG91) or Firebase, whichever `NEXT_PUBLIC_PHONE_AUTH_PROVIDER`
- * names — the same switch the sign-in screen follows (contract 1.77.0). Both end in
- * the same `stepped_up_at`; only the proof sent to Django differs.
- *
  * ## Always the signed-in person's own number
  *
- * Nobody types a number here. The Django path asks for a code without one and Django sends it
- * to the account's own number; the Firebase path, which has to send the SMS from the browser,
- * uses the number from the signed-in session. A code for anyone else proves nothing about the
- * person signed in, and used to be refused as if the code itself were wrong (contract 1.114.0).
+ * Nobody types a number here. The form asks for a code without one and Django sends it (MSG91)
+ * to the account's own number. A code for anyone else proves nothing about the person signed
+ * in, and used to be refused as if the code itself were wrong (contract 1.114.0).
  *
  * ## The code is never stored
  *
@@ -122,21 +109,12 @@ export function CompactStepUpGate({
         />
       ) : null}
       {open ? (
-        isFirebasePhoneAuth() ? (
-          <FirebaseStepUpForm
-            onSteppedUp={(stepped) => {
-              setOpened(false);
-              onSteppedUp(stepped);
-            }}
-          />
-        ) : (
-          <OtpStepUpForm
-            onSteppedUp={(stepped) => {
-              setOpened(false);
-              onSteppedUp(stepped);
-            }}
-          />
-        )
+        <OtpStepUpForm
+          onSteppedUp={(stepped) => {
+            setOpened(false);
+            onSteppedUp(stepped);
+          }}
+        />
       ) : null}
     </Card>
   );
@@ -187,11 +165,7 @@ export function StepUpGate({
         </p>
       ) : null}
 
-      {isFirebasePhoneAuth() ? (
-        <FirebaseStepUpForm onSteppedUp={onSteppedUp} />
-      ) : (
-        <OtpStepUpForm onSteppedUp={onSteppedUp} />
-      )}
+      <OtpStepUpForm onSteppedUp={onSteppedUp} />
     </Card>
   );
 }
@@ -223,12 +197,10 @@ function useOwnPhone(): { phone: string | null; loading: boolean } {
 
 function SendStep({
   maskedPhone,
-  phoneError,
   sending,
   onSend,
 }: {
   maskedPhone: string | null;
-  phoneError?: string;
   sending: boolean;
   onSend: () => void;
 }) {
@@ -247,11 +219,6 @@ function SendStep({
           "We will send a code to the number you signed in with."
         )}
       </p>
-      {phoneError ? (
-        <p role="alert" className="mt-2 text-sm text-danger-text">
-          {phoneError}
-        </p>
-      ) : null}
       <Button className="mt-4" loading={sending} loadingLabel="Sending a code" onClick={onSend}>
         Send me a code
       </Button>
@@ -380,160 +347,6 @@ function OtpStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) 
             )
           }
           onSendAgain={startOver}
-        />
-      )}
-    </>
-  );
-}
-
-const FIREBASE_CODE_LENGTH = 6;
-
-/**
- * Firebase sends and checks the code; Django checks the resulting ID token is
- * fresh, unspent and for the signed-in operator's own number.
- */
-function FirebaseStepUpForm({ onSteppedUp }: { onSteppedUp: (session: StepUpSession) => void }) {
-  const confirmStepUp = useConfirmFirebaseStepUp();
-  // Firebase sends the SMS from the browser, so it needs the number here: always the
-  // signed-in session's own, never one typed in.
-  const { phone } = useOwnPhone();
-
-  const [code, setCode] = useState("");
-  const [awaitingCode, setAwaitingCode] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [phoneError, setPhoneError] = useState<string | undefined>(undefined);
-  const [codeError, setCodeError] = useState<string | undefined>(undefined);
-  const [failure, setFailure] = useState<OtpFailure | null>(null);
-  // The confirm step Firebase handed back. Held in a ref: it is a capability for
-  // this one attempt, not something to render.
-  const confirmCodeRef = useRef<((code: string) => Promise<string>) | null>(null);
-
-  const backToPhone = () => {
-    confirmCodeRef.current = null;
-    setAwaitingCode(false);
-    setCode("");
-    setCodeError(undefined);
-  };
-
-  const showFirebaseError = (error: unknown) => {
-    const mapped = mapFirebaseError(error);
-    if (mapped.target === "phone") setPhoneError(mapped.message);
-    else if (mapped.target === "code") setCodeError(mapped.message);
-    else
-      setFailure(
-        mapped.failure ?? {
-          kind: "unexpected",
-          title: "That did not go through",
-          message: mapped.message,
-          severity: "error",
-          reference: null,
-        },
-      );
-  };
-
-  const send = async () => {
-    if (sending) return;
-    if (!phone) {
-      setPhoneError("We could not read the number you signed in with. Reload the page and try again.");
-      return;
-    }
-    setSending(true);
-    setFailure(null);
-    setPhoneError(undefined);
-    try {
-      // Django's rate limit and grant check first, so a refused number costs no SMS.
-      await request(() =>
-        getApiClient().POST("/api/v1/auth/firebase/precheck/", {
-          body: { phone_number: formatToE164(phone), intended_role: "operations" },
-        }),
-      );
-    } catch (error) {
-      setFailure(describeOtpFailure(error, "operations"));
-      setSending(false);
-      return;
-    }
-    try {
-      confirmCodeRef.current = await startFirebasePhoneVerification(formatToE164(phone));
-      setCode("");
-      setAwaitingCode(true);
-    } catch (error) {
-      showFirebaseError(error);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const confirm = async () => {
-    const confirmCode = confirmCodeRef.current;
-    if (!confirmCode || confirming) return;
-    setConfirming(true);
-    setFailure(null);
-    setCodeError(undefined);
-
-    let idToken: string;
-    try {
-      idToken = await confirmCode(code);
-    } catch (error) {
-      showFirebaseError(error);
-      setConfirming(false);
-      return;
-    }
-
-    confirmStepUp.mutate(idToken, {
-      onSuccess: (stepped) => {
-        backToPhone();
-        onSteppedUp(stepped);
-      },
-      onError: (error) => {
-        // The token is spent whatever Django said, so the next try needs a new code.
-        backToPhone();
-        setFailure(
-          isStepUpIdentityMismatch(error)
-            ? {
-                kind: "unexpected",
-                title: "That is not your number",
-                message:
-                  "Confirm with the mobile number you signed in with. Nothing was confirmed.",
-                severity: "error",
-                reference: error instanceof ApiRequestError ? error.requestId : null,
-              }
-            : {
-                kind: "unexpected",
-                title: "We could not confirm it is you",
-                message: "The code expired or was already used. Ask for a new one.",
-                severity: "error",
-                reference: error instanceof ApiRequestError ? error.requestId : null,
-              },
-        );
-      },
-      onSettled: () => setConfirming(false),
-    });
-  };
-
-  return (
-    <>
-      <FailureBanner failure={failure} />
-
-      {awaitingCode ? (
-        <CodeStep
-          code={code}
-          codeLength={FIREBASE_CODE_LENGTH}
-          onCodeChange={(value) => {
-            setCode(value);
-            setCodeError(undefined);
-          }}
-          codeError={codeError}
-          confirming={confirming}
-          onConfirm={() => void confirm()}
-          onSendAgain={backToPhone}
-        />
-      ) : (
-        <SendStep
-          maskedPhone={phone ? maskPhone(phone) : null}
-          phoneError={phoneError}
-          sending={sending}
-          onSend={() => void send()}
         />
       )}
     </>
