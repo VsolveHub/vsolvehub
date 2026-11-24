@@ -47,7 +47,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "V Solve Hub",
   slug: "vsolve-customer",
-  owner: "vsolvehub",
+  owner: "webaura7000s",
   scheme: "vsolvehub",
   version: "1.0.0",
   orientation: "portrait",
