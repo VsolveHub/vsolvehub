@@ -261,7 +261,7 @@ describe("parcel rate cards (§7.3)", () => {
   async function openAdd() {
     client.GET.mockResolvedValue(ok([RIDE_CARD, PARCEL_CARD]));
     render(<RateCards />, { wrapper });
-    fireEvent.click(await screen.findByRole("button", { name: "Add card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add rate card" }));
     return screen.getByRole("dialog");
   }
 
@@ -355,8 +355,26 @@ describe("parcel rate cards (§7.3)", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Add card" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Max weight (kg)");
+    const weight = within(dialog).getByLabelText(/^Max weight/);
+    expect(weight).toHaveAttribute("aria-invalid", "true");
+    expect(weight).toHaveAccessibleDescription(expect.stringContaining("Enter a weight above 0 kg."));
     expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it("shows what is missing under each box when Add card is pressed on an empty form", async () => {
+    const dialog = await openAdd();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add card" }));
+
+    expect(within(dialog).getByText("Choose an area.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Choose a vehicle.")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^Base fare/)).toHaveAttribute("aria-invalid", "true");
+    expect(within(dialog).getAllByText("Enter an amount in rupees, 0 or more.").length).toBe(5);
+    expect(client.POST).not.toHaveBeenCalled();
+
+    // Fixing a box takes its message away.
+    fireEvent.change(within(dialog).getByLabelText(/^Area/), { target: { value: "area-1" } });
+    expect(within(dialog).queryByText("Choose an area.")).not.toBeInTheDocument();
   });
 
   it("edits a parcel card's limits on their own, as a new version", async () => {

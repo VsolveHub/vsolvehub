@@ -84,6 +84,22 @@ describe("rate cards", () => {
 });
 
 describe("pass plans", () => {
+  it("shows what is missing under each box, and saves nothing", async () => {
+    client.GET.mockResolvedValue(ok([PLAN]));
+    render(<PassPlans />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add pass plan" }));
+    fireEvent.change(screen.getByLabelText(/^Lasts/), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add plan" }));
+
+    expect(screen.getByText("Give the plan a code, for example DAILY_BIKE.")).toBeInTheDocument();
+    expect(screen.getByText("Give the plan a name captains will see.")).toBeInTheDocument();
+    expect(screen.getByText("Enter the price in rupees.")).toBeInTheDocument();
+    expect(screen.getByText("A pass lasts at least 1 whole hour.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Name/)).toHaveAttribute("aria-invalid", "true");
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
   it("shows the plan and saves an edited price in paise", async () => {
     client.GET.mockResolvedValue(ok([PLAN]));
     client.PATCH.mockResolvedValue(ok({ ...PLAN, price_paise: 5900 }));

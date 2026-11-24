@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { durationText, fromInput, toInput } from "../model";
 import { usePassPlans, useSavePassPlan, type PassPlan } from "../queries";
+import { Stacked, Table, Td, Th, Toolbar } from "./layout";
 
 function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => void }) {
   const save = useSavePassPlan();
@@ -14,16 +15,23 @@ function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => v
   const [price, setPrice] = useState(plan ? toInput(plan.price_paise, "rupees") : "");
   const [hours, setHours] = useState(plan ? String(plan.duration_hours) : "24");
   const [active, setActive] = useState(plan?.is_active ?? true);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Each message shows under its own box, and goes as soon as that box changes.
+  const [problems, setProblems] = useState<Partial<Record<"code" | "name" | "price" | "hours", string>>>({});
+
+  function clear(key: keyof typeof problems) {
+    setProblems((old) => (old[key] ? { ...old, [key]: undefined } : old));
+  }
 
   function submit() {
     const pricePaise = fromInput(price, "rupees");
     const duration = fromInput(hours, "minutes");
-    if (!name.trim()) return setProblem("Give the plan a name captains will see.");
-    if (!plan && !code.trim()) return setProblem("Give the plan a code, for example DAILY_BIKE.");
-    if (pricePaise === null) return setProblem("Enter the price in rupees.");
-    if (duration === null || duration < 1) return setProblem("A pass lasts at least 1 whole hour.");
-    setProblem(null);
+    const found: typeof problems = {};
+    if (!plan && !code.trim()) found.code = "Give the plan a code, for example DAILY_BIKE.";
+    if (!name.trim()) found.name = "Give the plan a name captains will see.";
+    if (pricePaise === null) found.price = "Enter the price in rupees.";
+    if (duration === null || duration < 1) found.hours = "A pass lasts at least 1 whole hour.";
+    setProblems(found);
+    if (pricePaise === null || duration === null || Object.keys(found).length > 0) return;
     const body = { name: name.trim(), price_paise: pricePaise, duration_hours: duration, is_active: active };
     if (plan) save.mutate({ planId: plan.id, body }, { onSuccess: onClose });
     else save.mutate({ body: { ...body, code: code.trim().toUpperCase() } }, { onSuccess: onClose });
@@ -52,29 +60,65 @@ function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => v
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Code" required description={plan ? "Fixed once created." : undefined}>
-          <Input value={code} disabled={plan !== null} onChange={(e) => setCode(e.target.value)} maxLength={32} />
-        </Field>
-        <Field label="Name" required>
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
-        </Field>
-        <Field label="Price (₹)" required>
-          <Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
-        </Field>
-        <Field label="Lasts (hours)" required>
-          <Input inputMode="numeric" value={hours} onChange={(e) => setHours(e.target.value)} />
-        </Field>
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            label="Code"
+            required
+            description={plan ? "Fixed once created." : "Capital letters, for example DAILY_BIKE."}
+            error={problems.code}
+          >
+            <Input
+              value={code}
+              disabled={plan !== null}
+              maxLength={32}
+              onChange={(e) => {
+                setCode(e.target.value);
+                clear("code");
+              }}
+            />
+          </Field>
+          <Field label="Name" required description="What captains see." error={problems.name}>
+            <Input
+              value={name}
+              maxLength={80}
+              onChange={(e) => {
+                setName(e.target.value);
+                clear("name");
+              }}
+            />
+          </Field>
+          <Field label="Price (₹)" required error={problems.price}>
+            <Input
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => {
+                setPrice(e.target.value);
+                clear("price");
+              }}
+            />
+          </Field>
+          <Field label="Lasts (hours)" required error={problems.hours}>
+            <Input
+              inputMode="numeric"
+              value={hours}
+              onChange={(e) => {
+                setHours(e.target.value);
+                clear("hours");
+              }}
+            />
+          </Field>
+        </div>
+        <label className="flex items-center gap-2 border-t border-line pt-4 text-sm">
+          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+          Captains can buy this plan
+        </label>
+        {save.error ? (
+          <p role="alert" className="rounded-lg bg-danger-surface px-3 py-2 text-sm text-danger-text">
+            {friendlyErrorMessage(save.error)}
+          </p>
+        ) : null}
       </div>
-      <label className="mt-3 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-        Captains can buy this plan
-      </label>
-      {problem || save.error ? (
-        <p role="alert" className="mt-3 text-sm text-danger-text">
-          {problem ?? friendlyErrorMessage(save.error)}
-        </p>
-      ) : null}
     </Dialog>
   );
 }
@@ -98,46 +142,49 @@ export function PassPlans() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => setEditing({ plan: null })}>
-          Add plan
-        </Button>
-      </div>
+      <Toolbar
+        action={
+          <Button size="sm" onClick={() => setEditing({ plan: null })}>
+            Add pass plan
+          </Button>
+        }
+      >
+        <p className="text-sm text-text-secondary">Captains buy a pass to go on duty. Prices are in rupees.</p>
+      </Toolbar>
       {plans.data.length === 0 ? (
         <EmptyState title="No pass plans" description="Captains need an active plan to go on duty." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase text-text-secondary">
-              <tr>
-                <th className="px-4 py-3">Plan</th>
-                <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3 text-right">Price</th>
-                <th className="px-4 py-3">Lasts</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {plans.data.map((plan) => (
-                <tr key={plan.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 font-semibold">{plan.name}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{plan.code}</td>
-                  <td className="px-4 py-3 text-right">{plan.price_paise === 0 ? "Free" : formatMoney(plan.price_paise)}</td>
-                  <td className="px-4 py-3">{durationText(plan.duration_hours)}</td>
-                  <td className="px-4 py-3">
-                    {plan.is_active ? <Badge tone="success">On sale</Badge> : <Badge tone="neutral">Off</Badge>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button size="sm" variant="outline" onClick={() => setEditing({ plan })}>
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          head={
+            <>
+              <Th>Plan</Th>
+              <Th numeric>Price</Th>
+              <Th>Lasts</Th>
+              <Th>Status</Th>
+              <Th>
+                <span className="sr-only">Actions</span>
+              </Th>
+            </>
+          }
+        >
+          {plans.data.map((plan) => (
+            <tr key={plan.id} className="hover:bg-surface-sunken">
+              <Td>
+                <Stacked main={plan.name} sub={<span className="font-mono">{plan.code}</span>} />
+              </Td>
+              <Td numeric>{plan.price_paise === 0 ? "Free" : formatMoney(plan.price_paise)}</Td>
+              <Td>{durationText(plan.duration_hours)}</Td>
+              <Td>{plan.is_active ? <Badge tone="success">On sale</Badge> : <Badge tone="neutral">Not on sale</Badge>}</Td>
+              <Td>
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setEditing({ plan })}>
+                    Edit
+                  </Button>
+                </div>
+              </Td>
+            </tr>
+          ))}
+        </Table>
       )}
       {editing ? <PlanDialog plan={editing.plan} onClose={() => setEditing(null)} /> : null}
     </div>

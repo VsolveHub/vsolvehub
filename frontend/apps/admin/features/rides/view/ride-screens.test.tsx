@@ -133,7 +133,7 @@ describe("SOS queue", () => {
     client.POST.mockResolvedValue(ok({ ...SOS, status: "RESOLVED" }));
     render(<SosQueue />, { wrapper });
 
-    expect(await screen.findByText("Priya · rider")).toBeInTheDocument();
+    expect(await screen.findByText("Priya · Rider")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Where it was raised" })).toHaveAttribute(
       "href",
       "https://www.google.com/maps?q=9.490000,76.330000",
