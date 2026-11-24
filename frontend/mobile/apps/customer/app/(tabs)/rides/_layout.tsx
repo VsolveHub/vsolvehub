@@ -16,6 +16,13 @@ export default function RidesLayout() {
         }}
       />
       <Stack.Screen
+        name="start"
+        options={{
+          headerTitle: "Pick up & Drop",
+          headerBackTitle: "Back",
+        }}
+      />
+      <Stack.Screen
         name="choose-ride"
         options={{
           headerTitle: "Choose ride",

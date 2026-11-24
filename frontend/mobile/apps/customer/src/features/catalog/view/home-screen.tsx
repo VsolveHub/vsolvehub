@@ -12,7 +12,6 @@ import { useCategories, usePromoBanners, type Category } from "@/features/catalo
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
 import { PickupDropEntry } from "@/features/rides/pickup-drop-entry";
-import { RidesEntry } from "@/features/rides/rides-entry";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { DesktopHeroCarousel, HeroBannerCarousel } from "@/features/catalog/view/hero-banner-carousel";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
@@ -277,7 +276,6 @@ function MobileHomeScreen() {
       {/* Safety Stories Tray */}
       <SafetyStoriesTray />
 
-      <RidesEntry />
       <PickupDropEntry />
 
       <View className="gap-3.5">
