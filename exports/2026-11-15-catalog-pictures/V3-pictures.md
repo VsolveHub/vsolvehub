@@ -108,204 +108,204 @@ These are the squares customers tap first, so do them first.
 
 *This goes into the Interior fit-outs tile already in the app, so it needs no tile picture.*
 
-- [ ] **Home Interior Design**: `catalog-v2/construction-labour/interior-designer/home-interior-design.jpeg`
-- [ ] **Office Interior Design**: `catalog-v2/construction-labour/interior-designer/office-interior-design.jpeg`
-- [ ] **Modular Kitchen Design**: `catalog-v2/construction-labour/interior-designer/modular-kitchen-design.jpeg`
-- [ ] **Wardrobe Design**: `catalog-v2/construction-labour/interior-designer/wardrobe-design.jpeg`
-- [ ] **False Ceiling Design**: `catalog-v2/construction-labour/interior-designer/false-ceiling-design.jpeg`
-- [ ] **3D Interior Design**: `catalog-v2/construction-labour/interior-designer/3d-interior-design.jpeg`
-- [ ] **Interior Consultation**: `catalog-v2/construction-labour/interior-designer/interior-consultation.jpeg`
+- [x] **Home Interior Design**: `catalog-v2/construction-labour/interior-designer/home-interior-design.jpeg`
+- [x] **Office Interior Design**: `catalog-v2/construction-labour/interior-designer/office-interior-design.jpeg`
+- [x] **Modular Kitchen Design**: `catalog-v2/construction-labour/interior-designer/modular-kitchen-design.jpeg`
+- [x] **Wardrobe Design**: `catalog-v2/construction-labour/interior-designer/wardrobe-design.jpeg`
+- [x] **False Ceiling Design**: `catalog-v2/construction-labour/interior-designer/false-ceiling-design.jpeg`
+- [x] **3D Interior Design**: `catalog-v2/construction-labour/interior-designer/3d-interior-design.jpeg`
+- [x] **Interior Consultation**: `catalog-v2/construction-labour/interior-designer/interior-consultation.jpeg`
 
 ### Construction Labour › Architect (5)
 
-- [ ] **House Plan**: `catalog-v2/construction-labour/architect/house-plan.jpeg`
-- [ ] **Building Plan Approval**: `catalog-v2/construction-labour/architect/building-plan-approval.jpeg`
-- [ ] **2D Floor Plan**: `catalog-v2/construction-labour/architect/2d-floor-plan.jpeg`
-- [ ] **3D Elevation**: `catalog-v2/construction-labour/architect/3d-elevation.jpeg`
-- [ ] **Structural Drawing**: `catalog-v2/construction-labour/architect/structural-drawing.jpeg`
+- [x] **House Plan**: `catalog-v2/construction-labour/architect/house-plan.jpeg`
+- [x] **Building Plan Approval**: `catalog-v2/construction-labour/architect/building-plan-approval.jpeg`
+- [x] **2D Floor Plan**: `catalog-v2/construction-labour/architect/2d-floor-plan.jpeg`
+- [x] **3D Elevation**: `catalog-v2/construction-labour/architect/3d-elevation.jpeg`
+- [x] **Structural Drawing**: `catalog-v2/construction-labour/architect/structural-drawing.jpeg`
 
 ### Construction Labour › Civil Engineer (3)
 
-- [ ] **Site Inspection**: `catalog-v2/construction-labour/civil-engineer/site-inspection.jpeg`
-- [ ] **Estimation & Costing**: `catalog-v2/construction-labour/civil-engineer/estimation-costing.jpeg`
-- [ ] **Project Planning**: `catalog-v2/construction-labour/civil-engineer/project-planning.jpeg`
+- [x] **Site Inspection**: `catalog-v2/construction-labour/civil-engineer/site-inspection.jpeg`
+- [x] **Estimation & Costing**: `catalog-v2/construction-labour/civil-engineer/estimation-costing.jpeg`
+- [x] **Project Planning**: `catalog-v2/construction-labour/civil-engineer/project-planning.jpeg`
 
 ### Construction Labour › Quantity Surveyor (3)
 
-- [ ] **BOQ Preparation**: `catalog-v2/construction-labour/quantity-surveyor/boq-preparation.jpeg`
-- [ ] **Quantity Estimation**: `catalog-v2/construction-labour/quantity-surveyor/quantity-estimation.jpeg`
-- [ ] **Billing Support**: `catalog-v2/construction-labour/quantity-surveyor/billing-support.jpeg`
+- [x] **BOQ Preparation**: `catalog-v2/construction-labour/quantity-surveyor/boq-preparation.jpeg`
+- [x] **Quantity Estimation**: `catalog-v2/construction-labour/quantity-surveyor/quantity-estimation.jpeg`
+- [x] **Billing Support**: `catalog-v2/construction-labour/quantity-surveyor/billing-support.jpeg`
 
 ### Construction Labour › Site Supervisor (1)
 
-- [ ] **Daily Site Supervision**: `catalog-v2/construction-labour/site-supervisor/daily-site-supervision.jpeg`
+- [x] **Daily Site Supervision**: `catalog-v2/construction-labour/site-supervisor/daily-site-supervision.jpeg`
 
 ### Construction Labour › Project Manager (1)
 
-- [ ] **Turnkey Project Management**: `catalog-v2/construction-labour/project-manager/turnkey-project-management.jpeg`
+- [x] **Turnkey Project Management**: `catalog-v2/construction-labour/project-manager/turnkey-project-management.jpeg`
 
 ### Construction Labour › False Ceiling Worker (3)
 
-- [ ] **Gypsum Ceiling**: `catalog-v2/construction-labour/false-ceiling-worker/gypsum-ceiling.jpeg`
-- [ ] **POP Ceiling**: `catalog-v2/construction-labour/false-ceiling-worker/pop-ceiling.jpeg`
-- [ ] **PVC Ceiling**: `catalog-v2/construction-labour/false-ceiling-worker/pvc-ceiling.jpeg`
+- [x] **Gypsum Ceiling**: `catalog-v2/construction-labour/false-ceiling-worker/gypsum-ceiling.jpeg`
+- [x] **POP Ceiling**: `catalog-v2/construction-labour/false-ceiling-worker/pop-ceiling.jpeg`
+- [x] **PVC Ceiling**: `catalog-v2/construction-labour/false-ceiling-worker/pvc-ceiling.jpeg`
 
 ### Construction Labour › Glass & Aluminium Worker (3)
 
-- [ ] **Toughened Glass**: `catalog-v2/construction-labour/glass-aluminium-worker/toughened-glass.jpeg`
-- [ ] **Aluminium Partition**: `catalog-v2/construction-labour/glass-aluminium-worker/aluminium-partition.jpeg`
-- [ ] **ACP Cladding**: `catalog-v2/construction-labour/glass-aluminium-worker/acp-cladding.jpeg`
+- [x] **Toughened Glass**: `catalog-v2/construction-labour/glass-aluminium-worker/toughened-glass.jpeg`
+- [x] **Aluminium Partition**: `catalog-v2/construction-labour/glass-aluminium-worker/aluminium-partition.jpeg`
+- [x] **ACP Cladding**: `catalog-v2/construction-labour/glass-aluminium-worker/acp-cladding.jpeg`
 
 ### Construction Labour › UPVC Worker (2)
 
-- [ ] **UPVC Doors**: `catalog-v2/construction-labour/upvc-worker/upvc-doors.jpeg`
-- [ ] **UPVC Windows**: `catalog-v2/construction-labour/upvc-worker/upvc-windows.jpeg`
+- [x] **UPVC Doors**: `catalog-v2/construction-labour/upvc-worker/upvc-doors.jpeg`
+- [x] **UPVC Windows**: `catalog-v2/construction-labour/upvc-worker/upvc-windows.jpeg`
 
 ### Construction Labour › Flooring Worker (3)
 
 *This goes into the Tiling & flooring tile already in the app, so it needs no tile picture.*
 
-- [ ] **Wooden Flooring**: `catalog-v2/construction-labour/flooring-worker/wooden-flooring.jpeg`
-- [ ] **Vinyl Flooring**: `catalog-v2/construction-labour/flooring-worker/vinyl-flooring.jpeg`
-- [ ] **Epoxy Flooring**: `catalog-v2/construction-labour/flooring-worker/epoxy-flooring.jpeg`
+- [x] **Wooden Flooring**: `catalog-v2/construction-labour/flooring-worker/wooden-flooring.jpeg`
+- [x] **Vinyl Flooring**: `catalog-v2/construction-labour/flooring-worker/vinyl-flooring.jpeg`
+- [x] **Epoxy Flooring**: `catalog-v2/construction-labour/flooring-worker/epoxy-flooring.jpeg`
 
 ### Technician › Solar Technician (3)
 
-- [ ] **Solar Panel Installation**: `catalog-v2/technician/solar-technician/solar-panel-installation.jpeg`
-- [ ] **Solar Maintenance**: `catalog-v2/technician/solar-technician/solar-maintenance.jpeg`
-- [ ] **Solar Cleaning**: `catalog-v2/technician/solar-technician/solar-cleaning.jpeg`
+- [x] **Solar Panel Installation**: `catalog-v2/technician/solar-technician/solar-panel-installation.jpeg`
+- [x] **Solar Maintenance**: `catalog-v2/technician/solar-technician/solar-maintenance.jpeg`
+- [x] **Solar Cleaning**: `catalog-v2/technician/solar-technician/solar-cleaning.jpeg`
 
 ### Technician › Lift Technician (2)
 
-- [ ] **Elevator Installation**: `catalog-v2/technician/lift-technician/elevator-installation.jpeg`
-- [ ] **Lift Repair**: `catalog-v2/technician/lift-technician/lift-repair.jpeg`
+- [x] **Elevator Installation**: `catalog-v2/technician/lift-technician/elevator-installation.jpeg`
+- [x] **Lift Repair**: `catalog-v2/technician/lift-technician/lift-repair.jpeg`
 
 ### Technician › Watch Repair & Services (13)
 
-- [ ] **Battery Replacement**: `catalog-v2/technician/watch-repair-services/battery-replacement.jpeg`
-- [ ] **Strap Replacement**: `catalog-v2/technician/watch-repair-services/strap-replacement.jpeg`
-- [ ] **Dial Repair**: `catalog-v2/technician/watch-repair-services/dial-repair.jpeg`
-- [ ] **Glass Replacement**: `catalog-v2/technician/watch-repair-services/glass-replacement.jpeg`
-- [ ] **Crown Repair**: `catalog-v2/technician/watch-repair-services/crown-repair.jpeg`
-- [ ] **Complete Watch Servicing**: `catalog-v2/technician/watch-repair-services/complete-watch-servicing.jpeg`
-- [ ] **Smart Watch Repair**: `catalog-v2/technician/watch-repair-services/smart-watch-repair.jpeg`
-- [ ] **Smart Watch Display Replacement**: `catalog-v2/technician/watch-repair-services/smart-watch-display-replacement.jpeg`
-- [ ] **Smart Watch Battery Replacement**: `catalog-v2/technician/watch-repair-services/smart-watch-battery-replacement.jpeg`
-- [ ] **Button Repair**: `catalog-v2/technician/watch-repair-services/button-repair.jpeg`
-- [ ] **Waterproof Testing**: `catalog-v2/technician/watch-repair-services/waterproof-testing.jpeg`
-- [ ] **Watch Polishing**: `catalog-v2/technician/watch-repair-services/watch-polishing.jpeg`
-- [ ] **Watch Cleaning**: `catalog-v2/technician/watch-repair-services/watch-cleaning.jpeg`
+- [x] **Battery Replacement**: `catalog-v2/technician/watch-repair-services/battery-replacement.jpeg`
+- [x] **Strap Replacement**: `catalog-v2/technician/watch-repair-services/strap-replacement.jpeg`
+- [x] **Dial Repair**: `catalog-v2/technician/watch-repair-services/dial-repair.jpeg`
+- [x] **Glass Replacement**: `catalog-v2/technician/watch-repair-services/glass-replacement.jpeg`
+- [x] **Crown Repair**: `catalog-v2/technician/watch-repair-services/crown-repair.jpeg`
+- [x] **Complete Watch Servicing**: `catalog-v2/technician/watch-repair-services/complete-watch-servicing.jpeg`
+- [x] **Smart Watch Repair**: `catalog-v2/technician/watch-repair-services/smart-watch-repair.jpeg`
+- [x] **Smart Watch Display Replacement**: `catalog-v2/technician/watch-repair-services/smart-watch-display-replacement.jpeg`
+- [x] **Smart Watch Battery Replacement**: `catalog-v2/technician/watch-repair-services/smart-watch-battery-replacement.jpeg`
+- [x] **Button Repair**: `catalog-v2/technician/watch-repair-services/button-repair.jpeg`
+- [x] **Waterproof Testing**: `catalog-v2/technician/watch-repair-services/waterproof-testing.jpeg`
+- [x] **Watch Polishing**: `catalog-v2/technician/watch-repair-services/watch-polishing.jpeg`
+- [x] **Watch Cleaning**: `catalog-v2/technician/watch-repair-services/watch-cleaning.jpeg`
 
 ### Man Power & Support Staff › Cleaning & Maintenance Staff (6)
 
-- [ ] **Housekeeping Staff**: `catalog-v2/manpower/cleaning-maintenance-staff/housekeeping-staff.jpeg`
-- [ ] **Office Cleaning Staff**: `catalog-v2/manpower/cleaning-maintenance-staff/office-cleaning-staff.jpeg`
-- [ ] **Janitors**: `catalog-v2/manpower/cleaning-maintenance-staff/janitors.jpeg`
-- [ ] **Deep Cleaning Teams**: `catalog-v2/manpower/cleaning-maintenance-staff/deep-cleaning-teams.jpeg`
-- [ ] **Maintenance Workers**: `catalog-v2/manpower/cleaning-maintenance-staff/maintenance-workers.jpeg`
-- [ ] **Pest Control Helpers**: `catalog-v2/manpower/cleaning-maintenance-staff/pest-control-helpers.jpeg`
+- [x] **Housekeeping Staff**: `catalog-v2/manpower/cleaning-maintenance-staff/housekeeping-staff.jpeg`
+- [x] **Office Cleaning Staff**: `catalog-v2/manpower/cleaning-maintenance-staff/office-cleaning-staff.jpeg`
+- [x] **Janitors**: `catalog-v2/manpower/cleaning-maintenance-staff/janitors.jpeg`
+- [x] **Deep Cleaning Teams**: `catalog-v2/manpower/cleaning-maintenance-staff/deep-cleaning-teams.jpeg`
+- [x] **Maintenance Workers**: `catalog-v2/manpower/cleaning-maintenance-staff/maintenance-workers.jpeg`
+- [x] **Pest Control Helpers**: `catalog-v2/manpower/cleaning-maintenance-staff/pest-control-helpers.jpeg`
 
 ### Man Power & Support Staff › Logistics & Handling (6)
 
-- [ ] **Loading Staff**: `catalog-v2/manpower/logistics-handling/loading-staff.jpeg`
-- [ ] **Unloading Staff**: `catalog-v2/manpower/logistics-handling/unloading-staff.jpeg`
-- [ ] **Packers & Movers Staff**: `catalog-v2/manpower/logistics-handling/packers-movers-staff.jpeg`
-- [ ] **Delivery Helpers**: `catalog-v2/manpower/logistics-handling/delivery-helpers.jpeg`
-- [ ] **Warehouse Helpers**: `catalog-v2/manpower/logistics-handling/warehouse-helpers.jpeg`
-- [ ] **Material Handling Staff**: `catalog-v2/manpower/logistics-handling/material-handling-staff.jpeg`
+- [x] **Loading Staff**: `catalog-v2/manpower/logistics-handling/loading-staff.jpeg`
+- [x] **Unloading Staff**: `catalog-v2/manpower/logistics-handling/unloading-staff.jpeg`
+- [x] **Packers & Movers Staff**: `catalog-v2/manpower/logistics-handling/packers-movers-staff.jpeg`
+- [x] **Delivery Helpers**: `catalog-v2/manpower/logistics-handling/delivery-helpers.jpeg`
+- [x] **Warehouse Helpers**: `catalog-v2/manpower/logistics-handling/warehouse-helpers.jpeg`
+- [x] **Material Handling Staff**: `catalog-v2/manpower/logistics-handling/material-handling-staff.jpeg`
 
 ### Man Power & Support Staff › Drivers & Transport Staff (6)
 
-- [ ] **Car Drivers**: `catalog-v2/manpower/drivers-transport-staff/car-drivers.jpeg`
-- [ ] **Truck Drivers**: `catalog-v2/manpower/drivers-transport-staff/truck-drivers.jpeg`
-- [ ] **Tempo Drivers**: `catalog-v2/manpower/drivers-transport-staff/tempo-drivers.jpeg`
-- [ ] **Bus Drivers**: `catalog-v2/manpower/drivers-transport-staff/bus-drivers.jpeg`
-- [ ] **Temporary Drivers**: `catalog-v2/manpower/drivers-transport-staff/temporary-drivers.jpeg`
-- [ ] **Permanent Drivers**: `catalog-v2/manpower/drivers-transport-staff/permanent-drivers.jpeg`
+- [x] **Car Drivers**: `catalog-v2/manpower/drivers-transport-staff/car-drivers.jpeg`
+- [x] **Truck Drivers**: `catalog-v2/manpower/drivers-transport-staff/truck-drivers.jpeg`
+- [x] **Tempo Drivers**: `catalog-v2/manpower/drivers-transport-staff/tempo-drivers.jpeg`
+- [x] **Bus Drivers**: `catalog-v2/manpower/drivers-transport-staff/bus-drivers.jpeg`
+- [x] **Temporary Drivers**: `catalog-v2/manpower/drivers-transport-staff/temporary-drivers.jpeg`
+- [x] **Permanent Drivers**: `catalog-v2/manpower/drivers-transport-staff/permanent-drivers.jpeg`
 
 ### Man Power & Support Staff › Office Support Staff (6)
 
-- [ ] **Office Boys**: `catalog-v2/manpower/office-support-staff/office-boys.jpeg`
-- [ ] **Office Assistants**: `catalog-v2/manpower/office-support-staff/office-assistants.jpeg`
-- [ ] **Data Entry Operators**: `catalog-v2/manpower/office-support-staff/data-entry-operators.jpeg`
-- [ ] **Receptionists**: `catalog-v2/manpower/office-support-staff/receptionists.jpeg`
-- [ ] **File Management Staff**: `catalog-v2/manpower/office-support-staff/file-management-staff.jpeg`
-- [ ] **Front Office Staff**: `catalog-v2/manpower/office-support-staff/front-office-staff.jpeg`
+- [x] **Office Boys**: `catalog-v2/manpower/office-support-staff/office-boys.jpeg`
+- [x] **Office Assistants**: `catalog-v2/manpower/office-support-staff/office-assistants.jpeg`
+- [x] **Data Entry Operators**: `catalog-v2/manpower/office-support-staff/data-entry-operators.jpeg`
+- [x] **Receptionists**: `catalog-v2/manpower/office-support-staff/receptionists.jpeg`
+- [x] **File Management Staff**: `catalog-v2/manpower/office-support-staff/file-management-staff.jpeg`
+- [x] **Front Office Staff**: `catalog-v2/manpower/office-support-staff/front-office-staff.jpeg`
 
 ### Man Power & Support Staff › Security Staff (5)
 
-- [ ] **Security Guards**: `catalog-v2/manpower/security-staff/security-guards.jpeg`
-- [ ] **Bouncers**: `catalog-v2/manpower/security-staff/bouncers.jpeg`
-- [ ] **Watchmen**: `catalog-v2/manpower/security-staff/watchmen.jpeg`
-- [ ] **Gate Security Staff**: `catalog-v2/manpower/security-staff/gate-security-staff.jpeg`
-- [ ] **Event Security Staff**: `catalog-v2/manpower/security-staff/event-security-staff.jpeg`
+- [x] **Security Guards**: `catalog-v2/manpower/security-staff/security-guards.jpeg`
+- [x] **Bouncers**: `catalog-v2/manpower/security-staff/bouncers.jpeg`
+- [x] **Watchmen**: `catalog-v2/manpower/security-staff/watchmen.jpeg`
+- [x] **Gate Security Staff**: `catalog-v2/manpower/security-staff/gate-security-staff.jpeg`
+- [x] **Event Security Staff**: `catalog-v2/manpower/security-staff/event-security-staff.jpeg`
 
 ### Man Power & Support Staff › Retail Support Staff (4)
 
-- [ ] **Sales Boys**: `catalog-v2/manpower/retail-support-staff/sales-boys.jpeg`
-- [ ] **Sales Girls**: `catalog-v2/manpower/retail-support-staff/sales-girls.jpeg`
-- [ ] **Store Helpers**: `catalog-v2/manpower/retail-support-staff/store-helpers.jpeg`
-- [ ] **Cash Counter Assistants**: `catalog-v2/manpower/retail-support-staff/cash-counter-assistants.jpeg`
+- [x] **Sales Boys**: `catalog-v2/manpower/retail-support-staff/sales-boys.jpeg`
+- [x] **Sales Girls**: `catalog-v2/manpower/retail-support-staff/sales-girls.jpeg`
+- [x] **Store Helpers**: `catalog-v2/manpower/retail-support-staff/store-helpers.jpeg`
+- [x] **Cash Counter Assistants**: `catalog-v2/manpower/retail-support-staff/cash-counter-assistants.jpeg`
 
 ### Man Power & Support Staff › Industrial Support Staff (4)
 
-- [ ] **Factory Helpers**: `catalog-v2/manpower/industrial-support-staff/factory-helpers.jpeg`
-- [ ] **Packing Staff**: `catalog-v2/manpower/industrial-support-staff/packing-staff.jpeg`
-- [ ] **Assembly Line Helpers**: `catalog-v2/manpower/industrial-support-staff/assembly-line-helpers.jpeg`
-- [ ] **Production Helpers**: `catalog-v2/manpower/industrial-support-staff/production-helpers.jpeg`
+- [x] **Factory Helpers**: `catalog-v2/manpower/industrial-support-staff/factory-helpers.jpeg`
+- [x] **Packing Staff**: `catalog-v2/manpower/industrial-support-staff/packing-staff.jpeg`
+- [x] **Assembly Line Helpers**: `catalog-v2/manpower/industrial-support-staff/assembly-line-helpers.jpeg`
+- [x] **Production Helpers**: `catalog-v2/manpower/industrial-support-staff/production-helpers.jpeg`
 
 ### Home Services › Borewell Services (3)
 
-- [ ] **Borewell Cleaning**: `catalog-v2/home-services/borewell-services/borewell-cleaning.jpeg`
-- [ ] **Borewell Repair**: `catalog-v2/home-services/borewell-services/borewell-repair.jpeg`
-- [ ] **Borewell Motor Installation**: `catalog-v2/home-services/borewell-services/borewell-motor-installation.jpeg`
+- [x] **Borewell Cleaning**: `catalog-v2/home-services/borewell-services/borewell-cleaning.jpeg`
+- [x] **Borewell Repair**: `catalog-v2/home-services/borewell-services/borewell-repair.jpeg`
+- [x] **Borewell Motor Installation**: `catalog-v2/home-services/borewell-services/borewell-motor-installation.jpeg`
 
 ### Home Services › Home Shifting (6)
 
-- [ ] **House Shifting**: `catalog-v2/home-services/home-shifting/house-shifting.jpeg`
-- [ ] **Packing Service**: `catalog-v2/home-services/home-shifting/packing-service.jpeg`
-- [ ] **Unpacking Service**: `catalog-v2/home-services/home-shifting/unpacking-service.jpeg`
-- [ ] **Loading & Unloading**: `catalog-v2/home-services/home-shifting/loading-unloading.jpeg`
-- [ ] **Furniture Shifting**: `catalog-v2/home-services/home-shifting/furniture-shifting.jpeg`
-- [ ] **Office Shifting**: `catalog-v2/home-services/home-shifting/office-shifting.jpeg`
+- [x] **House Shifting**: `catalog-v2/home-services/home-shifting/house-shifting.jpeg`
+- [x] **Packing Service**: `catalog-v2/home-services/home-shifting/packing-service.jpeg`
+- [x] **Unpacking Service**: `catalog-v2/home-services/home-shifting/unpacking-service.jpeg`
+- [x] **Loading & Unloading**: `catalog-v2/home-services/home-shifting/loading-unloading.jpeg`
+- [x] **Furniture Shifting**: `catalog-v2/home-services/home-shifting/furniture-shifting.jpeg`
+- [x] **Office Shifting**: `catalog-v2/home-services/home-shifting/office-shifting.jpeg`
 
 ### Home Services › Storage Services (3)
 
-- [ ] **Household Storage**: `catalog-v2/home-services/storage-services/household-storage.jpeg`
-- [ ] **Office Storage**: `catalog-v2/home-services/storage-services/office-storage.jpeg`
-- [ ] **Warehouse Storage**: `catalog-v2/home-services/storage-services/warehouse-storage.jpeg`
+- [x] **Household Storage**: `catalog-v2/home-services/storage-services/household-storage.jpeg`
+- [x] **Office Storage**: `catalog-v2/home-services/storage-services/office-storage.jpeg`
+- [x] **Warehouse Storage**: `catalog-v2/home-services/storage-services/warehouse-storage.jpeg`
 
 ### Home Services › Home Maintenance (1)
 
 *This tile is already in the app. Only the service photo is needed.*
 
-- [ ] **Annual Home Maintenance Contract (AMC)**: `catalog-v2/home-services/home-maintenance/annual-home-maintenance-contract-amc.jpeg`
+- [x] **Annual Home Maintenance Contract (AMC)**: `catalog-v2/home-services/home-maintenance/annual-home-maintenance-contract-amc.jpeg`
 
 ### Pet Services › Pet Boarding (3)
 
-- [ ] **Dog Boarding**: `catalog-v2/pet-services/pet-boarding/dog-boarding.jpeg`
-- [ ] **Cat Boarding**: `catalog-v2/pet-services/pet-boarding/cat-boarding.jpeg`
-- [ ] **Day Care**: `catalog-v2/pet-services/pet-boarding/day-care.jpeg`
+- [x] **Dog Boarding**: `catalog-v2/pet-services/pet-boarding/dog-boarding.jpeg`
+- [x] **Cat Boarding**: `catalog-v2/pet-services/pet-boarding/cat-boarding.jpeg`
+- [x] **Day Care**: `catalog-v2/pet-services/pet-boarding/day-care.jpeg`
 
 ### Pet Services › Pet Taxi (1)
 
-- [ ] **Pet Pickup & Drop**: `catalog-v2/pet-services/pet-taxi/pet-pickup-drop.jpeg`
+- [x] **Pet Pickup & Drop**: `catalog-v2/pet-services/pet-taxi/pet-pickup-drop.jpeg`
 
 ### Pet Services › Pet Adoption (2)
 
-- [ ] **Dog Adoption**: `catalog-v2/pet-services/pet-adoption/dog-adoption.jpeg`
-- [ ] **Cat Adoption**: `catalog-v2/pet-services/pet-adoption/cat-adoption.jpeg`
+- [x] **Dog Adoption**: `catalog-v2/pet-services/pet-adoption/dog-adoption.jpeg`
+- [x] **Cat Adoption**: `catalog-v2/pet-services/pet-adoption/cat-adoption.jpeg`
 
 ### Pet Services › Pet Shop (4)
 
-- [ ] **Pet Food**: `catalog-v2/pet-services/pet-shop/pet-food.jpeg`
-- [ ] **Pet Accessories**: `catalog-v2/pet-services/pet-shop/pet-accessories.jpeg`
-- [ ] **Pet Toys**: `catalog-v2/pet-services/pet-shop/pet-toys.jpeg`
-- [ ] **Pet Medicines**: `catalog-v2/pet-services/pet-shop/pet-medicines.jpeg`
+- [x] **Pet Food**: `catalog-v2/pet-services/pet-shop/pet-food.jpeg`
+- [x] **Pet Accessories**: `catalog-v2/pet-services/pet-shop/pet-accessories.jpeg`
+- [x] **Pet Toys**: `catalog-v2/pet-services/pet-shop/pet-toys.jpeg`
+- [x] **Pet Medicines**: `catalog-v2/pet-services/pet-shop/pet-medicines.jpeg`
 
 ### Pet Services › Pet Insurance (1)
 
-- [ ] **Pet Insurance Assistance**: `catalog-v2/pet-services/pet-insurance/pet-insurance-assistance.jpeg`
+- [x] **Pet Insurance Assistance**: `catalog-v2/pet-services/pet-insurance/pet-insurance-assistance.jpeg`
 
 ## Do last: tiles the owner may merge
 
@@ -314,39 +314,39 @@ Same rules as above: one tile picture, then one photo per service.
 ### Home Services › Elder Care (7)
 
 - [x] **Tile picture: Elder Care** (show a walking stick beside a cushioned chair): `tiles-v2/home-services/elder-care.jpeg`
-- [ ] **Elder Care Attendant**: `catalog-v2/home-services/elder-care/elder-care-attendant.jpeg`
-- [ ] **Companion Care**: `catalog-v2/home-services/elder-care/companion-care.jpeg`
-- [ ] **Bedridden Patient Care**: `catalog-v2/home-services/elder-care/bedridden-patient-care.jpeg`
-- [ ] **Babysitter**: `catalog-v2/home-services/elder-care/babysitter.jpeg`
-- [ ] **Newborn Care**: `catalog-v2/home-services/elder-care/newborn-care.jpeg`
-- [ ] **Nanny Service**: `catalog-v2/home-services/elder-care/nanny-service.jpeg`
+- [x] **Elder Care Attendant**: `catalog-v2/home-services/elder-care/elder-care-attendant.jpeg`
+- [x] **Companion Care**: `catalog-v2/home-services/elder-care/companion-care.jpeg`
+- [x] **Bedridden Patient Care**: `catalog-v2/home-services/elder-care/bedridden-patient-care.jpeg`
+- [x] **Babysitter**: `catalog-v2/home-services/elder-care/babysitter.jpeg`
+- [x] **Newborn Care**: `catalog-v2/home-services/elder-care/newborn-care.jpeg`
+- [x] **Nanny Service**: `catalog-v2/home-services/elder-care/nanny-service.jpeg`
 
 ### Home Services › Maid Services (6)
 
 - [x] **Tile picture: Maid Services** (show a laundry basket with a broom and dustpan): `tiles-v2/home-services/maid-services.jpeg`
-- [ ] **Full Time Maid**: `catalog-v2/home-services/maid-services/full-time-maid.jpeg`
-- [ ] **Part Time Maid**: `catalog-v2/home-services/maid-services/part-time-maid.jpeg`
-- [ ] **Cook**: `catalog-v2/home-services/maid-services/cook.jpeg`
-- [ ] **Housekeeping**: `catalog-v2/home-services/maid-services/housekeeping.jpeg`
-- [ ] **Live-in Maid**: `catalog-v2/home-services/maid-services/live-in-maid.jpeg`
+- [x] **Full Time Maid**: `catalog-v2/home-services/maid-services/full-time-maid.jpeg`
+- [x] **Part Time Maid**: `catalog-v2/home-services/maid-services/part-time-maid.jpeg`
+- [x] **Cook**: `catalog-v2/home-services/maid-services/cook.jpeg`
+- [x] **Housekeeping**: `catalog-v2/home-services/maid-services/housekeeping.jpeg`
+- [x] **Live-in Maid**: `catalog-v2/home-services/maid-services/live-in-maid.jpeg`
 
 ### Man Power & Support Staff › Event & Catering Staff (8)
 
 - [x] **Tile picture: Event & Catering Staff** (show a serving tray with glasses): `tiles-v2/manpower/event-catering-staff.jpeg`
-- [ ] **Catering Boys**: `catalog-v2/manpower/event-catering-staff/catering-boys.jpeg`
-- [ ] **Catering Girls**: `catalog-v2/manpower/event-catering-staff/catering-girls.jpeg`
-- [ ] **Waiters**: `catalog-v2/manpower/event-catering-staff/waiters.jpeg`
-- [ ] **Kitchen Helpers**: `catalog-v2/manpower/event-catering-staff/kitchen-helpers.jpeg`
-- [ ] **Event Setup Staff**: `catalog-v2/manpower/event-catering-staff/event-setup-staff.jpeg`
-- [ ] **Serving Staff**: `catalog-v2/manpower/event-catering-staff/serving-staff.jpeg`
-- [ ] **Decoration Helpers**: `catalog-v2/manpower/event-catering-staff/decoration-helpers.jpeg`
+- [x] **Catering Boys**: `catalog-v2/manpower/event-catering-staff/catering-boys.jpeg`
+- [x] **Catering Girls**: `catalog-v2/manpower/event-catering-staff/catering-girls.jpeg`
+- [x] **Waiters**: `catalog-v2/manpower/event-catering-staff/waiters.jpeg`
+- [x] **Kitchen Helpers**: `catalog-v2/manpower/event-catering-staff/kitchen-helpers.jpeg`
+- [x] **Event Setup Staff**: `catalog-v2/manpower/event-catering-staff/event-setup-staff.jpeg`
+- [x] **Serving Staff**: `catalog-v2/manpower/event-catering-staff/serving-staff.jpeg`
+- [x] **Decoration Helpers**: `catalog-v2/manpower/event-catering-staff/decoration-helpers.jpeg`
 
 ### Man Power & Support Staff › Domestic Staff (7)
 
 - [x] **Tile picture: Domestic Staff** (show a kitchen apron with a cooking pot): `tiles-v2/manpower/domestic-staff.jpeg`
-- [ ] **Maids**: `catalog-v2/manpower/domestic-staff/maids.jpeg`
-- [ ] **Cooks**: `catalog-v2/manpower/domestic-staff/cooks.jpeg`
-- [ ] **Babysitters**: `catalog-v2/manpower/domestic-staff/babysitters.jpeg`
-- [ ] **Elder Care Staff**: `catalog-v2/manpower/domestic-staff/elder-care-staff.jpeg`
-- [ ] **House Helpers**: `catalog-v2/manpower/domestic-staff/house-helpers.jpeg`
-- [ ] **Patient Care Attendants**: `catalog-v2/manpower/domestic-staff/patient-care-attendants.jpeg`
+- [x] **Maids**: `catalog-v2/manpower/domestic-staff/maids.jpeg`
+- [x] **Cooks**: `catalog-v2/manpower/domestic-staff/cooks.jpeg`
+- [x] **Babysitters**: `catalog-v2/manpower/domestic-staff/babysitters.jpeg`
+- [x] **Elder Care Staff**: `catalog-v2/manpower/domestic-staff/elder-care-staff.jpeg`
+- [x] **House Helpers**: `catalog-v2/manpower/domestic-staff/house-helpers.jpeg`
+- [x] **Patient Care Attendants**: `catalog-v2/manpower/domestic-staff/patient-care-attendants.jpeg`
