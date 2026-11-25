@@ -9,6 +9,7 @@ from typing import Any
 from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from apps.commerce.models import PaymentAttempt
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
@@ -30,19 +31,22 @@ from apps.rides.exceptions import (
     RateCardInactiveError,
     RegistrationAlreadyUsedError,
     RoutingUnavailableApiError,
+    VehicleNotEligibleError,
 )
 from apps.rides.fares import trip_fare_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
+    PARCEL_LIMIT_FIELDS,
     RATE_FIELDS,
+    TRACKED_RIDE_STATES,
     CaptainDutySession,
     CaptainPass,
     CaptainPassPlan,
     CaptainVehicle,
     FareQuote,
     Ride,
+    RideKind,
     RideRateCard,
-    RideState,
     RideTrackPoint,
     VehicleType,
     normalise_registration_number,
@@ -51,9 +55,10 @@ from apps.rides.routing import RoutingUnavailableError, get_route
 
 __all__ = [
     "VEHICLE_EDITABLE_STATUSES",
+    "Availability",
     "LocationPing",
     "TripPoint",
-    "available_vehicle_types",
+    "availability",
     "buy_pass",
     "complete_pass_payment",
     "create_quotes",
@@ -61,6 +66,7 @@ __all__ = [
     "expire_passes",
     "record_location",
     "save_captain_vehicle",
+    "set_parcel_preference",
     "start_duty",
     "stop_duty",
     "sweep_stale_captains",
@@ -137,6 +143,26 @@ def save_captain_vehicle(
 
 # --- Fare quotes ------------------------------------------------------------------------------
 
+
+def set_parcel_preference(*, partner: PartnerProfile, takes_parcels: bool) -> CaptainVehicle:
+    """The "Take parcel orders" switch (D17). Bike and Auto captains only.
+
+    Repeating the same value changes nothing. A captain with no vehicle yet is refused the same
+    way as a cab: there is nothing to take parcels with.
+    """
+    vehicle = CaptainVehicle.objects.filter(partner=partner).first()
+    if vehicle is None or vehicle.vehicle_type == VehicleType.CAB:
+        raise VehicleNotEligibleError
+    if vehicle.takes_parcels != takes_parcels:
+        vehicle.takes_parcels = takes_parcels
+        vehicle.save(update_fields=("takes_parcels", "updated_at"))
+        logger.info(
+            "captain_parcel_preference_set",
+            extra={"partner_id": str(partner.pk), "takes_parcels": takes_parcels},
+        )
+    return vehicle
+
+
 #: The order the rider sees: cheapest kind of vehicle first.
 _VEHICLE_ORDER = {VehicleType.BIKE: 0, VehicleType.AUTO: 1, VehicleType.CAB: 2}
 
@@ -170,33 +196,51 @@ def _pickup_area(pickup: TripPoint) -> ServiceArea:
     return decision.service_area
 
 
-def available_vehicle_types(*, latitude: Decimal, longitude: Decimal) -> list[str]:
-    """Which vehicle types can be booked from here, cheapest first. Empty when none can.
+@dataclass(frozen=True, slots=True)
+class Availability:
+    #: Ride vehicle types bookable here, cheapest first.
+    vehicle_types: list[str]
+    #: The active parcel cards here (they carry the limits), cheapest vehicle first.
+    parcel_cards: list[RideRateCard]
 
-    Drives the Rides entry on the customer Home screen (brief §5.11), so "not served here" is an
-    empty answer, not an error. A geocoder failure still raises: the app hides the entry then.
+
+def availability(*, latitude: Decimal, longitude: Decimal) -> Availability:
+    """What can be booked from here: rides and Pick up & Drop. Empty lists when nothing can.
+
+    Drives the Rides and Pick up & Drop entries on the customer Home screen (D21), so "not served
+    here" is an empty answer, not an error. A geocoder failure still raises: the app hides the
+    entries then.
     """
     try:
         area = _pickup_area(TripPoint(latitude, longitude, ""))
     except AreaNotServedError:
-        return []
-    types = RideRateCard.objects.filter(service_area=area, is_active=True).values_list(
-        "vehicle_type", flat=True
+        return Availability(vehicle_types=[], parcel_cards=[])
+    cards = _active_cards(area)
+    return Availability(
+        vehicle_types=[c.vehicle_type for c in cards if c.kind == RideKind.RIDE],
+        parcel_cards=[c for c in cards if c.kind == RideKind.PARCEL],
     )
-    return sorted(types, key=lambda vehicle: _VEHICLE_ORDER[VehicleType(vehicle)])
 
 
-def create_quotes(*, rider: Any, pickup: TripPoint, drop: TripPoint) -> list[FareQuote]:
+def _active_cards(area: ServiceArea, *, kind: str | None = None) -> list[RideRateCard]:
+    """The area's active rate cards, bike first, then auto, then cab."""
+    cards = RideRateCard.objects.filter(service_area=area, is_active=True)
+    if kind is not None:
+        cards = cards.filter(kind=kind)
+    return sorted(cards, key=lambda card: _VEHICLE_ORDER[VehicleType(card.vehicle_type)])
+
+
+def create_quotes(
+    *, rider: Any, pickup: TripPoint, drop: TripPoint, kind: str = RideKind.RIDE
+) -> list[FareQuote]:
     """One quote per bookable vehicle type, priced on the server from the road route.
 
-    A vehicle type is bookable only while its area has an active rate card. If any route cannot be
-    had, no quote is made: a partial list would hide a vehicle the rider could have booked.
+    A vehicle type is bookable only while its area has an active rate card of this kind. If any
+    route cannot be had, no quote is made: a partial list would hide a vehicle the rider could
+    have booked.
     """
     area = _pickup_area(pickup)
-    cards = sorted(
-        RideRateCard.objects.filter(service_area=area, is_active=True),
-        key=lambda card: _VEHICLE_ORDER[VehicleType(card.vehicle_type)],
-    )
+    cards = _active_cards(area, kind=kind)
     if not cards:
         raise AreaNotServedError
 
@@ -212,6 +256,7 @@ def create_quotes(*, rider: Any, pickup: TripPoint, drop: TripPoint) -> list[Far
                 rider=rider,
                 service_area=area,
                 vehicle_type=card.vehicle_type,
+                kind=kind,
                 rate_card=card,
                 rate_card_version=card.version,
                 pickup_latitude=pickup.latitude,
@@ -502,7 +547,6 @@ def stop_duty(*, partner: PartnerProfile) -> None:
 PING_MAX_AHEAD = timedelta(seconds=5)
 
 #: Ride states in which each ping also becomes a point on the ride's GPS trail.
-_TRACKED_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED, RideState.IN_TRIP)
 
 
 @dataclass(frozen=True, slots=True)
@@ -559,7 +603,7 @@ def record_location(*, partner: PartnerProfile, ping: LocationPing) -> None:
         raise NotOnDutyError
     listed_in: str | None = None
     keep_listing = False
-    if ride is not None and ride.state in _TRACKED_STATES:
+    if ride is not None and ride.state in TRACKED_RIDE_STATES:
         RideTrackPoint.objects.create(
             ride=ride,
             latitude=ping.latitude,
@@ -629,23 +673,29 @@ def sweep_stale_captains() -> int:
 
 @transaction.atomic
 def create_rate_card(
-    *, created_by: Any, service_area: ServiceArea, vehicle_type: str, rates: dict[str, int]
+    *,
+    created_by: Any,
+    service_area: ServiceArea,
+    vehicle_type: str,
+    rates: dict[str, Any],
+    kind: str = RideKind.RIDE,
 ) -> RideRateCard:
-    """A first (or renewed) price for a vehicle in an area. Refused while one is active."""
-    if RideRateCard.objects.filter(
-        service_area=service_area, vehicle_type=vehicle_type, is_active=True
-    ).exists():
-        raise RateCardExistsError
-    last = (
-        RideRateCard.objects.filter(service_area=service_area, vehicle_type=vehicle_type)
-        .order_by("-version")
-        .first()
+    """A first (or renewed) price for a vehicle and kind in an area. Refused while one is active.
+
+    `rates` holds the prices and, for a Pick up & Drop card, its limits.
+    """
+    same = RideRateCard.objects.filter(
+        service_area=service_area, vehicle_type=vehicle_type, kind=kind
     )
+    if same.filter(is_active=True).exists():
+        raise RateCardExistsError
+    last = same.order_by("-version").first()
     try:
         with transaction.atomic():
             card = RideRateCard.objects.create(
                 service_area=service_area,
                 vehicle_type=vehicle_type,
+                kind=kind,
                 version=(last.version + 1) if last else 1,
                 created_by=created_by,
                 **rates,
@@ -659,26 +709,30 @@ def create_rate_card(
 
 @transaction.atomic
 def update_rate_card(
-    *, card: RideRateCard, updated_by: Any, rates: dict[str, int], deactivate: bool
+    *, card: RideRateCard, updated_by: Any, rates: dict[str, Any], deactivate: bool
 ) -> RideRateCard:
     """Edit the active card. A price edit is a new version; old quotes keep the old one.
 
-    `deactivate` switches that vehicle off in that area (the only on/off switch).
+    `deactivate` switches that vehicle off in that area (the only on/off switch). A Pick up & Drop
+    card keeps its kind and, unless changed, its limits.
     """
     card = RideRateCard.objects.select_for_update().get(pk=card.pk)
     if not card.is_active:
         raise RateCardInactiveError
+    if card.kind != RideKind.PARCEL and any(name in rates for name in PARCEL_LIMIT_FIELDS):
+        raise ValidationError({"parcel_size_label": "Only a Pick up & Drop card has limits."})
     card.is_active = False
     card.save(update_fields=("is_active", "updated_at"))
     if deactivate:
         logger.info("ride_rate_card_deactivated", extra=_card_log(card, updated_by))
         return card
 
-    fields = {name: getattr(card, name) for name in RATE_FIELDS}
+    fields = {name: getattr(card, name) for name in (*RATE_FIELDS, *PARCEL_LIMIT_FIELDS)}
     fields.update(rates)
     new_card = RideRateCard.objects.create(
         service_area_id=card.service_area_id,
         vehicle_type=card.vehicle_type,
+        kind=card.kind,
         version=card.version + 1,
         created_by=updated_by,
         **fields,

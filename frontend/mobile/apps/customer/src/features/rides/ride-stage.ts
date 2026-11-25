@@ -1,5 +1,14 @@
 /** What the rider's ride screen shows for each ride state (brief §5.11, rider items 4–8). */
-export type RideStage = "searching" | "no_captain" | "coming" | "arrived" | "in_trip" | "pay" | "cancelled";
+export type RideStage =
+  | "searching"
+  | "no_captain"
+  | "coming"
+  | "arrived"
+  | "in_trip"
+  | "pay"
+  | "returning"
+  | "returned"
+  | "cancelled";
 
 export function rideStage(state: string): RideStage {
   switch (state) {
@@ -15,6 +24,10 @@ export function rideStage(state: string): RideStage {
       return "in_trip";
     case "COMPLETED":
       return "pay";
+    case "RETURNING":
+      return "returning";
+    case "RETURNED":
+      return "returned";
     default:
       return "cancelled";
   }

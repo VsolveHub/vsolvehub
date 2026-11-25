@@ -58,7 +58,9 @@ def make_area() -> ServiceArea:
 
 
 def quote_for(rider: User, area: ServiceArea, *, expires_in: int = 300) -> FareQuote:
-    card = RideRateCard.objects.get(service_area=area, vehicle_type="BIKE", is_active=True)
+    card = RideRateCard.objects.get(
+        service_area=area, vehicle_type="BIKE", kind="RIDE", is_active=True
+    )
     now = timezone.now()
     quote = FareQuote.objects.create(
         rider=rider,

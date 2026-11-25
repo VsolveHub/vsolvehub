@@ -19,9 +19,23 @@ export function rideDetailKey(rideId: string) {
   return ["ops", "rides", "detail", rideId] as const;
 }
 
-export function fetchRidesPage(states: string, cursor?: string): Promise<Page<OpsRideRow>> {
+/** One page of rides for a state filter and a kind (`""` for every kind), newest first. */
+export function fetchRidesPage(
+  filter: { states: string; paymentStatus?: string },
+  kind: string,
+  cursor?: string,
+): Promise<Page<OpsRideRow>> {
   return request(() =>
-    getApiClient().GET("/api/v1/operations/rides/", { params: { query: { state: states, cursor } } }),
+    getApiClient().GET("/api/v1/operations/rides/", {
+      params: {
+        query: {
+          state: filter.states || undefined,
+          kind: kind || undefined,
+          payment_status: filter.paymentStatus || undefined,
+          cursor,
+        },
+      },
+    }),
   );
 }
 

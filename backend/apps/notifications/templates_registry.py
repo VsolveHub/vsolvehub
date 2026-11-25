@@ -692,6 +692,45 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "SOS on a ride",
         "A rider or captain pressed SOS on a live ride. Open the SOS queue now.",
     ),
+    # ---- VSolve Pick up & Drop (docs/parcel/README.md §4.3) --------------------------------
+    "parcel_offer_new": (
+        "New parcel request · {amount}",
+        "Open the app to accept: it goes to another captain in 15 seconds.",
+    ),
+    "parcel_captain_assigned": (
+        "{partner_name} is coming for your parcel",
+        "Open the app to see your captain and to get the pickup code.",
+    ),
+    "parcel_captain_arrived": (
+        "{partner_name} has arrived",
+        "Your captain is at the pickup. Share the pickup code when you meet.",
+    ),
+    "parcel_no_captain_found": (
+        "No captain nearby",
+        "We couldn't find a captain for your parcel. Please try booking again.",
+    ),
+    "parcel_picked_up": (
+        "Your parcel is on its way",
+        "{partner_name} has picked it up and is heading to the drop.",
+    ),
+    "parcel_delivered": (
+        "Parcel delivered",
+        "Your parcel has been delivered. Thank you for using Pick up & Drop.",
+    ),
+    "parcel_returning": (
+        "Your parcel is coming back",
+        "The receiver wasn't available. {partner_name} is bringing it back to the pickup. "
+        "Open the app to get the pickup code.",
+    ),
+    "parcel_returned": (
+        "Parcel returned",
+        "Your parcel is back at the pickup.",
+    ),
+    "parcel_item_not_allowed": (
+        "Parcel not taken",
+        "Your captain couldn't take this item because it doesn't follow the package "
+        "guidelines. You have not been charged.",
+    ),
 }
 
 

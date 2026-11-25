@@ -18,7 +18,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.foundation.services import enqueue_outbox_event
 from apps.partners.models import PartnerApplication, PartnerProfile
@@ -26,15 +26,20 @@ from apps.rides import location, notify, selectors
 from apps.rides.exceptions import (
     InvalidTransitionError,
     LocationUnavailableError,
+    NotAtDropError,
     NotAtPickupError,
     NotOnDutyError,
+    ParcelDetailsRequiredError,
+    PaymentNotCollectedError,
     QuoteExpiredError,
     QuoteUsedError,
     RideAlreadyOpenError,
     RideNoLongerAvailableError,
+    RoutingUnavailableApiError,
     VehicleUnavailableError,
+    WaitNotOverError,
 )
-from apps.rides.fares import waiting_charge_paise
+from apps.rides.fares import trip_fare_paise, waiting_charge_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
     ActorKind,
@@ -42,7 +47,9 @@ from apps.rides.models import (
     CaptainPass,
     CaptainVehicle,
     FareQuote,
+    ParcelDetails,
     Ride,
+    RideKind,
     RideOffer,
     RideRateCard,
     RideRating,
@@ -50,14 +57,19 @@ from apps.rides.models import (
     RideState,
     RideTransition,
 )
+from apps.rides.routing import RoutingUnavailableError, get_route
 from apps.rides.services import require_can_drive
 
 __all__ = [
     "CAPTAIN_CANCEL_REASONS",
+    "DELIVERY_PIN_VISIBLE_STATES",
+    "ITEM_NOT_ALLOWED",
     "OTP_INVALID",
     "OTP_LOCKED",
     "OTP_MAX_ATTEMPTS",
     "OTP_VISIBLE_STATES",
+    "PIN_INVALID",
+    "PIN_LOCKED",
     "RIDER_CANCEL_REASONS",
     "RIDE_REQUESTED",
     "accept_offer",
@@ -67,12 +79,20 @@ __all__ = [
     "create_ride",
     "current_offer",
     "decline_offer",
+    "deliver_parcel",
     "mark_arrived",
+    "mark_arrived_at_drop",
+    "mark_payment_not_received",
     "mark_payment_received",
+    "mark_receiver_unavailable",
+    "mark_returned",
     "operations_cancel",
     "otp_fingerprint",
+    "parcel_delivery_pin",
+    "pin_fingerprint",
     "raise_sos",
     "rate_ride",
+    "receiver_unavailable_allowed_at",
     "redrive_dispatch",
     "resolve_sos",
     "ride_otp",
@@ -117,9 +137,29 @@ def _transition(
 # --- Booking ----------------------------------------------------------------------------------
 
 
+def _parcel_details(ride: Ride, parcel: dict[str, Any]) -> ParcelDetails:
+    """Save the parcel's two ends. `create_ride` has already checked each has a name and a phone."""
+    pickup, drop = parcel["pickup"], parcel["drop"]
+    fields = {
+        f"{side}_{name}": end.get(name, "")
+        for side, end in (("pickup", pickup), ("drop", drop))
+        for name in ("name", "phone", "building", "unit", "meet_at", "instructions")
+    }
+    return ParcelDetails.objects.create(
+        ride=ride,
+        mode=parcel["mode"],
+        payer=parcel["payer"],
+        pin_required=parcel["pin_required"],
+        **fields,
+    )
+
+
 @transaction.atomic
-def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
-    """Book a ride from the rider's own quote and start looking for a captain."""
+def create_ride(*, rider: Any, quote_id: UUID, parcel: dict[str, Any] | None = None) -> Ride:
+    """Book a ride (or a Pick up & Drop parcel) from the rider's own quote and look for a captain.
+
+    A parcel quote needs `parcel`: both ends' details, who pays and the PIN setting.
+    """
     quote = (
         FareQuote.objects.select_for_update()
         .select_related("service_area")
@@ -133,8 +173,20 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
     now = timezone.now()
     if quote.expires_at <= now:
         raise QuoteExpiredError
+    if quote.kind == RideKind.PARCEL and (
+        parcel is None
+        or not all(
+            end.get("name") and end.get("phone") for end in (parcel["pickup"], parcel["drop"])
+        )
+    ):
+        raise ParcelDetailsRequiredError
+    if quote.kind == RideKind.RIDE and parcel is not None:
+        raise ValidationError({"parcel": "Parcel details are only for a Pick up & Drop quote."})
     vehicle_on_sale = RideRateCard.objects.filter(
-        service_area=quote.service_area, vehicle_type=quote.vehicle_type, is_active=True
+        service_area=quote.service_area,
+        vehicle_type=quote.vehicle_type,
+        kind=quote.kind,
+        is_active=True,
     ).exists()
     if not quote.service_area.is_active or not vehicle_on_sale:
         raise VehicleUnavailableError
@@ -146,6 +198,7 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
         quote=quote,
         service_area=quote.service_area,
         vehicle_type=quote.vehicle_type,
+        kind=quote.kind,
         pickup_latitude=quote.pickup_latitude,
         pickup_longitude=quote.pickup_longitude,
         pickup_label=quote.pickup_label,
@@ -160,6 +213,8 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
     except IntegrityError as exc:
         # Two bookings raced; the one-open-ride-per-rider rule let exactly one through.
         raise RideAlreadyOpenError from exc
+    if parcel is not None:
+        _parcel_details(ride, parcel)
     _transition(
         ride, RideState.SEARCHING, actor=rider, actor_kind=ActorKind.RIDER, now=now, first=True
     )
@@ -180,6 +235,7 @@ def create_ride(*, rider: Any, quote_id: UUID) -> Ride:
             "rider_id": str(rider.pk),
             "service_area_id": str(ride.service_area_id),
             "vehicle_type": ride.vehicle_type,
+            "kind": ride.kind,
         },
     )
     return ride
@@ -204,8 +260,12 @@ def _eligible_captains(ride: Ride, *, candidate_ids: list[str], now: datetime) -
 
     Locked rows another dispatch is holding are skipped: that captain is about to get an offer.
     A captain is offered a ride once per search; after a captain cancels, a new search may offer
-    it again to the others, but never to a captain who cancelled it.
+    it again to the others, but never to a captain who cancelled it. A parcel goes only to
+    captains who take parcel orders (D17).
     """
+    vehicle_match: dict[str, Any] = {"vehicle_type": ride.vehicle_type}
+    if ride.kind == RideKind.PARCEL:
+        vehicle_match["takes_parcels"] = True
     cancelled_by = RideTransition.objects.filter(
         ride=ride, actor_kind=ActorKind.CAPTAIN, to_state=RideState.SEARCHING
     ).values("actor_id")
@@ -230,9 +290,7 @@ def _eligible_captains(ride: Ride, *, candidate_ids: list[str], now: datetime) -
                     status=PartnerApplication.Status.APPROVED,
                 )
             ),
-            models.Exists(
-                CaptainVehicle.objects.filter(partner=partner, vehicle_type=ride.vehicle_type)
-            ),
+            models.Exists(CaptainVehicle.objects.filter(partner=partner, **vehicle_match)),
         )
         .exclude(models.Exists(Ride.objects.filter(captain=partner, state__in=OPEN_RIDE_STATES)))
         .exclude(
@@ -381,7 +439,7 @@ def redrive_dispatch() -> int:
 def current_offer(partner: PartnerProfile) -> RideOffer | None:
     """The offer to show the captain now: unanswered, in time, on a ride still searching."""
     return (
-        RideOffer.objects.select_related("ride__quote")
+        RideOffer.objects.select_related("ride__quote", "ride__parcel")
         .filter(
             captain=partner,
             status=RideOffer.Status.PENDING,
@@ -485,11 +543,26 @@ def decline_offer(*, partner: PartnerProfile, offer_id: UUID) -> None:
 
 #: Wrong start codes allowed before the ride is locked (also a database constraint).
 OTP_MAX_ATTEMPTS = 5
-#: The rider sees the start code only while the captain is on the way or at the pickup.
-OTP_VISIBLE_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED)
+#: The rider sees the start code only while the captain is on the way or at the pickup, and
+#: again while a parcel is coming back (the sender gives it to take the item).
+OTP_VISIBLE_STATES = (
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.RETURNING,
+)
 #: Refusals `start_trip` returns instead of raising, so the counted attempt is kept.
 OTP_INVALID = "otp_invalid"
 OTP_LOCKED = "otp_locked"
+#: The same for the parcel delivery PIN, which has its own counter (`ParcelDetails.pin_attempts`).
+PIN_INVALID = "pin_invalid"
+PIN_LOCKED = "pin_locked"
+#: The booker sees the delivery PIN from the time a captain is assigned until the parcel is
+#: delivered or goes back (§3.2).
+DELIVERY_PIN_VISIBLE_STATES = (
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.IN_TRIP,
+)
 
 
 def _otp_secret() -> bytes:
@@ -512,6 +585,20 @@ def otp_fingerprint(ride_id: UUID, otp: str) -> str:
     return hmac.new(_otp_secret(), message, hashlib.sha256).hexdigest()
 
 
+def parcel_delivery_pin(ride_id: UUID) -> str:
+    """A parcel's 4-digit delivery PIN: derived from its id like the start code, with its own
+    message prefix so the two never match. Never stored, never logged."""
+    message = f"rides.parcel-pin.v1:{ride_id}".encode()
+    digest = hmac.new(_otp_secret(), message, hashlib.sha256).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 10_000:04d}"
+
+
+def pin_fingerprint(ride_id: UUID, pin: str) -> str:
+    """What the idempotency record stores for a typed PIN, as `otp_fingerprint` does for codes."""
+    message = f"rides.parcel-pin-attempt.v1:{ride_id}:{pin}".encode()
+    return hmac.new(_otp_secret(), message, hashlib.sha256).hexdigest()
+
+
 def _captain_ride(partner: PartnerProfile, ride_id: UUID) -> Ride:
     """The captain's own ride, locked. Anyone else's ride is a 404, so ids cannot be probed."""
     ride = Ride.objects.select_for_update().filter(id=ride_id, captain=partner).first()
@@ -529,7 +616,10 @@ def _metres_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float
     return 2 * earth_m * math.asin(math.sqrt(a))
 
 
-def _at_pickup(ride: Ride, position: dict[str, str] | None, now: datetime) -> bool:
+def _is_near(
+    position: dict[str, str] | None, latitude: Decimal, longitude: Decimal, now: datetime
+) -> bool:
+    """The captain's last ping is fresh and within the arrival radius of this point."""
     if position is None:
         return False
     captured_at = datetime.fromisoformat(position["captured_at"])
@@ -538,10 +628,17 @@ def _at_pickup(ride: Ride, position: dict[str, str] | None, now: datetime) -> bo
     distance = _metres_between(
         float(position["latitude"]),
         float(position["longitude"]),
-        float(ride.pickup_latitude),
-        float(ride.pickup_longitude),
+        float(latitude),
+        float(longitude),
     )
     return distance <= int(settings.RIDES_ARRIVAL_RADIUS_M)
+
+
+def _last_position(partner: PartnerProfile) -> dict[str, str] | None:
+    try:
+        return location.last_position(partner.id)
+    except location.LocationStoreError as exc:
+        raise LocationUnavailableError from exc
 
 
 def _log_step(event: str, ride: Ride) -> None:
@@ -556,12 +653,9 @@ def mark_arrived(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
         return ride
     if ride.state != RideState.CAPTAIN_ASSIGNED:
         raise InvalidTransitionError
-    try:
-        position = location.last_position(partner.id)
-    except location.LocationStoreError as exc:
-        raise LocationUnavailableError from exc
+    position = _last_position(partner)
     now = timezone.now()
-    if not _at_pickup(ride, position, now):
+    if not _is_near(position, ride.pickup_latitude, ride.pickup_longitude, now):
         raise NotAtPickupError
 
     ride.captain_arrived_at = now
@@ -604,8 +698,15 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
         card, waited_s=int((now - arrived_at).total_seconds())
     )
     ride.started_at = now
+    if ride.kind == RideKind.PARCEL:
+        # A parcel's fare is fixed at pickup: it is collected here or at the drop (§3.3).
+        ride.final_fare_paise = ride.fare_paise + ride.waiting_paise
     _transition(ride, RideState.IN_TRIP, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now)
-    ride.save(update_fields=("state", "started_at", "waiting_paise", "updated_at"))
+    ride.save(
+        update_fields=("state", "started_at", "waiting_paise", "final_fare_paise", "updated_at")
+    )
+    if ride.kind == RideKind.PARCEL:
+        notify.parcel_picked_up(ride)
     _log_step("ride_started", ride)
     return ride, None
 
@@ -614,6 +715,9 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
 def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     """End the trip. The rider pays the upfront fare plus waiting; GPS never re-prices it."""
     ride = _captain_ride(partner, ride_id)
+    if ride.kind == RideKind.PARCEL:
+        # A parcel ends only with `deliver_parcel`, which checks the PIN and the payment.
+        raise InvalidTransitionError
     if ride.state == RideState.COMPLETED:
         return ride
     if ride.state != RideState.IN_TRIP:
@@ -633,9 +737,234 @@ def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
 
 
 @transaction.atomic
+def mark_arrived_at_drop(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The captain reached the drop: a fresh ping within 200 m of it. Repeating it is harmless.
+
+    Not a state change: the parcel stays `IN_TRIP` and gets a timestamp, which starts the free
+    waiting minutes for the receiver.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL or ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    if parcel.arrived_at_drop_at is not None:
+        return ride
+    now = timezone.now()
+    if not _is_near(_last_position(partner), ride.drop_latitude, ride.drop_longitude, now):
+        raise NotAtDropError
+    parcel.arrived_at_drop_at = now
+    parcel.save(update_fields=("arrived_at_drop_at",))
+    _log_step("parcel_arrived_at_drop", ride)
+    return ride
+
+
+@transaction.atomic
+def deliver_parcel(
+    *, partner: PartnerProfile, ride_id: UUID, pin: str | None
+) -> tuple[Ride, str | None]:
+    """Hand the parcel over. Returns (ride, refusal), like `start_trip`.
+
+    The captain must be at the drop, and when the Receiver pays the money must be collected
+    first. When PIN confirmation is on, the PIN is checked: a wrong one is counted and
+    *returned* as `pin_invalid` (or `pin_locked` on the fifth), never raised, so the count is
+    kept. When it is off, no PIN is needed.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL:
+        raise InvalidTransitionError
+    if ride.state == RideState.COMPLETED:
+        return ride, None
+    if ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    if parcel.arrived_at_drop_at is None:
+        raise NotAtDropError
+    if parcel.payer == ParcelDetails.Payer.RECEIVER and (
+        ride.payment_status != Ride.PaymentStatus.COLLECTED
+    ):
+        raise PaymentNotCollectedError
+    if parcel.pin_required:
+        if parcel.pin_attempts >= OTP_MAX_ATTEMPTS:
+            return ride, PIN_LOCKED
+        if pin is None:
+            raise ValidationError({"pin": "Enter the delivery PIN."})
+        if not hmac.compare_digest(pin, parcel_delivery_pin(ride.id)):
+            parcel.pin_attempts += 1
+            parcel.save(update_fields=("pin_attempts",))
+            logger.info(
+                "parcel_pin_wrong",
+                extra={"ride_id": str(ride.id), "attempts": parcel.pin_attempts},
+            )
+            return ride, PIN_LOCKED if parcel.pin_attempts >= OTP_MAX_ATTEMPTS else PIN_INVALID
+
+    now = timezone.now()
+    parcel.delivered_at = now
+    parcel.save(update_fields=("delivered_at",))
+    ride.completed_at = now
+    _transition(
+        ride, RideState.COMPLETED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
+    )
+    ride.save(update_fields=("state", "completed_at", "updated_at"))
+    notify.parcel_delivered(ride)
+    _log_step("parcel_delivered", ride)
+    return ride, None
+
+
+def receiver_unavailable_allowed_at(ride: Ride, parcel: ParcelDetails) -> datetime | None:
+    """When "Receiver not available" opens: the card's free waiting minutes after arriving at
+    the drop, or at once when the PIN is locked (D12). None before the captain arrives."""
+    if parcel.arrived_at_drop_at is None:
+        return None
+    if parcel.pin_required and parcel.pin_attempts >= OTP_MAX_ATTEMPTS:
+        return parcel.arrived_at_drop_at
+    free = timedelta(minutes=ride.quote.rate_card.free_waiting_minutes)
+    return parcel.arrived_at_drop_at + free
+
+
+def _require_wait_over(ride: Ride) -> None:
+    allowed_at = receiver_unavailable_allowed_at(ride, ride.parcel)
+    if allowed_at is None or timezone.now() < allowed_at:
+        raise WaitNotOverError
+
+
+def _return_fare_paise(ride: Ride) -> int:
+    """The return leg, drop back to pickup, on the quote's own rate card version (D13)."""
+    try:
+        route = get_route(
+            pickup=(ride.drop_latitude, ride.drop_longitude),
+            drop=(ride.pickup_latitude, ride.pickup_longitude),
+            vehicle_type=ride.vehicle_type,
+        )
+    except RoutingUnavailableError as exc:
+        raise RoutingUnavailableApiError from exc
+    return trip_fare_paise(
+        ride.quote.rate_card, distance_m=route.distance_m, duration_s=route.duration_s
+    )
+
+
+def mark_receiver_unavailable(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The receiver is not there after the wait: the parcel goes back to the pickup.
+
+    The return route is priced *before* the ride is locked, so a slow routing call never holds
+    the row. If it fails (503, retryable) nothing has changed. Repeating the step returns the ride.
+    """
+    ride = (
+        Ride.objects.select_related("quote__rate_card", "parcel")
+        .filter(id=ride_id, captain=partner)
+        .first()
+    )
+    if ride is None:
+        raise NotFound("We couldn't find this ride.")
+    if ride.kind != RideKind.PARCEL or ride.state not in (RideState.IN_TRIP, RideState.RETURNING):
+        raise InvalidTransitionError
+    if ride.state == RideState.RETURNING:
+        return ride
+    _require_wait_over(ride)
+    return_fare = _return_fare_paise(ride)
+    return _start_return(partner=partner, ride_id=ride_id, return_fare=return_fare)
+
+
+@transaction.atomic
+def _start_return(*, partner: PartnerProfile, ride_id: UUID, return_fare: int) -> Ride:
+    ride = _captain_ride(partner, ride_id)
+    if ride.state == RideState.RETURNING:
+        return ride  # another tap got here first
+    if ride.state != RideState.IN_TRIP:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    _require_wait_over(ride)
+    now = timezone.now()
+    parcel.receiver_unavailable_at = now
+    parcel.return_fare_paise = return_fare
+    parcel.return_payment_status = Ride.PaymentStatus.DUE
+    parcel.save(
+        update_fields=("receiver_unavailable_at", "return_fare_paise", "return_payment_status")
+    )
+    # The total the captain is owed across the whole job grows by the return leg.
+    ride.final_fare_paise = (ride.final_fare_paise or 0) + return_fare
+    _transition(
+        ride, RideState.RETURNING, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
+    )
+    ride.save(update_fields=("state", "final_fare_paise", "updated_at"))
+    notify.parcel_returning(ride)
+    _log_step("parcel_returning", ride)
+    return ride
+
+
+@transaction.atomic
+def mark_returned(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Ride, str | None]:
+    """The parcel is back at the pickup: the sender gives the pickup code again (D13).
+
+    Like `start_trip`, a wrong code is counted on `otp_attempts` and *returned*, not raised.
+    """
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL:
+        raise InvalidTransitionError
+    if ride.state == RideState.RETURNED:
+        return ride, None
+    if ride.state != RideState.RETURNING:
+        raise InvalidTransitionError
+    now = timezone.now()
+    if not _is_near(_last_position(partner), ride.pickup_latitude, ride.pickup_longitude, now):
+        raise NotAtPickupError
+    if ride.otp_attempts >= OTP_MAX_ATTEMPTS:
+        return ride, OTP_LOCKED
+    if not hmac.compare_digest(otp, ride_otp(ride.id)):
+        ride.otp_attempts += 1
+        ride.save(update_fields=("otp_attempts", "updated_at"))
+        logger.info(
+            "ride_otp_wrong", extra={"ride_id": str(ride.id), "attempts": ride.otp_attempts}
+        )
+        return ride, OTP_LOCKED if ride.otp_attempts >= OTP_MAX_ATTEMPTS else OTP_INVALID
+
+    parcel = ride.parcel
+    parcel.returned_at = now
+    parcel.save(update_fields=("returned_at",))
+    _transition(ride, RideState.RETURNED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now)
+    ride.save(update_fields=("state", "updated_at"))
+    notify.parcel_returned(ride)
+    _log_step("parcel_returned", ride)
+    return ride, None
+
+
+def _fare_collectable(ride: Ride, parcel: ParcelDetails) -> bool:
+    """Whether the captain is at the moment where the fare may be collected (§3.3).
+
+    The Sender pays from the pickup on. The Receiver pays only at the drop, so not before the
+    captain arrives there. Nothing is collected while the parcel is on its way back; it is
+    collected again at the pickup, once returned.
+    """
+    if ride.state in (RideState.COMPLETED, RideState.RETURNED):
+        return True
+    if ride.state == RideState.IN_TRIP:
+        return parcel.payer == ParcelDetails.Payer.SENDER or parcel.arrived_at_drop_at is not None
+    return False
+
+
+def _collect_parcel_payment(ride: Ride) -> Ride:
+    """Mark every amount that is due and collectable now as collected. Saying so twice is fine."""
+    parcel = ride.parcel
+    if not _fare_collectable(ride, parcel):
+        raise InvalidTransitionError
+    now = timezone.now()
+    if ride.payment_status == Ride.PaymentStatus.DUE:
+        ride.payment_status = Ride.PaymentStatus.COLLECTED
+        ride.payment_collected_at = now
+        ride.save(update_fields=("payment_status", "payment_collected_at", "updated_at"))
+    # The return leg is collected from the sender at the pickup, so only once the parcel is back.
+    if ride.state == RideState.RETURNED and parcel.return_payment_status == Ride.PaymentStatus.DUE:
+        parcel.return_payment_status = Ride.PaymentStatus.COLLECTED
+        parcel.save(update_fields=("return_payment_status",))
+    _log_step("parcel_payment_collected", ride)
+    return ride
+
+
+@transaction.atomic
 def mark_payment_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     """The captain got the cash or UPI. Saying so twice changes nothing."""
     ride = _captain_ride(partner, ride_id)
+    if ride.kind == RideKind.PARCEL:
+        return _collect_parcel_payment(ride)
     if ride.state != RideState.COMPLETED:
         raise InvalidTransitionError
     if ride.payment_status == Ride.PaymentStatus.COLLECTED:
@@ -647,14 +976,40 @@ def mark_payment_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     return ride
 
 
+@transaction.atomic
+def mark_payment_not_received(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
+    """The sender would not pay when the parcel came back: what is still due becomes unpaid, for
+    Operations to follow up (D14). Returned parcels only. Saying so twice changes nothing."""
+    ride = _captain_ride(partner, ride_id)
+    if ride.kind != RideKind.PARCEL or ride.state != RideState.RETURNED:
+        raise InvalidTransitionError
+    parcel = ride.parcel
+    if ride.payment_status == Ride.PaymentStatus.DUE:
+        ride.payment_status = Ride.PaymentStatus.UNPAID
+        ride.save(update_fields=("payment_status", "updated_at"))
+    if parcel.return_payment_status == Ride.PaymentStatus.DUE:
+        parcel.return_payment_status = Ride.PaymentStatus.UNPAID
+        parcel.save(update_fields=("return_payment_status",))
+    _log_step("parcel_payment_not_received", ride)
+    return ride
+
+
 def captain_current_ride(partner: PartnerProfile) -> Ride | None:
     """The ride the captain's app should show: the open one, else a finished one still unpaid
     (so the Collect screen survives an app restart)."""
-    rides = Ride.objects.select_related("quote", "rider").filter(captain=partner)
+    rides = Ride.objects.select_related("quote__rate_card", "rider", "parcel").filter(
+        captain=partner
+    )
+    due = Ride.PaymentStatus.DUE
     return (
         rides.filter(state__in=OPEN_RIDE_STATES).first()
-        or rides.filter(state=RideState.COMPLETED, payment_status=Ride.PaymentStatus.DUE)
+        or rides.filter(state=RideState.COMPLETED, payment_status=due)
         .order_by("-completed_at")
+        .first()
+        # A parcel handed back stays on the screen until the sender has paid or not paid.
+        or rides.filter(state=RideState.RETURNED)
+        .filter(models.Q(payment_status=due) | models.Q(parcel__return_payment_status=due))
+        .order_by("-parcel__returned_at")
         .first()
     )
 
@@ -662,7 +1017,15 @@ def captain_current_ride(partner: PartnerProfile) -> Ride | None:
 # --- Cancellations (brief §5.4) ---------------------------------------------------------------
 
 RIDER_CANCEL_REASONS = ("CHANGED_MIND", "CAPTAIN_DELAYED", "WRONG_PICKUP", "OTHER")
-CAPTAIN_CANCEL_REASONS = ("RIDER_NOT_REACHABLE", "VEHICLE_ISSUE", "PICKUP_TOO_FAR", "OTHER")
+CAPTAIN_CANCEL_REASONS = (
+    "RIDER_NOT_REACHABLE",
+    "VEHICLE_ISSUE",
+    "PICKUP_TOO_FAR",
+    "OTHER",
+    "ITEM_NOT_ALLOWED",
+)
+#: A parcel the captain refuses at the pickup (D16): it ends cancelled and is never re-dispatched.
+ITEM_NOT_ALLOWED = "ITEM_NOT_ALLOWED"
 #: The rider may cancel until the trip starts; after that only Operations can.
 _RIDER_CANCELLABLE = (
     RideState.SEARCHING,
@@ -686,9 +1049,10 @@ def _cancel(ride: Ride, *, actor: Any, actor_kind: str, reason: str, now: dateti
     ride.save(
         update_fields=("state", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at")
     )
+    # A captain who cancels (a refused parcel) needs no notice about their own action.
     captain_user_id = (
         PartnerProfile.objects.filter(pk=ride.captain_id).values_list("user_id", flat=True).first()
-        if ride.captain_id is not None
+        if ride.captain_id is not None and actor_kind != ActorKind.CAPTAIN
         else None
     )
     notify.ride_cancelled(ride, captain_user_id=captain_user_id)
@@ -717,6 +1081,19 @@ def captain_cancel(*, partner: PartnerProfile, ride_id: UUID, reason: str) -> No
     """The captain gives the ride up before the trip. The ride searches again from round 1,
     never offering it back to this captain, and the cancel counts against them in Operations."""
     ride = _captain_ride(partner, ride_id)
+    if reason == ITEM_NOT_ALLOWED:
+        # Only a parcel, only at the pickup before the code: no charge, and no other captain.
+        if ride.kind != RideKind.PARCEL or ride.state != RideState.CAPTAIN_ARRIVED:
+            raise InvalidTransitionError
+        _cancel(
+            ride,
+            actor=partner.user,
+            actor_kind=ActorKind.CAPTAIN,
+            reason=reason,
+            now=timezone.now(),
+        )
+        notify.parcel_item_not_allowed(ride)
+        return
     if ride.state not in _CAPTAIN_CANCELLABLE:
         raise InvalidTransitionError
     now = timezone.now()

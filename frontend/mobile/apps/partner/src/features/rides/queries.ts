@@ -216,3 +216,73 @@ export function raiseCaptainSos(rideId: string): Promise<SosAnswer> {
     getApiClient().POST("/api/v1/partner/rides/{ride_id}/sos/", { params: ridePath(rideId), body: {} }),
   );
 }
+
+// --- Pick up & Drop (docs/parcel/README.md §4.2, §6) -------------------------------------------
+
+/** The "Take parcel orders" switch. Bike and Auto captains only: a cab is refused. */
+export function setParcelPreference(takesParcels: boolean): Promise<Schemas["ParcelPreference"]> {
+  return request(() =>
+    getApiClient().PUT("/api/v1/partner/rides/parcel-preference/", { body: { takes_parcels: takesParcels } }),
+  );
+}
+
+/** At the drop. Refused with `not_at_drop` until the last ping is within 200 m of it. */
+export function markArrivedAtDrop(rideId: string): Promise<CaptainRide> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/arrived-at-drop/", { params: ridePath(rideId) }),
+  );
+}
+
+/**
+ * Hand the parcel over, with the receiver's PIN when PIN confirmation is on. Like `startTrip`,
+ * each typed PIN keeps one idempotency key across network retries, so a timeout never costs one
+ * of the five tries; once the server answers, the key goes.
+ */
+export async function deliverParcel(rideId: string, pin?: string): Promise<CaptainRide> {
+  const scope = `rides.deliver.${rideId}.${pin ?? "none"}`;
+  try {
+    const ride = await request(() =>
+      getApiClient().POST("/api/v1/partner/rides/{ride_id}/deliver/", {
+        body: pin ? { pin } : {},
+        params: { path: { ride_id: rideId }, header: { "Idempotency-Key": getStableIdempotencyKey(scope) } },
+      }),
+    );
+    clearIdempotencyKey(scope);
+    return ride;
+  } catch (error) {
+    if (isApiRequestError(error)) clearIdempotencyKey(scope);
+    throw error;
+  }
+}
+
+/** The receiver is not there after the free wait (or the PIN is locked): take the parcel back. */
+export function markReceiverUnavailable(rideId: string): Promise<CaptainRide> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/receiver-unavailable/", { params: ridePath(rideId) }),
+  );
+}
+
+/** Back at the pickup: the sender gives the pickup code again. Same key rule as `startTrip`. */
+export async function returnParcel(rideId: string, otp: string): Promise<CaptainRide> {
+  const scope = `rides.returned.${rideId}.${otp}`;
+  try {
+    const ride = await request(() =>
+      getApiClient().POST("/api/v1/partner/rides/{ride_id}/returned/", {
+        body: { otp },
+        params: { path: { ride_id: rideId }, header: { "Idempotency-Key": getStableIdempotencyKey(scope) } },
+      }),
+    );
+    clearIdempotencyKey(scope);
+    return ride;
+  } catch (error) {
+    if (isApiRequestError(error)) clearIdempotencyKey(scope);
+    throw error;
+  }
+}
+
+/** The sender would not pay on the return: whatever is due becomes unpaid, for Operations. */
+export function markPaymentNotReceived(rideId: string): Promise<CaptainRide> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/rides/{ride_id}/payment-not-received/", { params: ridePath(rideId) }),
+  );
+}

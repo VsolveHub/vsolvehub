@@ -11,8 +11,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 
+import { limitsText } from "../parcel/model";
 import { decodePolyline } from "../polyline";
-import { bookRide, findOpenRide, useFareQuotes, type Trip } from "../queries";
+import { bookRide, findOpenRide, useFareQuotes, type RideKind } from "../queries";
+import { tripFrom, type TripParams } from "../trip-params";
 import { VEHICLES, type VehicleType } from "../vehicles";
 
 const ROUTE_BLUE = "#2563EB";
@@ -25,24 +27,6 @@ const ROUTE_BLUE = "#2563EB";
  */
 const QUOTES_REFRESH_MS = 4.5 * 60 * 1000;
 
-type Params = Record<
-  "pickupLat" | "pickupLng" | "pickupLabel" | "dropLat" | "dropLng" | "dropLabel",
-  string
->;
-
-/** The trip from the Where-to screen, or null if any part is missing or not a number. */
-function tripFrom(params: Partial<Params>): Trip | null {
-  const point = (lat?: string, lng?: string, address?: string) => {
-    const latitude = Number(lat);
-    const longitude = Number(lng);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !address) return null;
-    return { latitude: latitude.toFixed(6), longitude: longitude.toFixed(6), address };
-  };
-  const pickup = point(params.pickupLat, params.pickupLng, params.pickupLabel);
-  const drop = point(params.dropLat, params.dropLng, params.dropLabel);
-  return pickup && drop ? { pickup, drop } : null;
-}
-
 function minutes(seconds: number): string {
   return `${Math.max(1, Math.round(seconds / 60))} min`;
 }
@@ -51,11 +35,17 @@ function km(metres: number): string {
   return `${(metres / 1000).toFixed(1)} km`;
 }
 
-export function ChooseRideScreen() {
+/**
+ * The prices for a trip, one per vehicle. For a ride the rider picks a vehicle and books it here.
+ * For Pick up & Drop (`kind="PARCEL"`) each card shows the vehicle's limits and tapping one opens
+ * Review, where the booking is made: there is no Book button on this screen (§5.2, item 3).
+ */
+export function ChooseRideScreen({ kind = "RIDE" }: { kind?: RideKind } = {}) {
+  const parcel = kind === "PARCEL";
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<Params>();
+  const params = useLocalSearchParams<TripParams>();
   const { pickupLat, pickupLng, pickupLabel, dropLat, dropLng, dropLabel } = params;
   // The router hands back a new params object on render. Key the trip on its values, so nothing
   // below re-runs (refit the map, ask for prices) unless the trip really changed.
@@ -67,7 +57,7 @@ export function ChooseRideScreen() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [booked, setBooked] = useState(false);
 
-  const quotes = useFareQuotes(trip, signedIn && !booked);
+  const quotes = useFareQuotes(trip, signedIn && !booked, kind);
   const list = quotes.data?.quotes ?? [];
   // Remember the vehicle, not the quote: a fresh answer has new quote ids for the same vehicles.
   const [selectedType, setSelectedType] = useState<VehicleType | null>(null);
@@ -171,6 +161,7 @@ export function ChooseRideScreen() {
             busy={quotes.isFetching}
             onRetry={() => void refetch()}
             onChangePickup={() => router.back()}
+            product={parcel ? "Pick up & Drop" : "Rides"}
           />
         ) : (
           <>
@@ -184,7 +175,12 @@ export function ChooseRideScreen() {
                   key={quote.id}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: active }}
-                  onPress={() => setSelectedType(quote.vehicle_type)}
+                  onPress={() => {
+                    setSelectedType(quote.vehicle_type);
+                    if (parcel) {
+                      router.push({ pathname: "/rides/parcel/review", params: { ...params, vehicle: quote.vehicle_type } } as never);
+                    }
+                  }}
                   className={`mb-1.5 flex-row items-center gap-3 rounded-xl border px-3 py-2 ${
                     active ? "border-blue-600 bg-blue-50" : "border-line bg-surface"
                   }`}
@@ -194,6 +190,7 @@ export function ChooseRideScreen() {
                   </View>
                   <View className="flex-1">
                     <Text className="text-sm font-semibold text-slate-900">{vehicle.name}</Text>
+                    {parcel ? <Text className="text-xs font-semibold text-slate-700">{limitsText(quote)}</Text> : null}
                     <Text className="text-xs text-slate-500">
                       {minutes(quote.duration_s)} · {km(quote.distance_m)}
                     </Text>
@@ -208,7 +205,7 @@ export function ChooseRideScreen() {
               {bookingErrorText(book.error)}
             </Text>
           ) : null}
-          {selected ? (
+          {selected && !parcel ? (
             <Button
               size="lg"
               block
@@ -236,7 +233,7 @@ function bookingErrorText(error: unknown): string {
   return describeError(error, "mutation").message;
 }
 
-function Message({ text, children }: { text: string; children: React.ReactNode }) {
+export function Message({ text, children }: { text: string; children: React.ReactNode }) {
   return (
     <View className="items-center gap-4 py-6">
       <Text className="text-center text-sm text-slate-700">{text}</Text>
@@ -263,23 +260,25 @@ function useCountdown(seconds: number): number {
   return left;
 }
 
-function QuoteError({
+export function QuoteError({
   error,
   busy,
   onRetry,
   onChangePickup,
+  product = "Rides",
 }: {
   error: unknown;
   busy: boolean;
   onRetry: () => void;
   onChangePickup: () => void;
+  product?: string;
 }) {
   const wait = throttleWait(error);
   const left = useCountdown(wait);
   const code = isApiRequestError(error) ? error.code : null;
   if (code === "area_not_served") {
     return (
-      <Message text="Rides isn't available here yet.">
+      <Message text={`${product} isn't available here yet.`}>
         <Button onPress={onChangePickup}>Change pickup</Button>
       </Message>
     );

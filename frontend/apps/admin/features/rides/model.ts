@@ -1,6 +1,7 @@
 /** Plain words for the ride states, the filters, and what Operations may do (brief §5.4). */
 
-export const OPEN_STATES = ["SEARCHING", "CAPTAIN_ASSIGNED", "CAPTAIN_ARRIVED", "IN_TRIP"] as const;
+/** `RETURNING` is a parcel going back to the pickup: still open, so Operations can still end it. */
+export const OPEN_STATES = ["SEARCHING", "CAPTAIN_ASSIGNED", "CAPTAIN_ARRIVED", "IN_TRIP", "RETURNING"] as const;
 
 export const STATE_LABEL: Record<string, string> = {
   SEARCHING: "Searching",
@@ -10,6 +11,8 @@ export const STATE_LABEL: Record<string, string> = {
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
   NO_CAPTAIN_FOUND: "No captain found",
+  RETURNING: "Returning",
+  RETURNED: "Returned",
 };
 
 export type StateTone = "info" | "success" | "warning" | "neutral";
@@ -21,7 +24,9 @@ export function stateTone(state: string): StateTone {
   return "neutral";
 }
 
-export function stateLabel(state: string): string {
+/** A parcel that finished is "Delivered", where a ride is "Completed". */
+export function stateLabel(state: string, kind: string = "RIDE"): string {
+  if (kind === "PARCEL" && state === "COMPLETED") return "Delivered";
   return STATE_LABEL[state] ?? state;
 }
 
@@ -32,15 +37,58 @@ export function isOpen(state: string): boolean {
 /** Operations can close any open ride, even one in trip; never a finished one (brief §5.4). */
 export const canForceCancel = isOpen;
 
-/** The list filters, each the comma-separated `?state=` the server takes. */
-export const RIDE_FILTERS = [
+/**
+ * The list filters: each the comma-separated `?state=` the server takes. "Unpaid" is different: it
+ * looks at every state for a parcel whose sender did not pay, for Operations to follow up (§7.1).
+ */
+export interface RideFilter {
+  key: "live" | "completed" | "cancelled" | "no-captain" | "unpaid";
+  label: string;
+  states: string;
+  paymentStatus?: "UNPAID";
+}
+
+export const RIDE_FILTERS: readonly RideFilter[] = [
   { key: "live", label: "Live", states: OPEN_STATES.join(",") },
   { key: "completed", label: "Completed", states: "COMPLETED" },
   { key: "cancelled", label: "Cancelled", states: "CANCELLED" },
   { key: "no-captain", label: "No captain", states: "NO_CAPTAIN_FOUND" },
+  { key: "unpaid", label: "Unpaid", states: "", paymentStatus: "UNPAID" },
+];
+
+export type RideFilterKey = RideFilter["key"];
+
+/** The Kind filter on the rides list (§7.1): everything, rides, or Pick up & Drop parcels. */
+export const KIND_FILTERS = [
+  { key: "all", label: "All", kind: "" },
+  { key: "rides", label: "Rides", kind: "RIDE" },
+  { key: "parcels", label: "Pick up & Drop", kind: "PARCEL" },
 ] as const;
 
-export type RideFilterKey = (typeof RIDE_FILTERS)[number]["key"];
+export type KindFilterKey = (typeof KIND_FILTERS)[number]["key"];
+
+export const KIND_LABEL: Record<string, string> = { RIDE: "Ride", PARCEL: "Pick up & Drop" };
+
+export function kindLabel(kind: string | undefined): string {
+  return KIND_LABEL[kind ?? "RIDE"] ?? "Ride";
+}
+
+/** What Operations reads for a payment: a parcel can also be "Not paid", to follow up (D14). */
+export function paymentText(status: string): string {
+  if (status === "COLLECTED") return "Collected by captain";
+  if (status === "UNPAID") return "Not paid: follow up";
+  return "Due";
+}
+
+export const MODE_LABEL: Record<string, string> = { SEND: "Sending", RECEIVE: "Receiving" };
+export const PAYER_LABEL: Record<string, string> = {
+  SENDER: "Sender pays, at the pickup",
+  RECEIVER: "Receiver pays, at the drop",
+};
+export const MEET_LABEL: Record<string, string> = { CURB: "Meet at curb", DOOR: "Meet at door" };
+
+/** The most wrong delivery PINs allowed before it locks (D12). */
+export const PIN_MAX_ATTEMPTS = 5;
 
 /** The force-cancel reason the server accepts: required, at most 64 characters. */
 export const CANCEL_REASON_MAX = 64;
@@ -145,11 +193,80 @@ export function areasOf(cards: readonly { service_area_id: string; service_area_
   return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** The server's vehicle codes: a cab is `CAB` (it was typed `CAR` here, which the server refuses). */
 export const VEHICLE_TYPES = [
   { code: "BIKE", label: "Bike" },
   { code: "AUTO", label: "Auto" },
-  { code: "CAR", label: "Car" },
+  { code: "CAB", label: "Cab" },
 ] as const;
+
+/** What a card is for: rides, or Pick up & Drop parcels (§7.3). */
+export const RATE_KINDS = [
+  { code: "RIDE", label: "Ride" },
+  { code: "PARCEL", label: "Pick up & Drop" },
+] as const;
+
+/** A parcel card exists only for these (D2): there are no cab parcels. */
+export const PARCEL_VEHICLES = ["BIKE", "AUTO"] as const;
+
+/**
+ * The limits Operations starts a new parcel card with (D5). Only a starting point: the saved card
+ * is what customers see, and Operations changes it per area.
+ */
+export const PARCEL_DEFAULTS: Record<string, { weightKg: string; size: string }> = {
+  BIKE: { weightKg: "10", size: "40 x 30 x 20 cm" },
+  AUTO: { weightKg: "50", size: "1.3 x 3.5 x 3.3 ft" },
+};
+
+/** The server keeps the size label to this many characters. */
+export const SIZE_LABEL_MAX = 40;
+
+export interface ParcelLimits {
+  max_parcel_weight_grams: number;
+  parcel_size_label: string;
+}
+
+/** Kilograms typed in a box as the grams the server stores, or null when not a positive number. */
+export function kgToGrams(raw: string): number | null {
+  const value = Number(raw.trim());
+  if (!raw.trim() || !Number.isFinite(value) || value <= 0) return null;
+  const grams = Math.round(value * 1000);
+  return grams > 0 ? grams : null;
+}
+
+/** Grams from the server as the text of the kilograms box ("10", "7.5"). */
+export function gramsToKg(grams: number): string {
+  return (grams / 1000).toString();
+}
+
+/** The weight and size boxes as the limits to save, or what is wrong with them. */
+export function readParcelLimits(weightKg: string, size: string): { limits: ParcelLimits } | { error: string } {
+  const grams = kgToGrams(weightKg);
+  if (grams === null) return { error: "Check “Max weight (kg)”: a number above 0." };
+  const label = size.trim();
+  if (!label) return { error: "Check “Size”: say what size fits, for example 40 x 30 x 20 cm." };
+  if (label.length > SIZE_LABEL_MAX) return { error: `Check “Size”: up to ${SIZE_LABEL_MAX} characters.` };
+  return { limits: { max_parcel_weight_grams: grams, parcel_size_label: label } };
+}
+
+/** Only the limits that changed, since an edit saves a new version. */
+export function changedParcelLimits(
+  card: { max_parcel_weight_grams: number | null; parcel_size_label: string },
+  limits: ParcelLimits,
+): Partial<ParcelLimits> {
+  const changed: Partial<ParcelLimits> = {};
+  if (card.max_parcel_weight_grams !== limits.max_parcel_weight_grams) {
+    changed.max_parcel_weight_grams = limits.max_parcel_weight_grams;
+  }
+  if (card.parcel_size_label !== limits.parcel_size_label) changed.parcel_size_label = limits.parcel_size_label;
+  return changed;
+}
+
+/** "up to 10 kg · 40 x 30 x 20 cm", for a parcel card in the list. */
+export function limitsText(card: { max_parcel_weight_grams: number | null; parcel_size_label: string }): string {
+  if (card.max_parcel_weight_grams === null) return "";
+  return `up to ${gramsToKg(card.max_parcel_weight_grams)} kg · ${card.parcel_size_label}`;
+}
 
 /** "24 h", or "3 days" when it is whole days. */
 export function durationText(hours: number): string {

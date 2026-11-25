@@ -7,10 +7,16 @@ import { useState } from "react";
 import {
   ACTOR_LABEL,
   CANCEL_REASON_MAX,
+  MEET_LABEL,
+  MODE_LABEL,
   OFFER_LABEL,
+  PAYER_LABEL,
+  PIN_MAX_ATTEMPTS,
   canForceCancel,
   cancelReasonError,
   distanceText,
+  kindLabel,
+  paymentText,
   stateLabel,
   stateTone,
 } from "../model";
@@ -50,7 +56,7 @@ function ForceCancel({ ride }: { ride: OpsRideDetail }) {
           }}
           title="Cancel this ride?"
           description={
-            ride.state === "IN_TRIP"
+            ride.state === "IN_TRIP" || ride.state === "RETURNING"
               ? "The trip is under way. The rider and captain are told at once, and the captain becomes free. This can't be undone."
               : "The rider and captain are told at once, and any captain becomes free. This can't be undone."
           }
@@ -101,6 +107,57 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+type ParcelBlock = NonNullable<OpsRideDetail["parcel"]>;
+
+/** One end of a parcel: who is there, how to call them and how to meet them. Operations always see it (D20). */
+function ParcelEnd({ title, end }: { title: string; end: ParcelBlock["pickup"] }) {
+  const building = [end.building, end.unit].filter(Boolean).join(" · ");
+  return (
+    <div className="flex flex-col gap-0.5 py-1 text-sm">
+      <span className="text-xs font-semibold uppercase text-text-secondary">{title}</span>
+      <span className="font-medium text-text">
+        {end.name} · <a className="text-text-link" href={`tel:+91${end.phone}`}>+91 {end.phone}</a>
+      </span>
+      {building ? <span className="text-text">{building}</span> : null}
+      <span className="text-text-secondary">{MEET_LABEL[end.meet_at] ?? end.meet_at}</span>
+      {end.instructions ? <span className="italic text-text-secondary">{end.instructions}</span> : null}
+    </div>
+  );
+}
+
+/** What a Pick up & Drop parcel adds: who pays, the PIN, every step's time, both ends, the return. */
+function ParcelDetails({ parcel }: { parcel: ParcelBlock }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card className="p-4">
+        <h2 className="mb-2 font-semibold text-text">Parcel</h2>
+        <Row label="Booked as">{MODE_LABEL[parcel.mode] ?? parcel.mode}</Row>
+        <Row label="Who pays">{PAYER_LABEL[parcel.payer] ?? parcel.payer}</Row>
+        <Row label="PIN confirmation">{parcel.pin_required ? "On" : "Off"}</Row>
+        <Row label="Wrong delivery PINs">
+          {parcel.pin_attempts} of {PIN_MAX_ATTEMPTS}
+        </Row>
+        <Row label="Arrived at drop">{when(parcel.arrived_at_drop_at)}</Row>
+        <Row label="Delivered">{when(parcel.delivered_at)}</Row>
+        <Row label="Receiver not available">{when(parcel.receiver_unavailable_at)}</Row>
+        <Row label="Returned">{when(parcel.returned_at)}</Row>
+        <Row label="Return trip fare">
+          {parcel.return_fare_paise != null ? formatMoney(parcel.return_fare_paise) : "—"}
+        </Row>
+        <Row label="Return trip payment">
+          {parcel.return_payment_status ? paymentText(parcel.return_payment_status) : "—"}
+        </Row>
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="mb-2 font-semibold text-text">Pickup and drop details</h2>
+        <ParcelEnd title="Pickup" end={parcel.pickup} />
+        <ParcelEnd title="Drop" end={parcel.drop} />
+      </Card>
+    </div>
+  );
+}
+
 /** One ride for Operations: both people, fares, every state change and every offer. */
 export function RideDetail({ rideId }: { rideId: string }) {
   const ride = useOpsRide(rideId);
@@ -122,8 +179,10 @@ export function RideDetail({ rideId }: { rideId: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-navy-900">{data.vehicle_type} ride</h1>
-          <Badge tone={stateTone(data.state)}>{stateLabel(data.state)}</Badge>
+          <h1 className="text-2xl font-bold text-navy-900">
+            {data.kind === "PARCEL" ? `${kindLabel(data.kind)} · ${data.vehicle_type}` : `${data.vehicle_type} ride`}
+          </h1>
+          <Badge tone={stateTone(data.state)}>{stateLabel(data.state, data.kind)}</Badge>
         </div>
         {canForceCancel(data.state) ? <ForceCancel ride={data} /> : null}
       </div>
@@ -160,7 +219,7 @@ export function RideDetail({ rideId }: { rideId: string }) {
           <Row label="Fare">{formatMoney(data.fare_paise)}</Row>
           <Row label="Waiting">{formatMoney(data.waiting_paise)}</Row>
           <Row label="Final fare">{data.final_fare_paise != null ? formatMoney(data.final_fare_paise) : "—"}</Row>
-          <Row label="Payment">{data.payment_status === "COLLECTED" ? "Collected by captain" : "Due"}</Row>
+          <Row label="Payment">{paymentText(data.payment_status)}</Row>
           <Row label="Wrong start codes">{data.otp_attempts}</Row>
           {data.cancelled_by ? (
             <Row label="Cancelled by">
@@ -171,6 +230,8 @@ export function RideDetail({ rideId }: { rideId: string }) {
         </Card>
       </div>
 
+      {data.parcel ? <ParcelDetails parcel={data.parcel} /> : null}
+
       <Card className="p-4">
         <h2 className="mb-2 font-semibold text-text">What happened</h2>
         <ol className="flex flex-col gap-2 text-sm">
@@ -178,8 +239,8 @@ export function RideDetail({ rideId }: { rideId: string }) {
             <li key={`${step.at}-${index}`} className="flex flex-wrap gap-x-3">
               <span className="w-44 shrink-0 text-text-secondary">{when(step.at)}</span>
               <span className="font-medium text-text">
-                {step.from_state ? `${stateLabel(step.from_state)} → ` : ""}
-                {stateLabel(step.to_state)}
+                {step.from_state ? `${stateLabel(step.from_state, data.kind)} → ` : ""}
+                {stateLabel(step.to_state, data.kind)}
               </span>
               <span className="text-text-secondary">
                 by {ACTOR_LABEL[step.actor_kind] ?? step.actor_kind}

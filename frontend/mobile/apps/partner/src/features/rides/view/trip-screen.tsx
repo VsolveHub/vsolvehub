@@ -57,7 +57,7 @@ function errorText(error: unknown): string {
  * only when this build can draw maps (`isInAppMapAvailable`): an Android build without the Maps
  * key would show an empty grey square, so then the panel takes the whole screen.
  */
-function TripMap({ latitude, longitude }: { latitude: string; longitude: string }) {
+export function TripMap({ latitude, longitude }: { latitude: string; longitude: string }) {
   const point = { latitude: Number(latitude), longitude: Number(longitude) };
   return (
     <MapView
@@ -80,7 +80,7 @@ function ErrorLine({ error }: { error: unknown }) {
   );
 }
 
-function CancelChoices({ onPick, busy }: { onPick: (reason: string) => void; busy: boolean }) {
+export function CancelChoices({ onPick, busy }: { onPick: (reason: string) => void; busy: boolean }) {
   return (
     <View className="gap-2 rounded-2xl border border-line bg-canvas p-4">
       <Text className="text-sm font-semibold text-text">Why are you cancelling?</Text>
@@ -144,7 +144,7 @@ function StepVisual({ step }: { step: string }) {
 }
 
 /** The step's title and who it is about, centred, with the fare under them. */
-function Header({ title, subtitle, fare }: { title: string; subtitle?: string; fare?: number }) {
+export function Header({ title, subtitle, fare }: { title: string; subtitle?: string; fare?: number }) {
   return (
     <View className="items-center gap-1">
       <Text className="text-center text-3xl font-extrabold text-text">{title}</Text>

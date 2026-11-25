@@ -12,7 +12,7 @@ from uuid import UUID
 from apps.identity.models import User
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
-from apps.rides.models import Ride, RideOffer, RideSosEvent
+from apps.rides.models import Ride, RideKind, RideOffer, RideSosEvent
 
 __all__ = [
     "captain_arrived",
@@ -20,6 +20,11 @@ __all__ = [
     "captain_cancelled",
     "new_offer",
     "no_captain_found",
+    "parcel_delivered",
+    "parcel_item_not_allowed",
+    "parcel_picked_up",
+    "parcel_returned",
+    "parcel_returning",
     "ride_cancelled",
     "sos_raised",
 ]
@@ -32,6 +37,11 @@ _OPERATIONS = NotificationIntent.Audience.OPERATIONS
 
 def _rupees(paise: int) -> str:
     return f"₹{paise // 100}"
+
+
+def _code(ride: Ride, ride_code: str, parcel_code: str) -> str:
+    """A Pick up & Drop parcel gets its own wording for the steps it shares with rides."""
+    return parcel_code if ride.kind == RideKind.PARCEL else ride_code
 
 
 def _send(
@@ -59,7 +69,7 @@ def new_offer(offer: RideOffer, ride: Ride) -> None:
     _send(
         recipient_id=offer.captain.user_id,
         audience=_PARTNER,
-        template_code="rides_offer_new",
+        template_code=_code(ride, "rides_offer_new", "parcel_offer_new"),
         # The offer row is reused when a ride searches again, so the time makes each offer unique.
         key=f"{offer.id}:{offer.offered_at.timestamp()}",
         context={
@@ -78,7 +88,7 @@ def captain_assigned(ride: Ride) -> None:
     _send(
         recipient_id=ride.rider_id,
         audience=_CUSTOMER,
-        template_code="rides_captain_assigned",
+        template_code=_code(ride, "rides_captain_assigned", "parcel_captain_assigned"),
         key=f"{ride.id}:{ride.captain_assigned_at}",
         context={
             "ride_id": str(ride.id),
@@ -93,7 +103,7 @@ def captain_arrived(ride: Ride) -> None:
     _send(
         recipient_id=ride.rider_id,
         audience=_CUSTOMER,
-        template_code="rides_captain_arrived",
+        template_code=_code(ride, "rides_captain_arrived", "parcel_captain_arrived"),
         key=f"{ride.id}:{ride.captain_arrived_at}",
         context={"ride_id": str(ride.id), "partner_name": ride.captain.display_name},
     )
@@ -103,10 +113,44 @@ def no_captain_found(ride: Ride) -> None:
     _send(
         recipient_id=ride.rider_id,
         audience=_CUSTOMER,
-        template_code="rides_no_captain_found",
+        template_code=_code(ride, "rides_no_captain_found", "parcel_no_captain_found"),
         key=str(ride.id),
         context={"ride_id": str(ride.id)},
     )
+
+
+def _tell_booker(ride: Ride, template_code: str, *, with_captain: bool = False) -> None:
+    """One notice to the person who booked, once per parcel and event."""
+    context = {"ride_id": str(ride.id)}
+    if with_captain and ride.captain is not None:
+        context["partner_name"] = ride.captain.display_name
+    _send(
+        recipient_id=ride.rider_id,
+        audience=_CUSTOMER,
+        template_code=template_code,
+        key=str(ride.id),
+        context=context,
+    )
+
+
+def parcel_picked_up(ride: Ride) -> None:
+    _tell_booker(ride, "parcel_picked_up", with_captain=True)
+
+
+def parcel_delivered(ride: Ride) -> None:
+    _tell_booker(ride, "parcel_delivered")
+
+
+def parcel_returning(ride: Ride) -> None:
+    _tell_booker(ride, "parcel_returning", with_captain=True)
+
+
+def parcel_returned(ride: Ride) -> None:
+    _tell_booker(ride, "parcel_returned")
+
+
+def parcel_item_not_allowed(ride: Ride) -> None:
+    _tell_booker(ride, "parcel_item_not_allowed")
 
 
 def captain_cancelled(ride: Ride, at: Any) -> None:

@@ -15,6 +15,7 @@ from apps.rides.models import (
     CaptainPass,
     CaptainPassPlan,
     CaptainVehicle,
+    RideKind,
     RideRateCard,
     VehicleType,
 )
@@ -58,15 +59,53 @@ def test_refused_when_the_area_is_missing(settings: SettingsWrapper) -> None:
 def test_creates_one_active_card_per_vehicle(settings: SettingsWrapper, area: ServiceArea) -> None:
     settings.DEBUG = True
     seed()
-    active = RideRateCard.objects.filter(service_area=area, is_active=True)
+    active = RideRateCard.objects.filter(service_area=area, is_active=True, kind=RideKind.RIDE)
     assert sorted(active.values_list("vehicle_type", flat=True)) == ["AUTO", "BIKE", "CAB"]
+
+
+def test_creates_a_parcel_card_for_bike_and_auto_with_the_default_limits(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    settings.DEBUG = True
+    seed()
+
+    parcel = RideRateCard.objects.filter(service_area=area, kind=RideKind.PARCEL, is_active=True)
+
+    assert {c.vehicle_type: (c.max_parcel_weight_grams, c.parcel_size_label) for c in parcel} == {
+        "BIKE": (10_000, "40 x 30 x 20 cm"),
+        "AUTO": (50_000, "1.3 x 3.5 x 3.3 ft"),
+    }  # no cab parcel card
+
+
+def test_a_live_parcel_price_is_never_overwritten(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    settings.DEBUG = True
+    RideRateCard.objects.create(
+        service_area=area,
+        vehicle_type=VehicleType.BIKE,
+        kind=RideKind.PARCEL,
+        max_parcel_weight_grams=5000,
+        parcel_size_label="small",
+        base_fare_paise=9900,
+        included_distance_m=0,
+        per_km_paise=0,
+        per_minute_paise=0,
+        minimum_fare_paise=0,
+        free_waiting_minutes=0,
+        waiting_per_minute_paise=0,
+    )
+    seed()
+    card = RideRateCard.objects.get(service_area=area, kind=RideKind.PARCEL, vehicle_type="BIKE")
+    assert (card.base_fare_paise, card.max_parcel_weight_grams) == (9900, 5000)
+    assert RideRateCard.objects.filter(service_area=area, kind=RideKind.RIDE).count() == 3
 
 
 def test_running_twice_changes_nothing(settings: SettingsWrapper, area: ServiceArea) -> None:
     settings.DEBUG = True
     seed()
     seed()
-    assert RideRateCard.objects.filter(service_area=area).count() == 3
+    assert RideRateCard.objects.filter(service_area=area).count() == 5  # 3 rides + 2 parcels
 
 
 def test_a_live_price_is_never_overwritten(settings: SettingsWrapper, area: ServiceArea) -> None:
@@ -83,7 +122,9 @@ def test_a_live_price_is_never_overwritten(settings: SettingsWrapper, area: Serv
         waiting_per_minute_paise=0,
     )
     seed()
-    bike = RideRateCard.objects.get(service_area=area, vehicle_type=VehicleType.BIKE)
+    bike = RideRateCard.objects.get(
+        service_area=area, vehicle_type=VehicleType.BIKE, kind=RideKind.RIDE
+    )
     assert bike.base_fare_paise == 4200
 
 

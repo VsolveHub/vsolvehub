@@ -6,16 +6,31 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
-from django.db.models import Avg, Count, Exists, F, OuterRef, Q, Subquery, Sum
+from django.db.models import (
+    Avg,
+    BigIntegerField,
+    Case,
+    Count,
+    Exists,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
 from django.utils import timezone
 
 from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.rides import location
 from apps.rides.models import (
+    TRACKED_RIDE_STATES,
     CaptainDutySession,
     CaptainPass,
     CaptainVehicle,
     Ride,
+    RideKind,
     RideRating,
     RideState,
     RideTransition,
@@ -126,8 +141,6 @@ def captain_status(partner: PartnerProfile) -> CaptainStatus:
 
 # --- The rider's live ride (brief §5.7) -------------------------------------------------------
 
-#: While the ride is in these states, the rider sees where the captain is.
-_TRACKED_STATES = (RideState.CAPTAIN_ASSIGNED, RideState.CAPTAIN_ARRIVED, RideState.IN_TRIP)
 #: The pickup ETA is a Routes call, so it is worked out at most this often per ride.
 ETA_CACHE_SECONDS = 30
 
@@ -144,7 +157,7 @@ def captain_live(ride: Ride) -> CaptainLive:
     Either is None rather than guessed: no fresh ping, Redis down, or Routes down. The ETA is
     only for a captain still on the way.
     """
-    if ride.captain_id is None or ride.state not in _TRACKED_STATES:
+    if ride.captain_id is None or ride.state not in TRACKED_RIDE_STATES:
         return CaptainLive(position=None, eta_s=None)
     try:
         ping = location.last_position(ride.captain_id)
@@ -211,11 +224,40 @@ def captain_earnings(partner: PartnerProfile, *, period: str) -> Earnings:
     since = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     if period == "week":
         since -= timedelta(days=local_now.weekday())
-    rides = Ride.objects.filter(captain=partner, state=RideState.COMPLETED, completed_at__gte=since)
+    # A ride counts when completed; a parcel also when handed back (it still earned the return leg).
+    rides = Ride.objects.filter(captain=partner).filter(
+        Q(state=RideState.COMPLETED, completed_at__gte=since)
+        | Q(state=RideState.RETURNED, parcel__returned_at__gte=since)
+    )
+    collected = Ride.PaymentStatus.COLLECTED
+    # A parcel counts only the money actually collected: the fare (with pickup waiting) and the
+    # return leg, each only once marked as received.
+    parcel_collected = Case(
+        When(payment_status=collected, then=F("fare_paise") + F("waiting_paise")),
+        default=Value(0),
+        output_field=BigIntegerField(),
+    ) + Case(
+        When(parcel__return_payment_status=collected, then=F("parcel__return_fare_paise")),
+        default=Value(0),
+        output_field=BigIntegerField(),
+    )
     totals = rides.aggregate(
         count=Count("id"),
-        earned=Sum("final_fare_paise"),
-        collected=Sum("final_fare_paise", filter=Q(payment_status=Ride.PaymentStatus.COLLECTED)),
+        earned=Sum(
+            Case(
+                When(kind=RideKind.RIDE, then=F("final_fare_paise")),
+                default=parcel_collected,
+                output_field=BigIntegerField(),
+            )
+        ),
+        collected=Sum(
+            Case(
+                When(kind=RideKind.RIDE, payment_status=collected, then=F("final_fare_paise")),
+                When(kind=RideKind.RIDE, then=Value(0)),
+                default=parcel_collected,
+                output_field=BigIntegerField(),
+            )
+        ),
     )
     return Earnings(
         period=period,

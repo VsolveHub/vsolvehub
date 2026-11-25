@@ -314,7 +314,7 @@ def test_availability_lists_bookable_vehicles_cheapest_first(
     response = APIClient().get(AVAILABILITY)  # Home is open to signed-out visitors
 
     assert response.status_code == 200
-    assert response.json() == {"vehicle_types": ["BIKE", "AUTO", "CAB"]}
+    assert response.json()["vehicle_types"] == ["BIKE", "AUTO", "CAB"]
 
 
 def test_availability_leaves_out_a_vehicle_switched_off(
@@ -324,7 +324,7 @@ def test_availability_leaves_out_a_vehicle_switched_off(
     make_card(area, VehicleType.BIKE)
     make_card(area, VehicleType.CAB, is_active=False)
 
-    assert APIClient().get(AVAILABILITY).json() == {"vehicle_types": ["BIKE"]}
+    assert APIClient().get(AVAILABILITY).json()["vehicle_types"] == ["BIKE"]
 
 
 def test_availability_is_empty_outside_every_area(
@@ -333,7 +333,7 @@ def test_availability_is_empty_outside_every_area(
     pickup_pin(monkeypatch, "110001")
     all_cards(area)
 
-    assert APIClient().get(AVAILABILITY).json() == {"vehicle_types": []}
+    assert APIClient().get(AVAILABILITY).json()["vehicle_types"] == []
 
 
 def test_availability_is_503_when_the_place_cannot_be_looked_up(

@@ -2,6 +2,7 @@ import { EmptyState, ErrorState, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 
+import { parcelStateLabel } from "../model/parcel-trip";
 import { useCaptainHistory, type RideHistoryRow } from "../queries";
 
 const STATE_LABEL: Record<string, string> = {
@@ -12,14 +13,20 @@ const STATE_LABEL: Record<string, string> = {
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
   NO_CAPTAIN_FOUND: "No captain",
+  RETURNING: "Returning",
+  RETURNED: "Returned",
 };
 
 function Row({ ride }: { ride: RideHistoryRow }) {
   const amount = ride.final_fare_paise ?? ride.fare_paise;
+  const parcel = ride.kind === "PARCEL";
+  // A parcel is "Delivered" or "Returned" where a ride is "Completed".
+  const label = (parcel ? parcelStateLabel(ride.state) : null) ?? STATE_LABEL[ride.state] ?? ride.state;
   return (
     <View className="rounded-2xl bg-surface p-4 gap-1">
+      {parcel ? <Text className="text-xs font-semibold uppercase text-[#c25600]">Pick up &amp; Drop</Text> : null}
       <View className="flex-row justify-between">
-        <Text className="text-sm font-semibold text-text">{STATE_LABEL[ride.state] ?? ride.state}</Text>
+        <Text className="text-sm font-semibold text-text">{label}</Text>
         <Text className="text-sm font-bold text-text">{formatMoney(amount)}</Text>
       </View>
       <Text className="text-sm text-text" numberOfLines={1}>

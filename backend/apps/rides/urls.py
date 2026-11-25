@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.rides.views import (
+    ArrivedAtDropView,
     ArrivedView,
     AvailabilityView,
     CaptainCancelView,
@@ -16,6 +17,7 @@ from apps.rides.views import (
     CaptainVehicleView,
     CompleteTripView,
     CurrentOfferView,
+    DeliverParcelView,
     DutyStartView,
     DutyStopView,
     FareQuotesView,
@@ -31,7 +33,11 @@ from apps.rides.views import (
     OpsRidesView,
     OpsSosResolveView,
     OpsSosView,
+    ParcelPreferenceView,
+    PaymentNotReceivedView,
     PaymentReceivedView,
+    ReceiverUnavailableView,
+    ReturnedView,
     RideDetailView,
     RiderCancelView,
     RiderRatingView,
@@ -52,6 +58,11 @@ urlpatterns = [
     path("rides/<uuid:ride_id>/sos/", RiderSosView.as_view(), name="ride-sos"),
     path("partner/rides/me/", CaptainMeView.as_view(), name="captain-me"),
     path("partner/rides/vehicle/", CaptainVehicleView.as_view(), name="captain-vehicle"),
+    path(
+        "partner/rides/parcel-preference/",
+        ParcelPreferenceView.as_view(),
+        name="parcel-preference",
+    ),
     path("partner/rides/pass-plans/", CaptainPassPlansView.as_view(), name="pass-plans"),
     path("partner/rides/passes/", CaptainPassesView.as_view(), name="passes"),
     path("partner/rides/duty/start/", DutyStartView.as_view(), name="duty-start"),
@@ -63,6 +74,23 @@ urlpatterns = [
     path("partner/rides/<uuid:ride_id>/rating/", CaptainRatingView.as_view(), name="trip-rating"),
     path("partner/rides/<uuid:ride_id>/sos/", CaptainSosView.as_view(), name="trip-sos"),
     path("partner/rides/<uuid:ride_id>/arrived/", ArrivedView.as_view(), name="trip-arrived"),
+    path(
+        "partner/rides/<uuid:ride_id>/arrived-at-drop/",
+        ArrivedAtDropView.as_view(),
+        name="trip-arrived-at-drop",
+    ),
+    path("partner/rides/<uuid:ride_id>/deliver/", DeliverParcelView.as_view(), name="trip-deliver"),
+    path(
+        "partner/rides/<uuid:ride_id>/receiver-unavailable/",
+        ReceiverUnavailableView.as_view(),
+        name="trip-receiver-unavailable",
+    ),
+    path("partner/rides/<uuid:ride_id>/returned/", ReturnedView.as_view(), name="trip-returned"),
+    path(
+        "partner/rides/<uuid:ride_id>/payment-not-received/",
+        PaymentNotReceivedView.as_view(),
+        name="trip-payment-not-received",
+    ),
     path("partner/rides/<uuid:ride_id>/start/", StartTripView.as_view(), name="trip-start"),
     path(
         "partner/rides/<uuid:ride_id>/complete/", CompleteTripView.as_view(), name="trip-complete"

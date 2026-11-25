@@ -14,14 +14,18 @@ from django.utils import timezone
 
 __all__ = [
     "OPEN_RIDE_STATES",
+    "PARCEL_LIMIT_FIELDS",
     "RATE_FIELDS",
+    "TRACKED_RIDE_STATES",
     "ActorKind",
     "CaptainDutySession",
     "CaptainPass",
     "CaptainPassPlan",
     "CaptainVehicle",
     "FareQuote",
+    "ParcelDetails",
     "Ride",
+    "RideKind",
     "RideOffer",
     "RideRateCard",
     "RideRating",
@@ -45,6 +49,13 @@ class VehicleType(models.TextChoices):
     CAB = "CAB", "Cab"
 
 
+class RideKind(models.TextChoices):
+    """A passenger ride, or a Pick up & Drop parcel (ADR-0015)."""
+
+    RIDE = "RIDE", "Ride"
+    PARCEL = "PARCEL", "Pick up & Drop"
+
+
 class CaptainVehicle(models.Model):
     """The one vehicle a ride captain drives. A captain is a partner on the `RIDE_CAPTAIN` track."""
 
@@ -59,6 +70,8 @@ class CaptainVehicle(models.Model):
     registration_number = models.CharField(max_length=16, unique=True)
     make_model = models.CharField(max_length=120)
     colour = models.CharField(max_length=40)
+    #: "Take parcel orders". Only Bike and Auto captains may change it; a cab is never offered one.
+    takes_parcels = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -90,12 +103,17 @@ RATE_FIELDS = (
 )
 
 
-class RideRateCard(models.Model):
-    """Operations' price list for one vehicle type in one service area.
+#: What a Pick up & Drop card adds to the prices: the limits shown to customers (D5).
+PARCEL_LIMIT_FIELDS = ("max_parcel_weight_grams", "parcel_size_label")
 
-    A vehicle type is bookable in an area only while it has an active card: that is the only
-    on/off switch. An edit is a new row with the next `version`, and the old row is deactivated,
-    so a quote keeps the exact numbers it was priced on.
+
+class RideRateCard(models.Model):
+    """Operations' price list for one vehicle type and kind in one service area.
+
+    A vehicle type is bookable in an area only while it has an active card of that kind: that is
+    the only on/off switch, for rides and for Pick up & Drop alike. An edit is a new row with the
+    next `version`, and the old row is deactivated, so a quote keeps the exact numbers it was
+    priced on. A parcel card also carries the limits shown to customers.
 
     Every money value is integer paise. Positive integer fields make "never negative" a database
     rule, not just a serializer rule.
@@ -108,6 +126,11 @@ class RideRateCard(models.Model):
         related_name="ride_rate_cards",
     )
     vehicle_type = models.CharField(max_length=8, choices=VehicleType.choices)
+    kind = models.CharField(max_length=8, choices=RideKind.choices, default=RideKind.RIDE)
+    #: Parcel cards only (null on a ride card): the heaviest item this vehicle takes, in grams,
+    #: and a label such as "40 x 30 x 20 cm".
+    max_parcel_weight_grams = models.PositiveIntegerField(null=True, blank=True)
+    parcel_size_label = models.CharField(max_length=40, blank=True)
 
     base_fare_paise = models.PositiveBigIntegerField()
     #: Distance the base fare already covers, in metres. `per_km_paise` applies beyond it.
@@ -119,7 +142,7 @@ class RideRateCard(models.Model):
     waiting_per_minute_paise = models.PositiveBigIntegerField()
 
     is_active = models.BooleanField(default=True)
-    #: Starts at 1 and goes up by one per edit, per (area, vehicle type).
+    #: Starts at 1 and goes up by one per edit, per (area, vehicle type, kind).
     version = models.PositiveIntegerField(default=1)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -132,21 +155,46 @@ class RideRateCard(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("service_area", "vehicle_type", "-version")
+        ordering = ("service_area", "kind", "vehicle_type", "-version")
         constraints = [
-            # The on/off switch: at most one live price per area and vehicle type.
+            # The on/off switch: at most one live price per area, vehicle type and kind.
             models.UniqueConstraint(
-                fields=("service_area", "vehicle_type"),
+                fields=("service_area", "vehicle_type", "kind"),
                 condition=Q(is_active=True),
                 name="rides_one_active_rate_card_per_area_vehicle",
             ),
             models.UniqueConstraint(
-                fields=("service_area", "vehicle_type", "version"),
+                fields=("service_area", "vehicle_type", "kind", "version"),
                 name="rides_unique_rate_card_version",
             ),
             models.CheckConstraint(
                 condition=Q(version__gte=1),
                 name="rides_rate_card_version_from_one",
+            ),
+            # Bike and Auto only: there are no cab parcels (D2).
+            models.CheckConstraint(
+                condition=Q(kind=RideKind.RIDE)
+                | Q(vehicle_type__in=(VehicleType.BIKE, VehicleType.AUTO)),
+                name="rides_parcel_card_is_bike_or_auto",
+            ),
+            # A parcel card states its limits; a ride card has none.
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        kind=RideKind.PARCEL,
+                        max_parcel_weight_grams__isnull=False,
+                        max_parcel_weight_grams__gt=0,
+                    )
+                    & ~Q(parcel_size_label="")
+                )
+                | (
+                    Q(
+                        kind=RideKind.RIDE,
+                        max_parcel_weight_grams__isnull=True,
+                        parcel_size_label="",
+                    )
+                ),
+                name="rides_parcel_card_has_limits",
             ),
         ]
 
@@ -174,6 +222,7 @@ class FareQuote(models.Model):
         related_name="ride_quotes",
     )
     vehicle_type = models.CharField(max_length=8, choices=VehicleType.choices)
+    kind = models.CharField(max_length=8, choices=RideKind.choices, default=RideKind.RIDE)
     rate_card = models.ForeignKey(RideRateCard, on_delete=models.PROTECT, related_name="quotes")
     rate_card_version = models.PositiveIntegerField()
 
@@ -351,6 +400,10 @@ class RideState(models.TextChoices):
     COMPLETED = "COMPLETED", "Completed"
     NO_CAPTAIN_FOUND = "NO_CAPTAIN_FOUND", "No captain found"
     CANCELLED = "CANCELLED", "Cancelled"
+    #: Parcels only: the receiver was not there, so the item is going back to the pickup.
+    RETURNING = "RETURNING", "Returning"
+    #: Parcels only: handed back at the pickup.
+    RETURNED = "RETURNED", "Returned"
 
 
 #: States in which the ride still needs someone: the rider or captain cannot start another one.
@@ -359,6 +412,16 @@ OPEN_RIDE_STATES = (
     RideState.CAPTAIN_ASSIGNED,
     RideState.CAPTAIN_ARRIVED,
     RideState.IN_TRIP,
+    RideState.RETURNING,
+)
+
+#: States in which the captain's GPS is recorded as the ride's track and shown on the rider's map:
+#: from the moment they are assigned until the trip ends, including a parcel coming back.
+TRACKED_RIDE_STATES = (
+    RideState.CAPTAIN_ASSIGNED,
+    RideState.CAPTAIN_ARRIVED,
+    RideState.IN_TRIP,
+    RideState.RETURNING,
 )
 
 #: States that must name the captain doing the ride.
@@ -367,7 +430,13 @@ _CAPTAIN_STATES = (
     RideState.CAPTAIN_ARRIVED,
     RideState.IN_TRIP,
     RideState.COMPLETED,
+    RideState.RETURNING,
+    RideState.RETURNED,
 )
+
+#: States that have a fixed `final_fare_paise`. A parcel fixes it at pickup, so it is already
+#: set when a return starts.
+_FINAL_FARE_STATES = (RideState.COMPLETED, RideState.RETURNING, RideState.RETURNED)
 
 
 class ActorKind(models.TextChoices):
@@ -390,11 +459,14 @@ class Ride(models.Model):
     class PaymentStatus(models.TextChoices):
         DUE = "DUE", "Due"
         COLLECTED = "COLLECTED", "Collected"
+        #: Parcels only: the captain could not collect it. Operations follows up.
+        UNPAID = "UNPAID", "Not paid"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     rider = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="rides"
     )
+    kind = models.CharField(max_length=8, choices=RideKind.choices, default=RideKind.RIDE)
     #: One-to-one: a quote books at most one ride.
     quote = models.OneToOneField(FareQuote, on_delete=models.PROTECT, related_name="ride")
     service_area = models.ForeignKey(
@@ -420,7 +492,8 @@ class Ride(models.Model):
 
     fare_paise = models.PositiveBigIntegerField()
     waiting_paise = models.PositiveBigIntegerField(default=0)
-    #: Set when the trip completes: always `fare_paise + waiting_paise`.
+    #: Set when the trip completes (a parcel: at pickup): `fare_paise + waiting_paise`, plus the
+    #: parcel's return leg once a return starts.
     final_fare_paise = models.PositiveBigIntegerField(null=True, blank=True)
     payment_method = models.CharField(
         max_length=16, choices=PaymentMethod.choices, default=PaymentMethod.CASH_OR_UPI
@@ -463,12 +536,18 @@ class Ride(models.Model):
             ),
             models.CheckConstraint(
                 condition=Q(final_fare_paise__isnull=True)
-                | Q(final_fare_paise=F("fare_paise") + F("waiting_paise")),
-                name="rides_final_fare_is_fare_plus_waiting",
+                | Q(final_fare_paise__gte=F("fare_paise") + F("waiting_paise")),
+                name="rides_final_fare_covers_fare_plus_waiting",
             ),
             models.CheckConstraint(
-                condition=~Q(state=RideState.COMPLETED) | Q(final_fare_paise__isnull=False),
-                name="rides_completed_ride_has_a_final_fare",
+                condition=~Q(state__in=_FINAL_FARE_STATES) | Q(final_fare_paise__isnull=False),
+                name="rides_finished_ride_has_a_final_fare",
+            ),
+            # Only a parcel can be returned.
+            models.CheckConstraint(
+                condition=Q(kind=RideKind.PARCEL)
+                | ~Q(state__in=(RideState.RETURNING, RideState.RETURNED)),
+                name="rides_only_a_parcel_returns",
             ),
             models.CheckConstraint(
                 condition=~Q(state=RideState.CANCELLED)
@@ -486,6 +565,83 @@ class Ride(models.Model):
 
     def __str__(self) -> str:
         return f"{self.id}:{self.state}"
+
+
+class ParcelDetails(models.Model):
+    """What a Pick up & Drop parcel adds to its ride: both ends, who pays, the PIN and the return.
+
+    The names and phones here are shown to the captain only while the parcel is open (D20). The
+    delivery PIN is never stored: it is derived from the ride id, like the pickup code.
+    """
+
+    class Mode(models.TextChoices):
+        SEND = "SEND", "I'm sending"
+        RECEIVE = "RECEIVE", "I'm receiving"
+
+    class Payer(models.TextChoices):
+        SENDER = "SENDER", "Sender"
+        RECEIVER = "RECEIVER", "Receiver"
+
+    class MeetAt(models.TextChoices):
+        CURB = "CURB", "Meet at curb"
+        DOOR = "DOOR", "Meet at door"
+
+    ride = models.OneToOneField(
+        Ride, primary_key=True, on_delete=models.PROTECT, related_name="parcel"
+    )
+    mode = models.CharField(max_length=8, choices=Mode.choices)
+    payer = models.CharField(max_length=8, choices=Payer.choices)
+    pin_required = models.BooleanField()
+
+    pickup_name = models.CharField(max_length=80)
+    #: A 10-digit Indian mobile number, without +91.
+    pickup_phone = models.CharField(max_length=10)
+    pickup_building = models.CharField(max_length=120, blank=True)
+    pickup_unit = models.CharField(max_length=60, blank=True)
+    pickup_meet_at = models.CharField(max_length=8, choices=MeetAt.choices)
+    pickup_instructions = models.CharField(max_length=120, blank=True)
+
+    drop_name = models.CharField(max_length=80)
+    drop_phone = models.CharField(max_length=10)
+    drop_building = models.CharField(max_length=120, blank=True)
+    drop_unit = models.CharField(max_length=60, blank=True)
+    drop_meet_at = models.CharField(max_length=8, choices=MeetAt.choices)
+    drop_instructions = models.CharField(max_length=120, blank=True)
+
+    #: One timestamp per step; `Ride` keeps the shared ones.
+    arrived_at_drop_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    receiver_unavailable_at = models.DateTimeField(null=True, blank=True)
+    returned_at = models.DateTimeField(null=True, blank=True)
+
+    #: Null until a return starts; then the return leg's price and whether it has been paid.
+    return_fare_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    return_payment_status = models.CharField(
+        max_length=12, choices=Ride.PaymentStatus.choices, null=True, blank=True
+    )
+    pin_attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(pickup_name="")
+                & ~Q(pickup_phone="")
+                & ~Q(drop_name="")
+                & ~Q(drop_phone=""),
+                name="rides_parcel_both_ends_named",
+            ),
+            models.CheckConstraint(
+                condition=Q(return_fare_paise__isnull=True, return_payment_status__isnull=True)
+                | Q(return_fare_paise__isnull=False, return_payment_status__isnull=False),
+                name="rides_parcel_return_fare_and_status_together",
+            ),
+            models.CheckConstraint(
+                condition=Q(pin_attempts__lte=5), name="rides_parcel_pin_attempts_at_most_five"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.ride_id}:{self.mode}"
 
 
 class RideTransition(models.Model):

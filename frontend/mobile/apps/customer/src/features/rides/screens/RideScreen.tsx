@@ -1,23 +1,27 @@
-import { Button, Text } from "@vsolve/mobile-ui";
+import { Button, Text, formatMoney } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { CheckCircle2, SearchX, XCircle } from "lucide-react-native";
+import { CheckCircle2, SearchX, Undo2, XCircle } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CodesCard } from "../parcel/CodesCard";
+import { parcelCopy, parcelStageLabel } from "../parcel/model";
 import { cancelRide, rideKey, useRide, type Ride } from "../queries";
 import { RIDER_CANCEL_REASONS, canRiderCancel, cancelledText, etaText, rideStage } from "../ride-stage";
 import { RideMap } from "./RideMap";
 import { CaptainCard, ReviewSheet, SafetyRow, StartCode, TripSummary } from "./ride-parts";
 
 /** A large soft icon for a finished ride: done, cancelled or nobody found. */
-function ResultIcon({ stage }: { stage: "pay" | "cancelled" | "no_captain" }) {
+function ResultIcon({ stage }: { stage: "pay" | "cancelled" | "no_captain" | "returned" }) {
   const look = {
     pay: { Icon: CheckCircle2, color: "#16a34a", bg: "bg-green-50" },
     cancelled: { Icon: XCircle, color: "#b3261e", bg: "bg-red-50" },
     no_captain: { Icon: SearchX, color: "#756c5e", bg: "bg-surface" },
+    // A parcel handed back to the sender: not a failure, not a delivery.
+    returned: { Icon: Undo2, color: "#756c5e", bg: "bg-surface" },
   }[stage];
   return (
     <View className={`h-24 w-24 items-center justify-center rounded-full ${look.bg}`}>
@@ -63,9 +67,10 @@ export function RideScreen() {
   const data = ride.data;
   const stage = rideStage(data.state);
   const captainName = data.captain?.name ?? "Your captain";
+  const isParcel = data.kind === "PARCEL";
   const tryAgain = () =>
     router.replace({
-      pathname: "/rides/choose-ride",
+      pathname: isParcel ? "/rides/parcel/choose" : "/rides/choose-ride",
       params: {
         pickupLat: data.pickup.latitude,
         pickupLng: data.pickup.longitude,
@@ -76,7 +81,7 @@ export function RideScreen() {
       },
     } as never);
 
-  const live = stage === "coming" || stage === "arrived" || stage === "in_trip";
+  const live = stage === "coming" || stage === "arrived" || stage === "in_trip" || stage === "returning";
   const onRated = (stars: number) =>
     queryClient.setQueryData<Ride>(rideKey(rideId), (old) => (old ? { ...old, my_rating: stars } : old));
 
@@ -105,14 +110,23 @@ export function RideScreen() {
     detail = cancelledText(data.cancelled_by);
   }
 
+  if (isParcel) {
+    // Pick up & Drop has its own words for every stage (§5.2, item 6).
+    const copy = parcelCopy(data, captainName);
+    headline = copy.headline;
+    detail = copy.detail;
+  }
+
   const showMap = live || stage === "searching";
   // Open the review sheet only for a ride that is still to be rated; it carries its own Done.
   const reviewing = stage === "pay" && data.captain != null && data.my_rating == null;
-  const showDone = stage === "cancelled" || stage === "no_captain" || (stage === "pay" && !reviewing);
+  const showDone =
+    stage === "cancelled" || stage === "no_captain" || stage === "returned" || (stage === "pay" && !reviewing);
 
   if (!showMap) {
     // A finished ride: the result in the middle of the page, the trip and the buttons at the bottom.
-    const result = stage === "pay" || stage === "cancelled" || stage === "no_captain" ? stage : "cancelled";
+    const result =
+      stage === "pay" || stage === "cancelled" || stage === "no_captain" || stage === "returned" ? stage : "cancelled";
     return (
       <View className="flex-1 bg-canvas">
         <View className="flex-1 items-center justify-center gap-5 px-6">
@@ -135,7 +149,9 @@ export function RideScreen() {
             </Button>
           ) : null}
         </View>
-        {stage === "pay" && data.captain ? <ReviewSheet ride={data} onRated={onRated} onDone={done} /> : null}
+        {stage === "pay" && data.captain ? (
+          <ReviewSheet ride={data} onRated={onRated} onDone={done} parcel={isParcel} />
+        ) : null}
       </View>
     );
   }
@@ -154,12 +170,21 @@ export function RideScreen() {
             <Text className="flex-1 text-xl font-extrabold text-text">{headline}</Text>
             {stage === "searching" ? <ActivityIndicator color="#2563EB" /> : null}
           </View>
+          {isParcel ? (
+            <Text accessibilityLabel="Parcel stage" className="text-xs font-semibold uppercase text-[#c25600]">
+              {parcelStageLabel(data)}
+            </Text>
+          ) : null}
           {detail ? <Text className="text-sm text-text-muted">{detail}</Text> : null}
         </View>
 
         {live ? <CaptainCard ride={data} /> : null}
-        {(stage === "coming" || stage === "arrived") && data.otp ? <StartCode code={data.otp} /> : null}
-        {live ? <SafetyRow ride={data} /> : null}
+        {isParcel ? (
+          <CodesCard ride={data} money={formatMoney(data.final_fare_paise ?? data.fare_paise)} />
+        ) : (stage === "coming" || stage === "arrived") && data.otp ? (
+          <StartCode code={data.otp} />
+        ) : null}
+        {live ? <SafetyRow ride={data} hideShare={isParcel} /> : null}
 
         <TripSummary ride={data} />
 

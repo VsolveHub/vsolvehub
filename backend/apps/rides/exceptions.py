@@ -146,6 +146,26 @@ class VehicleUnavailableError(RidesApiError):
         )
 
 
+class VehicleNotEligibleError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="vehicle_not_eligible",
+            message="Pick up & Drop is for bike and auto captains.",
+        )
+
+
+class ParcelDetailsRequiredError(RidesApiError):
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="parcel_details_required",
+            message="Add a name and phone number for the pickup and the drop.",
+        )
+
+
 class RideAlreadyOpenError(RidesApiError):
     status_code = status.HTTP_409_CONFLICT
 
@@ -176,6 +196,33 @@ class NotAtPickupError(RidesApiError):
 
     def __init__(self) -> None:
         super().__init__(code="not_at_pickup", message="You are not at the pickup yet.")
+
+
+class NotAtDropError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(code="not_at_drop", message="You are not at the drop yet.")
+
+
+class WaitNotOverError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="wait_not_over",
+            message="Wait for the free waiting time at the drop to finish.",
+        )
+
+
+class PaymentNotCollectedError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="payment_not_collected",
+            message="Collect the payment from the receiver before handing over the parcel.",
+        )
 
 
 class RegistrationAlreadyUsedError(RidesApiError):

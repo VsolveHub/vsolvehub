@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.111.0
+  version: 1.112.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -11778,6 +11778,16 @@ paths:
           type: string
         description: Opaque page cursor from `next`.
       - in: query
+        name: kind
+        schema:
+          type: string
+        description: RIDE or PARCEL.
+      - in: query
+        name: payment_status
+        schema:
+          type: string
+        description: DUE, COLLECTED or UNPAID (a parcel the sender did not pay for).
+      - in: query
         name: state
         schema:
           type: string
@@ -11955,6 +11965,11 @@ paths:
         name: active
         schema:
           type: boolean
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: RIDE or PARCEL.
       - in: query
         name: service_area_id
         schema:
@@ -19183,6 +19198,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/CaptainRide'
           description: ''
+  /api/v1/partner/rides/{ride_id}/arrived-at-drop/:
+    post:
+      operationId: partner_rides_arrived_at_drop
+      description: 'At the drop: the last ping is under 30 s old and within 200 m.
+        Pick up & Drop only.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
   /api/v1/partner/rides/{ride_id}/cancel/:
     post:
       operationId: partner_rides_cancel
@@ -19218,6 +19256,71 @@ paths:
     post:
       operationId: partner_rides_complete
       description: 'End the trip: the final fare is the upfront fare plus waiting.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/deliver/:
+    post:
+      operationId: partner_rides_deliver
+      description: |-
+        Hand the parcel over, with the receiver's PIN when PIN confirmation is on. A network
+        retry never costs an attempt.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverParcelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeliverParcelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeliverParcelRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/payment-not-received/:
+    post:
+      operationId: partner_rides_payment_not_received
+      description: 'The sender would not pay on the return: what is due becomes unpaid.'
       parameters:
       - in: path
         name: ride_id
@@ -19292,6 +19395,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Rating'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/receiver-unavailable/:
+    post:
+      operationId: partner_rides_receiver_unavailable
+      description: 'The receiver is not there after the free wait (or the PIN is locked):
+        take it back.'
+      parameters:
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
+          description: ''
+  /api/v1/partner/rides/{ride_id}/returned/:
+    post:
+      operationId: partner_rides_returned
+      description: 'The parcel is back at the pickup: the sender gives the pickup
+        code again.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: ride_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StartTripRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptainRide'
           description: ''
   /api/v1/partner/rides/{ride_id}/sos/:
     post:
@@ -19563,6 +19732,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CurrentOffer'
+          description: ''
+  /api/v1/partner/rides/parcel-preference/:
+    put:
+      operationId: partner_rides_parcel_preference_update
+      description: The "Take parcel orders" switch. Bike and Auto captains only.
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParcelPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ParcelPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ParcelPreferenceRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParcelPreference'
           description: ''
   /api/v1/partner/rides/pass-plans/:
     get:
@@ -26190,7 +26386,17 @@ components:
           items:
             $ref: '#/components/schemas/VehicleTypesEnum'
           description: 'Bookable here, cheapest first. Empty: hide the Rides entry.'
+        parcel:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParcelLimits'
+          description: 'Pick up & Drop vehicles bookable here, with limits. Empty:
+            hide the entry.'
+        parcel_rules:
+          $ref: '#/components/schemas/ParcelRules'
       required:
+      - parcel
+      - parcel_rules
       - vehicle_types
     AvailableFromEnum:
       enum:
@@ -27036,7 +27242,7 @@ components:
           type: string
           minLength: 1
           description: 'One of: RIDER_NOT_REACHABLE, VEHICLE_ISSUE, PICKUP_TOO_FAR,
-            OTHER.'
+            OTHER, ITEM_NOT_ALLOWED.'
       required:
       - reason
     CaptainCurrentRide:
@@ -27050,6 +27256,75 @@ components:
             when neither.
       required:
       - ride
+    CaptainParcel:
+      type: object
+      description: |-
+        The parcel block as the captain sees it: both ends' details only while it is open (D20),
+        and never the delivery PIN.
+      properties:
+        mode:
+          type: string
+        payer:
+          type: string
+        pin_required:
+          type: boolean
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/ParcelContact'
+          nullable: true
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/ParcelContact'
+          nullable: true
+          readOnly: true
+        payment_point:
+          type: string
+          readOnly: true
+          description: PICKUP when the sender pays, DROP when the receiver pays.
+        arrived_at_drop_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        receiver_unavailable_at:
+          type: string
+          format: date-time
+          nullable: true
+        returned_at:
+          type: string
+          format: date-time
+          nullable: true
+        return_fare_paise:
+          type: integer
+          nullable: true
+        return_payment_status:
+          type: string
+          nullable: true
+        receiver_unavailable_allowed_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+          description: When Receiver not available opens (server time); null before
+            arriving at the drop and once the parcel is no longer at the drop.
+      required:
+      - arrived_at_drop_at
+      - delivered_at
+      - drop
+      - mode
+      - payer
+      - payment_point
+      - pickup
+      - pin_required
+      - receiver_unavailable_allowed_at
+      - receiver_unavailable_at
+      - return_fare_paise
+      - return_payment_status
+      - returned_at
     CaptainPass:
       type: object
       properties:
@@ -27216,6 +27491,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          readOnly: true
         state:
           allOf:
           - $ref: '#/components/schemas/StateEnum'
@@ -27293,6 +27572,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/RideRider'
           readOnly: true
+        parcel:
+          allOf:
+          - $ref: '#/components/schemas/CaptainParcel'
+          nullable: true
+          readOnly: true
+          description: Pick up & Drop only; null for a ride.
         my_rating:
           type: integer
           nullable: true
@@ -27310,7 +27595,9 @@ components:
       - fare_paise
       - final_fare_paise
       - id
+      - kind
       - my_rating
+      - parcel
       - payment_method
       - payment_status
       - pickup
@@ -27351,6 +27638,11 @@ components:
             type: string
           description: 'Why duty cannot start, in display order: suspended or not_approved,
             vehicle_missing, pass_required. Empty when the captain can go on duty.'
+        takes_parcels:
+          type: boolean
+          readOnly: true
+          description: The Take parcel orders switch. Always false for a cab or with
+            no vehicle.
         queued_pass:
           allOf:
           - $ref: '#/components/schemas/CaptainPass'
@@ -27377,6 +27669,7 @@ components:
       - on_duty
       - queued_pass
       - server_now
+      - takes_parcels
       - vehicle
     CaptainVehicle:
       type: object
@@ -31180,6 +31473,15 @@ components:
           maxLength: 2000
       required:
       - accept
+    DeliverParcelRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          minLength: 1
+          description: The receiver's 4-digit delivery PIN. Required only when PIN
+            confirmation is on.
+          pattern: ^[0-9]{4}$
     DeliverableInputRequest:
       type: object
       description: |-
@@ -31511,6 +31813,14 @@ components:
           type: string
           default: ''
           maxLength: 400
+    DropMeetAtEnum:
+      enum:
+      - CURB
+      - DOOR
+      type: string
+      description: |-
+        * `CURB` - Meet at curb
+        * `DOOR` - Meet at door
     DutyStatus:
       type: object
       properties:
@@ -33013,6 +33323,19 @@ components:
           type: string
           format: uuid
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          readOnly: true
+        max_weight_grams:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Parcel quotes only; null for a ride.
+        size_label:
+          type: string
+          readOnly: true
+          description: Parcel quotes only; empty for a ride.
         vehicle_type:
           allOf:
           - $ref: '#/components/schemas/VehicleTypeEnum'
@@ -33039,7 +33362,10 @@ components:
       - expires_at
       - fare_paise
       - id
+      - kind
+      - max_weight_grams
       - route_polyline
+      - size_label
       - vehicle_type
     FareQuoteList:
       type: object
@@ -33058,6 +33384,15 @@ components:
           $ref: '#/components/schemas/TripPointRequest'
         drop:
           $ref: '#/components/schemas/TripPointRequest'
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          default: RIDE
+          description: |-
+            PARCEL for Pick up & Drop.
+
+            * `RIDE` - Ride
+            * `PARCEL` - Pick up & Drop
       required:
       - drop
       - pickup
@@ -34530,6 +34865,14 @@ components:
         * `CANCEL` - Cancel
         * `REVERSE` - Reverse
         * `ADJUSTMENT` - Adjustment
+    Kind899Enum:
+      enum:
+      - RIDE
+      - PARCEL
+      type: string
+      description: |-
+        * `RIDE` - Ride
+        * `PARCEL` - Pick up & Drop
     LastDutyEnd:
       type: object
       properties:
@@ -39115,6 +39458,68 @@ components:
       - responded_at
       - round
       - status
+    OpsParcel:
+      type: object
+      description: 'The parcel block for Operations: both ends'' details, always (D20),
+        and the PIN tries.'
+      properties:
+        mode:
+          type: string
+        payer:
+          type: string
+        pin_required:
+          type: boolean
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/ParcelContact'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/ParcelContact'
+          readOnly: true
+        payment_point:
+          type: string
+          readOnly: true
+          description: PICKUP when the sender pays, DROP when the receiver pays.
+        arrived_at_drop_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        receiver_unavailable_at:
+          type: string
+          format: date-time
+          nullable: true
+        returned_at:
+          type: string
+          format: date-time
+          nullable: true
+        return_fare_paise:
+          type: integer
+          nullable: true
+        return_payment_status:
+          type: string
+          nullable: true
+        pin_attempts:
+          type: integer
+          description: Wrong delivery PINs so far, out of 5.
+      required:
+      - arrived_at_drop_at
+      - delivered_at
+      - drop
+      - mode
+      - payer
+      - payment_point
+      - pickup
+      - pin_attempts
+      - pin_required
+      - receiver_unavailable_at
+      - return_fare_paise
+      - return_payment_status
+      - returned_at
     OpsPerson:
       type: object
       properties:
@@ -39621,6 +40026,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          readOnly: true
         state:
           allOf:
           - $ref: '#/components/schemas/StateEnum'
@@ -39723,6 +40132,12 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        parcel:
+          allOf:
+          - $ref: '#/components/schemas/OpsParcel'
+          nullable: true
+          readOnly: true
+          description: Pick up & Drop only; null for a ride.
         ratings:
           type: object
           additionalProperties:
@@ -39752,9 +40167,11 @@ components:
       - fare_paise
       - final_fare_paise
       - id
+      - kind
       - no_captain_found_at
       - offers
       - otp_attempts
+      - parcel
       - payment_method
       - payment_status
       - pickup
@@ -39775,6 +40192,10 @@ components:
         id:
           type: string
           format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
           readOnly: true
         state:
           allOf:
@@ -39821,6 +40242,7 @@ components:
       - fare_paise
       - final_fare_paise
       - id
+      - kind
       - payment_status
       - rider_name
       - service_area_id
@@ -40423,6 +40845,205 @@ components:
       - next
       - previous
       - results
+    Parcel:
+      type: object
+      description: The parcel block on a ride, as the booker sees it.
+      properties:
+        mode:
+          type: string
+        payer:
+          type: string
+        pin_required:
+          type: boolean
+        pickup:
+          allOf:
+          - $ref: '#/components/schemas/ParcelContact'
+          readOnly: true
+        drop:
+          allOf:
+          - $ref: '#/components/schemas/ParcelContact'
+          readOnly: true
+        payment_point:
+          type: string
+          readOnly: true
+          description: PICKUP when the sender pays, DROP when the receiver pays.
+        arrived_at_drop_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        receiver_unavailable_at:
+          type: string
+          format: date-time
+          nullable: true
+        returned_at:
+          type: string
+          format: date-time
+          nullable: true
+        return_fare_paise:
+          type: integer
+          nullable: true
+        return_payment_status:
+          type: string
+          nullable: true
+        delivery_pin:
+          type: string
+          nullable: true
+          readOnly: true
+          description: The 4-digit PIN for the receiver. Only to the booker, only
+            when PIN confirmation is on, and only until the parcel is delivered or
+            goes back.
+      required:
+      - arrived_at_drop_at
+      - delivered_at
+      - delivery_pin
+      - drop
+      - mode
+      - payer
+      - payment_point
+      - pickup
+      - pin_required
+      - receiver_unavailable_at
+      - return_fare_paise
+      - return_payment_status
+      - returned_at
+    ParcelContact:
+      type: object
+      description: 'One end of a parcel as the server sends it back: every field is
+        always there.'
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+          description: A 10-digit Indian mobile number, without +91.
+        building:
+          type: string
+        unit:
+          type: string
+        meet_at:
+          $ref: '#/components/schemas/DropMeetAtEnum'
+        instructions:
+          type: string
+      required:
+      - building
+      - instructions
+      - meet_at
+      - name
+      - phone
+      - unit
+    ParcelEndRequest:
+      type: object
+      description: |-
+        One end of a parcel: who is there and how to meet them.
+
+        A missing name or phone is a 422 from the booking (`parcel_details_required`), not a 400, so
+        the app can send the customer back to the details screen. A malformed phone is a 400.
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        phone:
+          type: string
+          description: A 10-digit Indian mobile number, without +91.
+        building:
+          type: string
+          maxLength: 120
+        unit:
+          type: string
+          maxLength: 60
+        meet_at:
+          $ref: '#/components/schemas/DropMeetAtEnum'
+        instructions:
+          type: string
+          maxLength: 120
+      required:
+      - meet_at
+    ParcelLimits:
+      type: object
+      properties:
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleTypeEnum'
+        max_weight_grams:
+          type: integer
+        size_label:
+          type: string
+      required:
+      - max_weight_grams
+      - size_label
+      - vehicle_type
+    ParcelOffer:
+      type: object
+      description: What a captain sees of a parcel before accepting it. No names or
+        phones yet (D20).
+      properties:
+        pickup_meet_at:
+          $ref: '#/components/schemas/DropMeetAtEnum'
+        drop_meet_at:
+          $ref: '#/components/schemas/DropMeetAtEnum'
+        payment_point:
+          type: string
+          description: 'PICKUP or DROP: where to collect the money.'
+      required:
+      - drop_meet_at
+      - payment_point
+      - pickup_meet_at
+    ParcelPreference:
+      type: object
+      properties:
+        takes_parcels:
+          type: boolean
+      required:
+      - takes_parcels
+    ParcelPreferenceRequest:
+      type: object
+      properties:
+        takes_parcels:
+          type: boolean
+      required:
+      - takes_parcels
+    ParcelRequestModeEnum:
+      enum:
+      - SEND
+      - RECEIVE
+      type: string
+      description: |-
+        * `SEND` - I'm sending
+        * `RECEIVE` - I'm receiving
+    ParcelRequestRequest:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/ParcelRequestModeEnum'
+        payer:
+          $ref: '#/components/schemas/PayerEnum'
+        pin_required:
+          type: boolean
+        pickup:
+          $ref: '#/components/schemas/ParcelEndRequest'
+        drop:
+          $ref: '#/components/schemas/ParcelEndRequest'
+      required:
+      - drop
+      - mode
+      - payer
+      - pickup
+      - pin_required
+    ParcelRules:
+      type: object
+      properties:
+        value_cap_paise:
+          type: integer
+        prohibited_items:
+          type: array
+          items:
+            type: string
+      required:
+      - prohibited_items
+      - value_cap_paise
     PartnerApplication:
       type: object
       properties:
@@ -44462,6 +45083,15 @@ components:
         waiting_per_minute_paise:
           type: integer
           minimum: 0
+        max_parcel_weight_grams:
+          type: integer
+          minimum: 1
+          description: 'Pick up & Drop cards only: the heaviest item, in grams.'
+        parcel_size_label:
+          type: string
+          minLength: 1
+          description: Pick up & Drop cards only, such as '40 x 30 x 20 cm'.
+          maxLength: 40
     PatchedRequirementUpdateRequest:
       type: object
       description: |-
@@ -44657,6 +45287,14 @@ components:
           maximum: 10000
           minimum: 0
           nullable: true
+    PayerEnum:
+      enum:
+      - SENDER
+      - RECEIVER
+      type: string
+      description: |-
+        * `SENDER` - Sender
+        * `RECEIVER` - Receiver
     PaymentAllocation:
       type: object
       properties:
@@ -44843,10 +45481,12 @@ components:
       enum:
       - DUE
       - COLLECTED
+      - UNPAID
       type: string
       description: |-
         * `DUE` - Due
         * `COLLECTED` - Collected
+        * `UNPAID` - Not paid
     PayoutAccountStatusEnum:
       enum:
       - PENDING
@@ -49037,6 +49677,19 @@ components:
           format: uuid
         vehicle_type:
           $ref: '#/components/schemas/VehicleTypeEnum'
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          default: RIDE
+        max_parcel_weight_grams:
+          type: integer
+          minimum: 1
+          description: 'Pick up & Drop cards only: the heaviest item, in grams.'
+        parcel_size_label:
+          type: string
+          minLength: 1
+          description: Pick up & Drop cards only, such as '40 x 30 x 20 cm'.
+          maxLength: 40
         base_fare_paise:
           type: integer
           minimum: 0
@@ -51720,6 +52373,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          readOnly: true
         state:
           allOf:
           - $ref: '#/components/schemas/StateEnum'
@@ -51793,6 +52450,12 @@ components:
           readOnly: true
           description: The number the SOS Call button dials. From the server; never
             hard-coded.
+        parcel:
+          allOf:
+          - $ref: '#/components/schemas/Parcel'
+          nullable: true
+          readOnly: true
+          description: Pick up & Drop only; null for a ride.
         captain:
           allOf:
           - $ref: '#/components/schemas/RideCaptain'
@@ -51828,8 +52491,10 @@ components:
       - fare_paise
       - final_fare_paise
       - id
+      - kind
       - my_rating
       - otp
+      - parcel
       - payment_method
       - payment_status
       - pickup
@@ -51891,6 +52556,10 @@ components:
           type: string
           format: uuid
           description: One of the rider's quotes from POST rides/quotes/.
+        parcel:
+          allOf:
+          - $ref: '#/components/schemas/ParcelRequestRequest'
+          description: Required when the quote is a Pick up & Drop quote.
       required:
       - quote_id
     RideHistory:
@@ -51900,6 +52569,10 @@ components:
         id:
           type: string
           format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
           readOnly: true
         state:
           allOf:
@@ -51945,6 +52618,7 @@ components:
       - fare_paise
       - final_fare_paise
       - id
+      - kind
       - payment_status
       - pickup_address
       - state
@@ -51961,6 +52635,9 @@ components:
           type: string
           format: uuid
           readOnly: true
+        kind:
+          type: string
+          readOnly: true
         vehicle_type:
           type: string
           readOnly: true
@@ -51972,6 +52649,13 @@ components:
           allOf:
           - $ref: '#/components/schemas/RidePlace'
           readOnly: true
+        parcel:
+          allOf:
+          - $ref: '#/components/schemas/ParcelOffer'
+          nullable: true
+          readOnly: true
+          description: 'Pick up & Drop only: how to meet at each end and where the
+            money is collected.'
         pickup_distance_m:
           type: integer
           readOnly: true
@@ -51997,7 +52681,9 @@ components:
       - expires_at
       - fare_paise
       - id
+      - kind
       - offered_at
+      - parcel
       - pickup
       - pickup_distance_m
       - ride_id
@@ -52039,6 +52725,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/VehicleTypeEnum'
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/Kind899Enum'
+          readOnly: true
         base_fare_paise:
           type: integer
           readOnly: true
@@ -52060,6 +52750,13 @@ components:
         waiting_per_minute_paise:
           type: integer
           readOnly: true
+        max_parcel_weight_grams:
+          type: integer
+          readOnly: true
+          nullable: true
+        parcel_size_label:
+          type: string
+          readOnly: true
         is_active:
           type: boolean
           readOnly: true
@@ -52077,7 +52774,10 @@ components:
       - id
       - included_distance_m
       - is_active
+      - kind
+      - max_parcel_weight_grams
       - minimum_fare_paise
+      - parcel_size_label
       - per_km_paise
       - per_minute_paise
       - service_area_id
@@ -54209,6 +54909,8 @@ components:
       - COMPLETED
       - NO_CAPTAIN_FOUND
       - CANCELLED
+      - RETURNING
+      - RETURNED
       type: string
       description: |-
         * `SEARCHING` - Searching
@@ -54218,6 +54920,8 @@ components:
         * `COMPLETED` - Completed
         * `NO_CAPTAIN_FOUND` - No captain found
         * `CANCELLED` - Cancelled
+        * `RETURNING` - Returning
+        * `RETURNED` - Returned
     Status0a1Enum:
       enum:
       - REQUESTED

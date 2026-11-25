@@ -5,35 +5,36 @@ import { Badge, EmptyState, ErrorState, LoadMore, Spinner, formatMoney } from "@
 import Link from "next/link";
 import { useState } from "react";
 
-import { filterChipStyles } from "@/features/money/service-tabs";
-
-import { RIDE_FILTERS, stateLabel, stateTone, type RideFilterKey } from "../model";
+import {
+  KIND_FILTERS,
+  RIDE_FILTERS,
+  kindLabel,
+  paymentText,
+  stateLabel,
+  stateTone,
+  type KindFilterKey,
+  type RideFilterKey,
+} from "../model";
 import { fetchRidesPage, ridesKey } from "../queries";
+import { FilterGroup, Stacked, Table, Td, Th, Toolbar, vehicleLabel } from "./layout";
 import { useLiveRefresh } from "./use-live-refresh";
 
 const WHEN = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" });
 
 export function RideList() {
   const [filterKey, setFilterKey] = useState<RideFilterKey>("live");
-  const filter = RIDE_FILTERS.find((f) => f.key === filterKey) ?? RIDE_FILTERS[0];
-  const list = usePagedList([...ridesKey, filter.states], (cursor) => fetchRidesPage(filter.states, cursor));
+  const [kindKey, setKindKey] = useState<KindFilterKey>("all");
+  const filter = RIDE_FILTERS.find((f) => f.key === filterKey) ?? RIDE_FILTERS[0]!;
+  const kind = KIND_FILTERS.find((k) => k.key === kindKey) ?? KIND_FILTERS[0];
+  const list = usePagedList([...ridesKey, filter.key, kind.key], (cursor) => fetchRidesPage(filter, kind.kind, cursor));
   useLiveRefresh(list.refetch, filterKey === "live");
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Show rides">
-        {RIDE_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            aria-pressed={f.key === filterKey}
-            className={filterChipStyles(f.key === filterKey)}
-            onClick={() => setFilterKey(f.key)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      <Toolbar>
+        <FilterGroup label="Status" options={RIDE_FILTERS} value={filterKey} onChange={setFilterKey} />
+        <FilterGroup label="Type" options={KIND_FILTERS} value={kindKey} onChange={setKindKey} />
+      </Toolbar>
 
       {list.isLoading ? (
         <Spinner />
@@ -46,42 +47,65 @@ export function RideList() {
         />
       ) : list.items.length === 0 ? (
         <EmptyState
-          title={filterKey === "live" ? "No rides going right now" : "No rides here yet"}
-          description={filterKey === "live" ? "This list checks again every 10 seconds." : undefined}
+          title={
+            filterKey === "live"
+              ? "No rides going right now"
+              : filterKey === "unpaid"
+                ? "Nothing unpaid"
+                : "No rides here yet"
+          }
+          description={
+            filterKey === "live"
+              ? "This list checks again every 10 seconds."
+              : filterKey === "unpaid"
+                ? "Parcels returned to a sender who did not pay show up here."
+                : undefined
+          }
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase text-text-secondary">
-              <tr>
-                <th className="px-4 py-3">Booked</th>
-                <th className="px-4 py-3">State</th>
-                <th className="px-4 py-3">Vehicle</th>
-                <th className="px-4 py-3">Rider</th>
-                <th className="px-4 py-3">Captain</th>
-                <th className="px-4 py-3 text-right">Fare</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.items.map((ride) => (
-                <tr key={ride.id} className="border-b border-line last:border-0 hover:bg-surface-sunken">
-                  <td className="px-4 py-3">
-                    <Link href={`/operations/rides/${ride.id}`} className="font-semibold text-text-link hover:underline">
-                      {WHEN.format(new Date(ride.created_at))}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={stateTone(ride.state)}>{stateLabel(ride.state)}</Badge>
-                  </td>
-                  <td className="px-4 py-3">{ride.vehicle_type}</td>
-                  <td className="px-4 py-3">{ride.rider_name}</td>
-                  <td className="px-4 py-3">{ride.captain_name ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table
+          head={
+            <>
+              <Th>Booked</Th>
+              <Th>Status</Th>
+              <Th>Type</Th>
+              <Th>Rider</Th>
+              <Th>Captain</Th>
+              <Th numeric>Fare</Th>
+              <Th>Payment</Th>
+            </>
+          }
+        >
+          {list.items.map((ride) => (
+            // The whole row opens the ride: the date link stretches over it.
+            <tr key={ride.id} className="relative hover:bg-surface-sunken">
+              <Td>
+                <Link
+                  href={`/operations/rides/${ride.id}`}
+                  className="whitespace-nowrap font-semibold text-text-link after:absolute after:inset-0 hover:underline"
+                >
+                  {WHEN.format(new Date(ride.created_at))}
+                </Link>
+              </Td>
+              <Td>
+                <Badge tone={stateTone(ride.state)}>{stateLabel(ride.state, ride.kind)}</Badge>
+              </Td>
+              <Td>
+                <Stacked main={kindLabel(ride.kind)} sub={vehicleLabel(ride.vehicle_type)} />
+              </Td>
+              <Td>{ride.rider_name}</Td>
+              <Td>{ride.captain_name ?? <span className="text-text-secondary">Not assigned</span>}</Td>
+              <Td numeric>{formatMoney(ride.final_fare_paise ?? ride.fare_paise)}</Td>
+              <Td>
+                {ride.payment_status === "UNPAID" ? (
+                  <Badge tone="warning">{paymentText(ride.payment_status)}</Badge>
+                ) : (
+                  paymentText(ride.payment_status)
+                )}
+              </Td>
+            </tr>
+          ))}
+        </Table>
       )}
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onLoadMore={list.loadMore} label="Load more rides" />
     </div>
