@@ -198,6 +198,17 @@ def _deliver_by_onesignal(intent: NotificationIntent) -> None:
 
 
 def _deliver_by_expo(intent: NotificationIntent) -> None:
+    # Codes with no copy here (Rides, Pick up & Drop) are sent by OneSignal. Fail them at once
+    # instead of raising, so one of them cannot stop the sweep for every intent behind it.
+    if intent.template_code not in registered_push_template_codes():
+        logger.warning("No push copy for template %s; marked failed.", intent.template_code)
+        record_delivery_attempt(
+            intent_id=intent.id,
+            provider="expo",
+            status=NotificationDelivery.Status.SKIPPED,
+            failure_code="unknown_template",
+        )
+        return
     copy = render_push_template(template_code=intent.template_code, context=intent.context)
     devices = [
         device
