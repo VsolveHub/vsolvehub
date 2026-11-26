@@ -712,6 +712,25 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
 
 
 @transaction.atomic
+def _end_pass_if_trip_limit_reached(partner: PartnerProfile, now: datetime) -> None:
+    """A pass with `max_trips` ends after the trip that reaches it (Taxi brief A4).
+
+    Only its end time moves: dispatch stops at once, and `expire_passes` expires it, starts a
+    queued pass from that moment and ends duty, as for a pass that ran out of time.
+    """
+    captain_pass = selectors.active_pass(partner, now=now)
+    if captain_pass is None or captain_pass.plan.max_trips is None:
+        return
+    trips = RideTransition.objects.filter(
+        ride__captain=partner,
+        to_state__in=(RideState.COMPLETED, RideState.RETURNED),
+        at__gte=captain_pass.starts_at,
+    ).count()
+    if trips >= captain_pass.plan.max_trips:
+        captain_pass.ends_at = now
+        captain_pass.save(update_fields=("ends_at", "updated_at"))
+
+
 def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     """End the trip. The rider pays the upfront fare plus waiting; GPS never re-prices it."""
     ride = _captain_ride(partner, ride_id)
@@ -732,6 +751,7 @@ def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     ride.save(
         update_fields=("state", "completed_at", "final_fare_paise", "payment_status", "updated_at")
     )
+    _end_pass_if_trip_limit_reached(partner, now)
     _log_step("ride_completed", ride)
     return ride
 
@@ -805,6 +825,7 @@ def deliver_parcel(
         ride, RideState.COMPLETED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now
     )
     ride.save(update_fields=("state", "completed_at", "updated_at"))
+    _end_pass_if_trip_limit_reached(partner, now)
     notify.parcel_delivered(ride)
     _log_step("parcel_delivered", ride)
     return ride, None
@@ -922,6 +943,7 @@ def mark_returned(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[
     parcel.save(update_fields=("returned_at",))
     _transition(ride, RideState.RETURNED, actor=partner.user, actor_kind=ActorKind.CAPTAIN, now=now)
     ride.save(update_fields=("state", "updated_at"))
+    _end_pass_if_trip_limit_reached(partner, now)
     notify.parcel_returned(ride)
     _log_step("parcel_returned", ride)
     return ride, None
