@@ -111,6 +111,7 @@ def captain(
     CaptainPass.objects.create(
         partner=partner,
         plan=plan,
+        max_trips=plan.max_trips,
         status=CaptainPass.Status.ACTIVE,
         starts_at=now,
         ends_at=now + timedelta(hours=24),

@@ -320,6 +320,9 @@ class CaptainPass(models.Model):
         "partners.PartnerProfile", on_delete=models.PROTECT, related_name="ride_passes"
     )
     plan = models.ForeignKey(CaptainPassPlan, on_delete=models.PROTECT, related_name="passes")
+    #: The plan's trip limit when bought; null for no limit. Copied so an edit to the plan never
+    #: changes a pass already sold, as its price and dates never change either.
+    max_trips = models.PositiveSmallIntegerField(null=True, blank=True)
     #: Null for a ₹0 plan, which needs no payment.
     payment_attempt = models.OneToOneField(
         "commerce.PaymentAttempt",

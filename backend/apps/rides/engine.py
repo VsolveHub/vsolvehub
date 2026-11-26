@@ -711,26 +711,29 @@ def start_trip(*, partner: PartnerProfile, ride_id: UUID, otp: str) -> tuple[Rid
     return ride, None
 
 
-@transaction.atomic
 def _end_pass_if_trip_limit_reached(partner: PartnerProfile, now: datetime) -> None:
     """A pass with `max_trips` ends after the trip that reaches it (Taxi brief A4).
 
     Only its end time moves: dispatch stops at once, and `expire_passes` expires it, starts a
-    queued pass from that moment and ends duty, as for a pass that ran out of time.
+    queued pass from that moment and ends duty, as for a pass that ran out of time. Called inside
+    the caller's transaction, after the trip's own transition is written.
     """
     captain_pass = selectors.active_pass(partner, now=now)
-    if captain_pass is None or captain_pass.plan.max_trips is None:
+    if captain_pass is None or captain_pass.max_trips is None:
         return
+    # Strictly after the start: a queued pass starts at the very moment the trip that ended the
+    # pass before it was finished, and that trip belongs to the earlier pass.
     trips = RideTransition.objects.filter(
         ride__captain=partner,
         to_state__in=(RideState.COMPLETED, RideState.RETURNED),
-        at__gte=captain_pass.starts_at,
+        at__gt=captain_pass.starts_at,
     ).count()
-    if trips >= captain_pass.plan.max_trips:
+    if trips >= captain_pass.max_trips:
         captain_pass.ends_at = now
         captain_pass.save(update_fields=("ends_at", "updated_at"))
 
 
+@transaction.atomic
 def complete_trip(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     """End the trip. The rider pays the upfront fare plus waiting; GPS never re-prices it."""
     ride = _captain_ride(partner, ride_id)

@@ -14,6 +14,10 @@ or after Operations has set a price, never overwrites a real one.
 It also writes four PLACEHOLDER pass plans (a ₹0 launch offer for 30 days or 100 trips on any
 vehicle, and a day pass each for bike ₹19, auto ₹29 and cab ₹49), and three approved test
 captains (bike, auto, cab) with an active launch pass on +91 90000 777 01-03.
+
+A plan whose code already exists is left alone, like a rate card. A database seeded before
+26 November 2026 therefore keeps its old 24-hour `launch-pass` and its ₹49 `day-pass` for every
+vehicle: switch `day-pass` off and edit `launch-pass` in Operations, or seed a fresh database.
 """
 
 from datetime import timedelta
@@ -240,6 +244,7 @@ class Command(BaseCommand):
             CaptainPass.objects.create(
                 partner=partner,
                 plan=plan,
+                max_trips=plan.max_trips,
                 status=CaptainPass.Status.ACTIVE,
                 starts_at=now,
                 ends_at=now + timedelta(hours=plan.duration_hours),

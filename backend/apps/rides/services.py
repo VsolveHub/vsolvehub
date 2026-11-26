@@ -342,6 +342,8 @@ def buy_pass(
         raise CaptainNotApprovedError(
             "You can buy a pass once your captain application is approved."
         )
+    # Checked at purchase only: an approved captain's vehicle never changes (it is editable in
+    # VEHICLE_EDITABLE_STATUSES alone, and an approved application never goes back to them).
     if plan.vehicle_type is not None and plan.vehicle_type != selectors.captain_vehicle_type(
         partner
     ):
@@ -369,7 +371,9 @@ def buy_pass(
         raise PassPurchasePendingError
 
     if plan.price_paise == 0:
-        captain_pass = CaptainPass.objects.create(partner=partner, plan=plan)
+        captain_pass = CaptainPass.objects.create(
+            partner=partner, plan=plan, max_trips=plan.max_trips
+        )
         _activate(captain_pass, starts_at=now)
         logger.info(
             "ride_pass_activated",
@@ -382,7 +386,9 @@ def buy_pass(
         amount_paise=plan.price_paise,
         idempotency_key=f"ride-pass:{partner.id}:{idempotency_key}",
     )
-    return CaptainPass.objects.create(partner=partner, plan=plan, payment_attempt=attempt)
+    return CaptainPass.objects.create(
+        partner=partner, plan=plan, max_trips=plan.max_trips, payment_attempt=attempt
+    )
 
 
 @transaction.atomic

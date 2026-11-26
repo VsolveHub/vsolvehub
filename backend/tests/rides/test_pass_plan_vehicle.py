@@ -112,6 +112,7 @@ def test_a_plan_for_the_captains_own_vehicle_can_be_bought() -> None:
 
     assert response.status_code == 201
     assert response.json()["plan"]["max_trips"] == 10
+    assert CaptainPass.objects.get().max_trips == 10  # copied onto the pass at purchase
 
 
 # --- the trip limit ---------------------------------------------------------------------------
@@ -164,6 +165,7 @@ def test_trips_before_the_pass_started_do_not_count(rider: User, area: ServiceAr
     CaptainPass.objects.create(
         partner=driver,
         plan=plan("one-trip", max_trips=1),
+        max_trips=1,
         status=CaptainPass.Status.ACTIVE,
         starts_at=now,
         ends_at=now + timedelta(hours=24),
@@ -180,7 +182,10 @@ def test_a_queued_pass_starts_the_moment_the_limited_one_ended(
     launch_pass_with(max_trips=1)
     driver = captain(area, km=1)
     queued = CaptainPass.objects.create(
-        partner=driver, plan=plan("day", price_paise=4900), status=CaptainPass.Status.QUEUED
+        partner=driver,
+        plan=plan("day", price_paise=4900, max_trips=1),
+        max_trips=1,
+        status=CaptainPass.Status.QUEUED,
     )
 
     ride = complete_a_ride(driver, rider, area)
@@ -189,6 +194,29 @@ def test_a_queued_pass_starts_the_moment_the_limited_one_ended(
     queued.refresh_from_db()
     assert queued.status == CaptainPass.Status.ACTIVE
     assert queued.starts_at == ride.completed_at
+    # The trip that ended the first pass is not the queued pass's first trip.
+    engine._end_pass_if_trip_limit_reached(driver, timezone.now())
+    assert selectors.active_pass(driver) is not None
+
+
+def test_editing_the_plan_never_changes_a_pass_already_sold(rider: User, area: ServiceArea) -> None:
+    launch_pass_with(max_trips=1)
+    driver = captain(area, km=1)
+    CaptainPassPlan.objects.filter(code="launch-pass").update(max_trips=None)
+
+    complete_a_ride(driver, rider, area)
+
+    assert selectors.active_pass(driver) is None  # still the 1-trip pass it was sold as
+
+
+@pytest.mark.django_db(transaction=True)
+def test_completing_a_ride_runs_in_its_own_transaction(rider: User, area: ServiceArea) -> None:
+    """As in a real request, with no test transaction around it: `select_for_update` needs one."""
+    driver = captain(area, km=1)
+
+    ride = complete_a_ride(driver, rider, area)
+
+    assert ride.state == RideState.COMPLETED
 
 
 # --- Operations and the database --------------------------------------------------------------
