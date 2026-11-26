@@ -243,7 +243,6 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.errors.handler.api_exception_handler",
     "NON_FIELD_ERRORS_KEY": "non_field_errors",
     "DEFAULT_THROTTLE_RATES": {
-        "firebase_verify": "30/minute",
         # The public Contact form opens an Operations case per message. A person writes a few;
         # a script writes hundreds. Keyed per IP, since most senders are signed out.
         "contact_message": "5/hour",
@@ -427,7 +426,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.112.0",
+    "VERSION": "1.119.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -511,6 +510,9 @@ SPECTACULAR_SETTINGS = {
         # so each new choice set is named here rather than left to a positional hash.
         "PayoutBatchKindEnum": "apps.payouts.models.PayoutBatch.Kind",
         "PayoutBatchApprovalBasisEnum": "apps.payouts.models.PayoutBatch.ApprovalBasis",
+        "PayoutAuditEventTypeEnum": "apps.payouts.models.PayoutAuditEvent.EventType",
+        "PartnerLedgerSourceTypeEnum": "apps.payouts.ledger_sources.SOURCE_TYPES",
+        "PayoutAuditActorRoleEnum": "apps.payouts.models.PayoutAuditEvent.ActorRole",
         "PartnerWithdrawalStatusEnum": "apps.payouts.serializers.WITHDRAWAL_STATUSES",
         "WithdrawalRefusalReasonEnum": "apps.payouts.services.WITHDRAWAL_REFUSAL_REASONS",
         "WithdrawalReviewReasonEnum": "apps.payouts.services.WITHDRAWAL_REVIEW_REASONS",
@@ -708,16 +710,18 @@ OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 #: 0 here: a developer machine has none, and a forged header must not dodge the OTP limits.
 TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
+#: The store-review sign-in (`apps.identity.services`): one E.164 number that signs in with a
+#: fixed code and is never sent an SMS, so a Google Play or App Store reviewer can get past the
+#: login screen. Both set or both empty; production checks them (`guard_review_sign_in`). The
+#: code is written into the store's review notes, so it is not a secret and never unlocks a
+#: staff or Operations account.
+OTP_REVIEW_PHONE_NUMBER = env("OTP_REVIEW_PHONE_NUMBER", default="")
+OTP_REVIEW_CODE = env("OTP_REVIEW_CODE", default="")
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
 # Account deletion (apps.identity.account_deletion): how long a closed account waits before it is
 # erased. Signing in again inside it keeps the account. 30 days is the common platform window and
 # what the public deletion pages promise; change both together.
 ACCOUNT_DELETION_GRACE_DAYS = env.int("ACCOUNT_DELETION_GRACE_DAYS", default=30)
-
-FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
-FIREBASE_CREDENTIALS_JSON = env("FIREBASE_CREDENTIALS_JSON", default="")
-FIREBASE_AUTH_ENABLED = env.bool("FIREBASE_AUTH_ENABLED", default=False)
-FIREBASE_TOKEN_MAX_AGE_SECONDS = env.int("FIREBASE_TOKEN_MAX_AGE_SECONDS", default=300)
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
@@ -765,6 +769,21 @@ CASHFREE_PAYOUT_API_VERSION = env("CASHFREE_PAYOUT_API_VERSION", default="2024-0
 CASHFREE_PAYOUT_CLIENT_ID = env("CASHFREE_PAYOUT_CLIENT_ID", default="")
 CASHFREE_PAYOUT_CLIENT_SECRET = env("CASHFREE_PAYOUT_CLIENT_SECRET", default="")
 CASHFREE_PAYOUT_PUBLIC_KEY = env("CASHFREE_PAYOUT_PUBLIC_KEY", default="").replace("\\n", "\n")
+# Cashfree Bank Account Verification (Secure ID), run on every account a Partner adds when
+# `PAYOUT_PROVIDER=cashfree`. Its own keys from the Secure ID dashboard, not the Payouts ones;
+# without them adding a bank account is refused rather than left unchecked. A penny-drop waits
+# on the bank over IMPS, so its read timeout is longer than a payout call's.
+CASHFREE_VERIFICATION_API_BASE_URL = env(
+    "CASHFREE_VERIFICATION_API_BASE_URL", default="https://sandbox.cashfree.com/verification"
+)
+CASHFREE_VERIFICATION_CLIENT_ID = env("CASHFREE_VERIFICATION_CLIENT_ID", default="")
+CASHFREE_VERIFICATION_CLIENT_SECRET = env("CASHFREE_VERIFICATION_CLIENT_SECRET", default="")
+CASHFREE_VERIFICATION_PUBLIC_KEY = env("CASHFREE_VERIFICATION_PUBLIC_KEY", default="").replace(
+    "\\n", "\n"
+)
+CASHFREE_VERIFICATION_READ_TIMEOUT_SECONDS = env.float(
+    "CASHFREE_VERIFICATION_READ_TIMEOUT_SECONDS", default=30.0
+)
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
 # paying people, and a wrong payout — unlike a wrong capture — cannot be refunded. The name is
 # older than test mode: RazorpayX test keys need it on too, and move only dummy money.
@@ -1572,6 +1591,12 @@ GEMINI_API_BASE_URL = env(
     "GEMINI_API_BASE_URL", default="https://generativelanguage.googleapis.com/v1beta"
 )
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+
+# Paid stay reservations (A9 `RESERVATION` mode). Off until hosts can be paid: a paid stay is
+# collected by V Solve Hub in full, and there is no host earning, commission or GST on
+# accommodation (owed by the platform for stays booked through it) built yet. Every live stay
+# today is in `ENQUIRY` mode, which takes no payment, so this changes nothing that works now.
+STAY_PAID_RESERVATIONS_ENABLED = env.bool("STAY_PAID_RESERVATIONS_ENABLED", default=False)
 OPENAI_MODEL = env("OPENAI_MODEL", default="")
 OPENAI_API_BASE_URL = env("OPENAI_API_BASE_URL", default="https://api.openai.com/v1")
 ASSISTANT_LLM_CONNECT_TIMEOUT_SECONDS = env.float(

@@ -1,6 +1,5 @@
 import { Text, type Locale } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
-import { ArrowLeft, Check, Globe } from "lucide-react-native";
+import { Check, Globe } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
@@ -39,7 +38,6 @@ const OPTIONS: readonly LanguageOption[] = [
 ];
 
 export function LanguagePicker() {
-  const router = useRouter();
   const currentLocale = useLocaleStore((s) => s.locale);
   const setLocale = useLocaleStore((s) => s.setLocale);
   const [selected, setSelected] = useState<Locale>(currentLocale);
@@ -59,27 +57,6 @@ export function LanguagePicker() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Back to Account Link */}
-      <Pressable cssInterop={false}
-        accessibilityRole="button"
-        accessibilityLabel="Back to Account"
-        onPress={() => router.back()}
-        style={({ pressed }) => ({
-          flexDirection: "row",
-          alignItems: "center",
-          columnGap: 6,
-          alignSelf: "flex-start",
-          paddingVertical: 6,
-          opacity: pressed ? 0.7 : 1,
-          marginBottom: 16,
-        })}
-      >
-        <ArrowLeft size={16} color="#64748b" strokeWidth={2.2} />
-        <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748b" }}>
-          Back to Account
-        </Text>
-      </Pressable>
-
       {/* App Language Header Section */}
       <View style={{ marginBottom: 24 }}>
         <View style={{ flexDirection: "row", alignItems: "center", columnGap: 12, marginBottom: 8 }}>

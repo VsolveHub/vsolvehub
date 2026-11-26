@@ -4,8 +4,21 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { ArrowLeft, Clock } from "lucide-react";
-import { EmptyState, LoadMore, StatusChip, useT } from "@vsolve/ui";
+import {
+  ArrowLeft,
+  Award,
+  Banknote,
+  Briefcase,
+  CalendarClock,
+  Clock,
+  Eye,
+  MapPin,
+  Pencil,
+  Sparkles,
+  UserCheck,
+  Users,
+} from "lucide-react";
+import { Card, LoadMore, StatusChip, cn, useT } from "@vsolve/ui";
 
 import {
   fetchListingApplicationsPage,
@@ -197,27 +210,104 @@ export default function PartnerListingLeadsPage() {
       <div>
         <Link
           href="/listings"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text"
+          className="group inline-flex items-center gap-2 text-xs font-medium text-text-muted transition hover:text-text"
         >
-          <ArrowLeft className="size-4" /> {t("listings.detail.backToWorkspace")}
+          <span className="grid size-6 place-items-center rounded-full border border-line bg-surface text-text-secondary transition group-hover:border-navy-900 group-hover:text-text">
+            <ArrowLeft className="size-3.5" />
+          </span>
+          <span>{t("listings.detail.backToWorkspace")}</span>
         </Link>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-text">
-              {listing?.title || t("listings.detail.titleFallback")}
-            </h1>
-            <p className="mt-0.5 text-xs text-text-muted">
-              {t("listings.detail.applicantsReceived", {
-                service: listing?.service_name || t("listings.detail.roleFallback"),
-                count: totalApplicants,
-              })}
-            </p>
-          </div>
-          {listing?.status && (
-            <StatusChip status={listing.status} category="listing" />
-          )}
-        </div>
       </div>
+
+      {/* Hero Header Card */}
+      <Card padding="none" className="overflow-hidden border border-line bg-surface">
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-2xl font-bold tracking-tight text-text sm:text-3xl">
+                  {listing?.title || t("listings.detail.titleFallback")}
+                </h1>
+                {listing?.status && (
+                  <StatusChip status={listing.status} category="listing" />
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-text-secondary">
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <Briefcase className="size-3.5 text-text-muted" />
+                  {listing?.service_name || t("listings.detail.roleFallback")}
+                </span>
+                {listing?.location_text && (
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <MapPin className="size-3.5 text-text-muted" />
+                    {listing.location_text}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <Users className="size-3.5 text-text-muted" />
+                  {listing?.vacancies ?? 1} {listing?.vacancies === 1 ? "opening" : "openings"}
+                </span>
+                {listing?.salary_display && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-success-surface border border-success-line px-2.5 py-0.5 font-semibold text-success-text">
+                    <Banknote className="size-3.5" />
+                    {listing.salary_display}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href={`/listings/post?edit=${listingId}`}
+                className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3 py-1.5 text-xs font-bold text-text transition hover:border-line-strong hover:bg-surface-hover"
+              >
+                <Pencil className="size-3.5 text-text-muted" />
+                <span>Edit Job</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Metrics Strip */}
+        <div className="grid grid-cols-2 divide-x divide-y sm:divide-y-0 sm:grid-cols-5 border-t border-line bg-surface-sunken/40 text-center">
+          <div className="p-3 sm:py-3.5">
+            <span className="flex items-center justify-center gap-1 text-[11px] font-medium text-text-muted">
+              <Users className="size-3.5" />
+              Applied
+            </span>
+            <p className="mt-1 text-xl font-bold text-text">{totalApplicants}</p>
+          </div>
+          <div className="p-3 sm:py-3.5">
+            <span className="flex items-center justify-center gap-1 text-[11px] font-medium text-text-muted">
+              <UserCheck className="size-3.5" />
+              Shortlisted
+            </span>
+            <p className="mt-1 text-xl font-bold text-text">{listing?.counts?.shortlisted ?? 0}</p>
+          </div>
+          <div className="p-3 sm:py-3.5">
+            <span className="flex items-center justify-center gap-1 text-[11px] font-medium text-text-muted">
+              <CalendarClock className="size-3.5" />
+              Interviews
+            </span>
+            <p className="mt-1 text-xl font-bold text-text">{listing?.counts?.interviews ?? 0}</p>
+          </div>
+          <div className="p-3 sm:py-3.5">
+            <span className="flex items-center justify-center gap-1 text-[11px] font-medium text-text-muted">
+              <Award className="size-3.5" />
+              Hired
+            </span>
+            <p className="mt-1 text-xl font-bold text-success-text">{hiredCount}</p>
+          </div>
+          <div className="p-3 sm:py-3.5 col-span-2 sm:col-span-1 border-t sm:border-t-0">
+            <span className="flex items-center justify-center gap-1 text-[11px] font-medium text-text-muted">
+              <Eye className="size-3.5" />
+              Views
+            </span>
+            <p className="mt-1 text-xl font-bold text-text">{listing?.counts?.views ?? 0}</p>
+          </div>
+        </div>
+      </Card>
 
       {offerFill ? (
         <section
@@ -241,24 +331,46 @@ export default function PartnerListingLeadsPage() {
         </section>
       ) : null}
 
-      <div role="tablist" className="grid grid-cols-2 gap-1 rounded-control border border-line bg-surface-sunken p-1 sm:max-w-sm">
-        {(
-          [
-            ["applicants", t("listings.detail.applicationsTab", { count: totalApplicants })],
-            ["matches", t("listings.detail.matchingCandidatesTab")],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={view === key}
-            onClick={() => setView(key)}
-            className={`rounded-[calc(var(--radius-control)-2px)] px-3 py-2 text-sm font-bold ${view === key ? "bg-surface text-navy-900 shadow-xs" : "text-text-secondary"}`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* View Switcher: Applications vs Matching Candidates */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
+        <div role="tablist" className="inline-flex items-center rounded-xl border border-line bg-surface-sunken p-1">
+          {(
+            [
+              ["applicants", t("listings.detail.applicationsTab", { count: totalApplicants })],
+              ["matches", t("listings.detail.matchingCandidatesTab")],
+            ] as const
+          ).map(([key, label]) => {
+            const isMatches = key === "matches";
+            const matchCount = listing?.counts?.matches ?? 0;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={view === key}
+                onClick={() => setView(key)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition",
+                  view === key
+                    ? "bg-surface text-text shadow-sm"
+                    : "text-text-secondary hover:text-text"
+                )}
+              >
+                {isMatches ? (
+                  <Sparkles className="size-4 text-warning-text" />
+                ) : (
+                  <Users className="size-4 text-action" />
+                )}
+                <span>{label}</span>
+                {isMatches && matchCount > 0 && (
+                  <span className="rounded-full bg-warning-surface px-2 py-0.5 text-[10px] font-bold text-warning-text">
+                    {matchCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {view === "matches" ? (
@@ -270,29 +382,30 @@ export default function PartnerListingLeadsPage() {
       ) : (
       <>
       {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
+      <div className="flex flex-wrap items-center gap-2">
         {FILTER_TABS.map((tabKey) => {
           const count =
             tabKey === "ALL" ? totalApplicants : activeTab === tabKey ? loadedCount : null;
+          const isActive = activeTab === tabKey;
           return (
             <button
               type="button"
               key={tabKey}
               onClick={() => setActiveTab(tabKey)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-                activeTab === tabKey
-                  ? "bg-navy-900 text-warm-0 shadow-xs"
-                  : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
-              }`}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all",
+                isActive
+                  ? "bg-navy-900 text-white shadow-sm ring-2 ring-navy-900/15"
+                  : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover hover:text-text"
+              )}
             >
               <span>{t(FILTER_TAB_KEYS[tabKey]!)}</span>
-              {count === null ? null : (
+              {count !== null && (
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                    activeTab === tabKey
-                      ? "bg-warm-0/20 text-warm-0"
-                      : "bg-surface-sunken text-text-muted"
-                  }`}
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
+                    isActive ? "bg-white/20 text-white" : "bg-surface-sunken text-text-muted"
+                  )}
                 >
                   {count}
                 </span>
@@ -318,14 +431,35 @@ export default function PartnerListingLeadsPage() {
       ) : null}
 
       {!isLoading && filteredApplications.length === 0 ? (
-        <EmptyState
-          title={t("listings.detail.emptyTitle")}
-          description={
-            activeTab === "ALL"
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface px-6 py-16 text-center">
+          <div className="mb-4 grid size-14 place-items-center rounded-2xl border border-signal-100 bg-signal-50 text-action">
+            <Users className="size-7" />
+          </div>
+          <h3 className="text-base font-bold text-text">
+            {t("listings.detail.emptyTitle")}
+          </h3>
+          <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-text-secondary">
+            {activeTab === "ALL"
               ? t("listings.detail.emptyAll")
-              : t("listings.detail.emptyFiltered")
-          }
-        />
+              : t("listings.detail.emptyFiltered")}
+          </p>
+          {/* Already inside the applicants view, so there is no need to ask which view is open. */}
+          {listing?.counts?.matches && listing.counts.matches > 0 ? (
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <p className="text-xs font-semibold text-text-muted">
+                Don&apos;t wait for applicants to apply:
+              </p>
+              <button
+                type="button"
+                onClick={() => setView("matches")}
+                className="inline-flex items-center gap-2 rounded-full bg-action px-5 py-2.5 text-xs font-semibold text-action-text transition hover:bg-action-hover"
+              >
+                <Sparkles className="size-4" />
+                <span>Invite {listing.counts.matches} matching candidate{listing.counts.matches === 1 ? "" : "s"}</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Application Cards */}

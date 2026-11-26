@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "26 October 2026";
+const UPDATED = "23 November 2026";
 
 const SECTIONS: LegalSection[] = [
   {
@@ -75,8 +75,9 @@ const SECTIONS: LegalSection[] = [
           </li>
           <li>
             <strong>Service providers who run parts of the platform for us:</strong> Razorpay
-            (payments and refunds), Google Firebase (sending sign-in codes), Google Maps (finding
-            addresses from a map pin), Cloudflare (secure file storage) and our hosting provider.
+            (payments and refunds), MSG91 (sending sign-in codes and text messages), Google
+            Firebase (crash reports from our mobile apps), Google Maps (finding addresses from a map
+            pin), Cloudflare (secure file storage) and our hosting provider.
             They may use your data only to provide their service to us.
           </li>
           <li>

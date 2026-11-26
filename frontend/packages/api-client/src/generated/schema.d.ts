@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.112.0)
- * Checksum: 3e6dfb9bc3f98ae9
+ * Source:   contracts/openapi/v1.yaml (version 1.119.0)
+ * Checksum: f7acc7666a739144
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -131,6 +131,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Confirms the step-up code, against the signed-in person's own number only. */
         post: operations["auth_finance_step_up_create"];
         delete?: never;
         options?: never;
@@ -138,7 +139,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/firebase/precheck/": {
+    "/api/v1/auth/finance/step-up/code/": {
         parameters: {
             query?: never;
             header?: never;
@@ -148,51 +149,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Pre-check rate limits and intended role gate before requesting Firebase SMS.
+         * @description Sends a step-up code to the signed-in person's own number. Takes no number.
          *
-         *     Note that this is a UX/rate-limit aid and verify is the real gate.
+         *     A step-up re-proves the person already signed in, so the number comes from their account,
+         *     never from the request.
          */
-        post: operations["auth_firebase_precheck_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/firebase/step-up/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description `FinanceStepUpView` for deployments whose codes are sent by Firebase (contract 1.77.0).
-         *
-         *     Same outcome, same stamp: the session's `stepped_up_at`, which `HasRecentOperationsStepUp`
-         *     reads. Only the proof differs — a fresh, single-use Firebase ID token for the signed-in
-         *     person's own number instead of a Django OTP challenge.
-         */
-        post: operations["auth_firebase_step_up_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/firebase/verify/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Verify Firebase ID token, provision the user session, and issue auth cookies. */
-        post: operations["auth_firebase_verify_create"];
+        post: operations["auth_finance_step_up_code_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -209,29 +171,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth_logout_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/mobile/firebase/verify/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Firebase phone sign-in for the apps.
-         *
-         *     The web's Firebase check (`verify_firebase_login`), answered with a bearer token instead of
-         *     cookies, like `MobileOtpVerifyView`. The app sends the precheck to the shared
-         *     `POST /auth/firebase/precheck/` first, exactly as the web does.
-         */
-        post: operations["auth_mobile_firebase_verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3344,6 +3283,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/commercial-policies/tax-categories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every tax category the catalogue's active services use, with the services under it.
+         *
+         *     Read-only. The policy form offers these instead of asking Operations to type category codes,
+         *     which had to match a service's code exactly and failed silently when they did not.
+         */
+        get: operations["m2_operations_tax_categories_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/compatibility-rules/": {
         parameters: {
             query?: never;
@@ -4222,11 +4183,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Maker-checker plus a fresh OTP.
+         * @description Approval with a fresh OTP, by a second person or by the proposer after the preview.
          *
-         *     Two different people is a control against one person acting alone. The step-up is a control
-         *     against neither of them actually being present — an unlocked laptop with an Operations
-         *     session open should not be able to release a week of payouts.
+         *     A proposer's own approval is recorded as `SELF` and logged (`PayoutAuditEvent`), so a
+         *     one-person team can pay without it passing for a second person's. The step-up is a control
+         *     against nobody actually being present — an unlocked laptop with an Operations session open
+         *     should not be able to release a week of payouts.
          */
         post: operations["operations_payout_batch_approve"];
         delete?: never;
@@ -4271,6 +4233,28 @@ export interface paths {
          *     hours apart and the second decision deserves its own proof of presence.
          */
         post: operations["operations_payout_batch_pay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-batches/{batch_id}/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What Approve or Pay would do now: who is sent what, who is skipped and why.
+         *
+         *     Read-only and needs no step-up: looking changes nothing. The confirm that follows carries the
+         *     `version` shown here, so a batch that changed in between is refused rather than acted on.
+         */
+        get: operations["operations_payout_batch_preview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13783,25 +13767,6 @@ export interface components {
              */
             kind: components["schemas"]["Kind899Enum"];
         };
-        FirebasePrecheckRequest: {
-            phone_number: string;
-            /** @default  */
-            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
-        };
-        FirebaseStepUpRequest: {
-            /** @description Firebase ID token from a phone verification just completed for the signed-in person's own number. */
-            id_token: string;
-        };
-        FirebaseVerifyRequest: {
-            /** @description Firebase ID token issued after client-side Phone Auth. */
-            id_token: string;
-            /** @default  */
-            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
-            /** @description Applied only when this verification creates a new account. */
-            referral_code?: string;
-            device_identifier?: string;
-            device_label?: string;
-        };
         FulfilmentPlan: {
             /** Format: uuid */
             readonly id: string;
@@ -14678,17 +14643,6 @@ export interface components {
             /** Format: date-time */
             readonly session_expires_at: string;
             readonly session_token: string;
-        };
-        /** @description The web Firebase verify body, with a required installation id. */
-        MobileFirebaseVerifyRequest: {
-            /** @description Firebase ID token issued after client-side Phone Auth. */
-            id_token: string;
-            /** @default  */
-            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
-            /** @description Applied only when this verification creates a new account. */
-            referral_code?: string;
-            device_identifier: string;
-            device_label?: string;
         };
         /** @description Same OTP body as the web, with a required installation id. */
         MobileOtpVerifyRequest: {
@@ -15693,6 +15647,13 @@ export interface components {
             readonly ifsc: string;
             readonly holder_name: string;
             readonly is_registered_with_provider: boolean;
+            readonly bank_check_provider: string;
+            /** Format: date-time */
+            readonly bank_checked_at: string | null;
+            readonly name_at_bank: string;
+            readonly name_match_result: string;
+            readonly name_match_score: string;
+            readonly is_missing_required_bank_check: boolean;
             /** Format: date-time */
             readonly verified_at: string | null;
             /** Format: uuid */
@@ -15948,6 +15909,7 @@ export interface components {
             /** Format: date-time */
             readonly cancelled_at: string | null;
             readonly transfer: components["schemas"]["OperationsWithdrawalTransfer"] | null;
+            readonly history: components["schemas"]["PayoutAuditEvent"][];
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -16608,6 +16570,27 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["RideHistory"][];
         };
+        /**
+         * @description * `BOOKING_GROUP` - Booking group
+         *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+         *     * `M2_QUOTE_UNLOCK` - M2 quote unlock
+         *     * `M2_VISIT_PLAN` - M2 visit plan
+         *     * `M2_SITE_VISIT_FEE` - M2 site visit fee
+         *     * `M2_STAGE_FUNDING` - M2 stage funding
+         *     * `M2_MATERIAL_ADVANCE` - M2 material advance
+         *     * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+         *     * `M2_BOOKING_FEE` - M2 booking fee
+         *     * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+         *     * `A10_PREMIUM_LISTING` - A10 premium listing
+         *     * `WALLET_TOP_UP` - Wallet top-up
+         *     * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+         *     * `A9_STAY_RESERVATION` - A9 stay reservation
+         *     * `A7_RENTAL_BOOKING` - A7 rental booking
+         *     * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+         *     * `RIDE_CAPTAIN_PASS` - Ride captain pass
+         * @enum {string}
+         */
+        PaidForEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING" | "A9_STAY_SUBSCRIPTION" | "RIDE_CAPTAIN_PASS";
         /** @description The parcel block on a ride, as the booker sees it. */
         Parcel: {
             mode: string;
@@ -17310,6 +17293,8 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly booking_id: string | null;
+            /** @description What this line was for: the visit, rental, project stage or correction behind it, with its name, dates and the id the Partner app opens. */
+            readonly origin: components["schemas"]["PartnerLedgerSource"];
             readonly kind: components["schemas"]["LedgerEntryKindEnum"];
             readonly status: components["schemas"]["LedgerEntryStatusEnum"];
             readonly gross_paise: number;
@@ -17337,6 +17322,37 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["PartnerLedgerEntry"][];
         };
+        /** @description What a ledger line was for, so a statement reads as bookings rather than amounts. */
+        PartnerLedgerSource: {
+            type: components["schemas"]["PartnerLedgerSourceTypeEnum"];
+            title: string;
+            stage_position: number | null;
+            stage_label: string;
+            /** Format: date */
+            starts_on: string | null;
+            /** Format: date */
+            ends_on: string | null;
+            /** Format: uuid */
+            booking_id: string | null;
+            /** Format: uuid */
+            rental_booking_id: string | null;
+            /** Format: uuid */
+            engagement_id: string | null;
+        };
+        /**
+         * @description * `HOME_VISIT` - Home-service visit
+         *     * `RENTAL` - Rental
+         *     * `PROJECT_STAGE` - Project or workforce stage
+         *     * `PROJECT_RETENTION` - Project retention released
+         *     * `BOOKING_FEE` - Booking fee kept as compensation
+         *     * `SITE_VISIT` - Site visit share
+         *     * `ADJUSTMENT` - Correction by Vsolve
+         *     * `WITHDRAWAL_FEE` - Withdrawal fee
+         *     * `WITHDRAWAL_FEE_REFUND` - Withdrawal fee refunded
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        PartnerLedgerSourceTypeEnum: "HOME_VISIT" | "RENTAL" | "PROJECT_STAGE" | "PROJECT_RETENTION" | "BOOKING_FEE" | "SITE_VISIT" | "ADJUSTMENT" | "WITHDRAWAL_FEE" | "WITHDRAWAL_FEE_REFUND" | "OTHER";
         PartnerListing: {
             description: string;
             /** Format: uuid */
@@ -18427,6 +18443,49 @@ export interface components {
          */
         PayoutAccountStatusEnum: "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
         /**
+         * @description * `OPERATIONS` - Operations
+         *     * `PARTNER` - Partner
+         *     * `SYSTEM` - System
+         * @enum {string}
+         */
+        PayoutAuditActorRoleEnum: "OPERATIONS" | "PARTNER" | "SYSTEM";
+        /**
+         * @description One line of a run's or withdrawal's history.
+         *
+         *     Names are looked up when read, never stored: an account deleted later shows as an empty name
+         *     rather than being kept in the log (`PayoutAuditEvent`).
+         */
+        PayoutAuditEvent: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly event_type: components["schemas"]["PayoutAuditEventTypeEnum"];
+            readonly actor_role: components["schemas"]["PayoutAuditActorRoleEnum"];
+            /** Format: uuid */
+            readonly actor_id: string | null;
+            readonly actor_name: string;
+            readonly approval_basis: string;
+            /** Format: uuid */
+            readonly partner_id: string | null;
+            readonly partner_name: string;
+            readonly amount_paise: number | null;
+            readonly reason: string;
+            readonly details: unknown;
+            /** Format: date-time */
+            readonly occurred_at: string;
+        };
+        /**
+         * @description * `RUN_PROPOSED` - Run proposed
+         *     * `RUN_APPROVED` - Run approved
+         *     * `RUN_PAY_STARTED` - Payment started
+         *     * `RUN_CANCELLED` - Run cancelled
+         *     * `PARTNER_SKIPPED` - Partner skipped
+         *     * `WITHDRAWAL_REQUESTED` - Withdrawal requested
+         *     * `WITHDRAWAL_APPROVED` - Withdrawal approved
+         *     * `WITHDRAWAL_DECLINED` - Withdrawal declined
+         * @enum {string}
+         */
+        PayoutAuditEventTypeEnum: "RUN_PROPOSED" | "RUN_APPROVED" | "RUN_PAY_STARTED" | "RUN_CANCELLED" | "PARTNER_SKIPPED" | "WITHDRAWAL_REQUESTED" | "WITHDRAWAL_APPROVED" | "WITHDRAWAL_DECLINED";
+        /**
          * @description A run, with both signatures on it.
          *
          *     `proposed_by_id` and `approved_by_id` are both published so a console can render the
@@ -18459,6 +18518,7 @@ export interface components {
             readonly currency: string;
             readonly item_count: number;
             readonly items: components["schemas"]["PayoutBatchItem"][];
+            readonly history: components["schemas"]["PayoutAuditEvent"][];
             /** Format: date-time */
             readonly server_now: string;
             /** Format: date-time */
@@ -18466,10 +18526,11 @@ export interface components {
         };
         /**
          * @description * `OPERATIONS` - Approved by Operations
+         *     * `SELF` - Approved by the proposer
          *     * `POLICY` - Approved by withdrawal policy
          * @enum {string}
          */
-        PayoutBatchApprovalBasisEnum: "OPERATIONS" | "POLICY";
+        PayoutBatchApprovalBasisEnum: "OPERATIONS" | "SELF" | "POLICY";
         /** @description One transfer to one Partner: the sum of its ledger lines, refunds included. */
         PayoutBatchItem: {
             /** Format: uuid */
@@ -18542,6 +18603,30 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["PayoutBatchList"][];
+        };
+        /** @description What Approve or Pay would do right now. Building it changes nothing. */
+        PayoutBatchPreview: {
+            /** Format: uuid */
+            batch_id: string;
+            version: number;
+            status: components["schemas"]["PayoutBatchStatusEnum"];
+            items: components["schemas"]["PayoutBatchPreviewItem"][];
+            send_count: number;
+            send_total_paise: number;
+            skip_count: number;
+            skip_total_paise: number;
+            includes_actor: boolean;
+        };
+        PayoutBatchPreviewItem: {
+            /** Format: uuid */
+            item_id: string;
+            /** Format: uuid */
+            partner_id: string;
+            partner_name: string;
+            amount_paise: number;
+            account_last4: string;
+            ifsc: string;
+            skip_reason: string;
         };
         /**
          * @description * `DRAFT` - Draft
@@ -20444,6 +20529,36 @@ export interface components {
             readonly provider_refund_id: string;
             readonly amount: components["schemas"]["Money"];
             readonly allocations: components["schemas"]["RefundAllocation"][];
+            /**
+             * @description Who set the refund going: AUTOMATIC (the system, e.g. a cancellation), CUSTOMER (their own action) or OPERATIONS (staff, from the console).
+             *
+             *     * `AUTOMATIC` - Automatic
+             *     * `CUSTOMER` - Customer
+             *     * `OPERATIONS` - Operations
+             */
+            readonly started_by: components["schemas"]["StartedByEnum"];
+            /**
+             * @description What the refunded payment was for: its payment attempt's purpose.
+             *
+             *     * `BOOKING_GROUP` - Booking group
+             *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+             *     * `M2_QUOTE_UNLOCK` - M2 quote unlock
+             *     * `M2_VISIT_PLAN` - M2 visit plan
+             *     * `M2_SITE_VISIT_FEE` - M2 site visit fee
+             *     * `M2_STAGE_FUNDING` - M2 stage funding
+             *     * `M2_MATERIAL_ADVANCE` - M2 material advance
+             *     * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+             *     * `M2_BOOKING_FEE` - M2 booking fee
+             *     * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+             *     * `A10_PREMIUM_LISTING` - A10 premium listing
+             *     * `WALLET_TOP_UP` - Wallet top-up
+             *     * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+             *     * `A9_STAY_RESERVATION` - A9 stay reservation
+             *     * `A7_RENTAL_BOOKING` - A7 rental booking
+             *     * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
+             *     * `RIDE_CAPTAIN_PASS` - Ride captain pass
+             */
+            readonly paid_for: (components["schemas"]["PaidForEnum"] | components["schemas"]["NullEnum"]) | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -22178,6 +22293,13 @@ export interface components {
             otp: string;
         };
         /**
+         * @description * `AUTOMATIC` - Automatic
+         *     * `CUSTOMER` - Customer
+         *     * `OPERATIONS` - Operations
+         * @enum {string}
+         */
+        StartedByEnum: "AUTOMATIC" | "CUSTOMER" | "OPERATIONS";
+        /**
          * @description * `SEARCHING` - Searching
          *     * `CAPTAIN_ASSIGNED` - Captain assigned
          *     * `CAPTAIN_ARRIVED` - Captain arrived
@@ -22535,9 +22657,27 @@ export interface components {
             /** Format: time */
             end_time: string;
         };
+        /** @description A step-up code sent to the signed-in person's own number, which is shown masked. */
+        StepUpCodeIssued: {
+            /** Format: uuid */
+            readonly challenge_id: string;
+            readonly expires_in_seconds: number;
+            readonly resend_after_seconds: number;
+            readonly code_length: number;
+            readonly development_code: string | null;
+            /** @description The number the code went to, all but the last four hidden. */
+            readonly phone_number_masked: string;
+        };
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
+        };
+        StepUpVerifyRequest: {
+            /** Format: uuid */
+            challenge_id: string;
+            code: string;
+            /** @description Deprecated and optional. The code is always checked against the signed-in person's own number; a different number here is refused. */
+            phone_number?: string;
         };
         /**
          * @description * `SINGLE_PARTNER_SEQUENTIAL` - Single Partner sequential
@@ -22617,6 +22757,16 @@ export interface components {
          * @enum {string}
          */
         TargetStatusEnum: "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "DECLINED" | "SUSPENDED" | "OFFBOARDED";
+        TaxCategoryUsage: {
+            /** @description The `tax_category_code` services carry. */
+            code: string;
+            /** @description Active services using this category. */
+            service_count: number;
+            /** @description Of those, crew (A3) and project (A5) services: the ones this policy prices. */
+            crew_and_project_service_count: number;
+            /** @description A few of their names, alphabetical. */
+            example_services: string[];
+        };
         TaxDocument: {
             /** Format: uuid */
             readonly id: string;
@@ -23838,9 +23988,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OtpVerifyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["OtpVerifyRequest"];
-                "multipart/form-data": components["schemas"]["OtpVerifyRequest"];
+                "application/json": components["schemas"]["StepUpVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StepUpVerifyRequest"];
+                "multipart/form-data": components["schemas"]["StepUpVerifyRequest"];
             };
         };
         responses: {
@@ -23852,30 +24002,7 @@ export interface operations {
                     "application/json": components["schemas"]["StepUpSession"];
                 };
             };
-        };
-    };
-    auth_firebase_precheck_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FirebasePrecheckRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["FirebasePrecheckRequest"];
-                "multipart/form-data": components["schemas"]["FirebasePrecheckRequest"];
-            };
-        };
-        responses: {
-            /** @description Precheck allowed; client may proceed with Firebase SMS. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            /** @description `invalid_otp`: the code is wrong, used or expired. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23884,57 +24011,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    auth_firebase_step_up_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FirebaseStepUpRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["FirebaseStepUpRequest"];
-                "multipart/form-data": components["schemas"]["FirebaseStepUpRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StepUpSession"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description The verified number is not the signed-in person's. */
+            /** @description `step_up_identity_mismatch`: a number other than the signed-in person's was sent; or `account_blocked`. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -23943,68 +24020,34 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Firebase auth is disabled. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
         };
     };
-    auth_firebase_verify_create: {
+    auth_finance_step_up_code_create: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FirebaseVerifyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["FirebaseVerifyRequest"];
-                "multipart/form-data": components["schemas"]["FirebaseVerifyRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthenticatedSession"];
+                    "application/json": components["schemas"]["StepUpCodeIssued"];
                 };
             };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Rate limit exceeded. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24029,57 +24072,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    auth_mobile_firebase_verify_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MobileFirebaseVerifyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["MobileFirebaseVerifyRequest"];
-                "multipart/form-data": components["schemas"]["MobileFirebaseVerifyRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MobileAuthenticatedSession"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
             };
         };
     };
@@ -30789,6 +30781,25 @@ export interface operations {
             };
         };
     };
+    m2_operations_tax_categories_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxCategoryUsage"][];
+                };
+            };
+        };
+    };
     operations_compatibility_rule_list: {
         parameters: {
             query?: {
@@ -33390,6 +33401,51 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_batch_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatchPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -40808,6 +40864,7 @@ export interface operations {
                     "application/json": components["schemas"]["PartnerPayoutAccount"];
                 };
             };
+            /** @description `validation_error`, `payout_account_rejected`, or `payout_account_not_valid_at_bank`: the bank checked the account and it cannot receive money; `details.bank_status` says why (`INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`, `INVALID_IFSC_FAIL`, `NRE_ACCOUNT_FAIL`, `FRAUD_ACCOUNT`). Nothing was saved. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -40824,6 +40881,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description `payout_account_in_use`: another partner's live account is this bank account. Nothing was saved. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -40832,6 +40898,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description `payout_accounts_unavailable`, `payout_account_provider_unavailable`, or `payout_account_bank_check_unavailable`: the bank check did not finish. Nothing was saved; submitting again later is safe. */
             503: {
                 headers: {
                     [name: string]: unknown;

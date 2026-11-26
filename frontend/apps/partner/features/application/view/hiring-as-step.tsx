@@ -3,7 +3,7 @@
 import type { Schemas } from "@vsolve/api-client";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Button, Dialog, ErrorState, buttonStyles, cn, useT } from "@vsolve/ui";
-import { Building2, Check, House } from "lucide-react";
+import { Building2, Check, House, Info } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -52,11 +52,14 @@ function HiringAsChoice({ application }: { application: Application }) {
   const editable = application.can_edit;
   // A switch that would clear what they typed waits here until they confirm it.
   const [switchingTo, setSwitchingTo] = useState<HiringAs | null>(null);
+  // The card they clicked lights up at once, instead of waiting for the save to come back.
+  const [picked, setPicked] = useState<HiringAs | null>(null);
 
   const goOn = (type: HiringAs) =>
     router.push(nextStep("/apply/hiring-as", "EMPLOYER", type)?.href ?? "/apply");
 
   function save(type: HiringAs) {
+    setPicked(type);
     update.mutate(
       { hiring_as: type },
       {
@@ -64,6 +67,7 @@ function HiringAsChoice({ application }: { application: Application }) {
           setSwitchingTo(null);
           goOn(type);
         },
+        onError: () => setPicked(null),
       },
     );
   }
@@ -93,7 +97,8 @@ function HiringAsChoice({ application }: { application: Application }) {
           {CHOICES.map(({ type, icon }) => (
             <ChoiceCard
               key={type}
-              selected={current === type}
+              type={type}
+              selected={(picked ?? current) === type}
               disabled={!editable || update.isPending}
               icon={icon}
               title={t(titleKey(type))}
@@ -102,7 +107,10 @@ function HiringAsChoice({ application }: { application: Application }) {
             />
           ))}
         </div>
-        <p className="text-sm text-text-secondary">{t("apply.employer.hiringAs.agencyNote")}</p>
+        <div className="flex items-start gap-3 rounded-control bg-surface-sunken p-4 text-sm text-text-secondary">
+          <Info size={16} className="mt-0.5 shrink-0 text-text-muted" aria-hidden />
+          <p className="leading-relaxed">{t("apply.employer.hiringAs.agencyNote")}</p>
+        </div>
       </StepFrame>
 
       <ApplyDock>
@@ -181,6 +189,7 @@ function ChoiceCard({
   disabled,
   onSelect,
 }: {
+  type: HiringAs;
   icon: ReactNode;
   title: string;
   description: string;
@@ -196,25 +205,31 @@ function ChoiceCard({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "group flex items-center gap-3.5 rounded-card border bg-surface p-4 text-left shadow-xs transition-[border-color,box-shadow] hover:border-action hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-60",
-        selected ? "border-action ring-2 ring-action/30" : "border-line",
+        "group flex items-center gap-4 rounded-card border p-4 text-left transition-colors duration-fast sm:p-5",
+        "hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed",
+        selected ? "border-action bg-selected-surface/50" : "border-line bg-surface disabled:opacity-60",
       )}
     >
-      <span className="grid h-11 w-11 shrink-0 place-items-center self-start rounded-control bg-action-surface text-action">
+      <span
+        className={cn(
+          "grid h-11 w-11 shrink-0 place-items-center rounded-control transition-colors duration-fast",
+          selected ? "bg-action text-surface" : "bg-action-surface text-action",
+        )}
+      >
         {icon}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="font-bold text-navy-900">{title}</span>
-        <span className="text-sm text-text-secondary">{description}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-base font-semibold text-text">{title}</span>
+        <span className="text-sm leading-relaxed text-text-secondary">{description}</span>
       </span>
       <span
         aria-hidden
         className={cn(
-          "grid h-6 w-6 shrink-0 place-items-center rounded-full border-2",
-          selected ? "border-action bg-action text-surface" : "border-line-strong",
+          "grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition-colors",
+          selected ? "border-action bg-action text-surface" : "border-line-strong bg-surface",
         )}
       >
-        {selected ? <Check size={14} strokeWidth={3} /> : null}
+        {selected ? <Check size={12} strokeWidth={3} /> : null}
       </span>
     </button>
   );

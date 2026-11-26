@@ -14,7 +14,11 @@ vi.mock("../queries", async (importOriginal) => {
   };
 });
 
-import { useApproveWithdrawal, useDeclineWithdrawal, useWithdrawals } from "../queries";
+import {
+  useApproveWithdrawal,
+  useDeclineWithdrawal,
+  useWithdrawals,
+} from "../queries";
 import { WithdrawalQueue } from "./withdrawal-queue";
 
 const QUEUED = {
@@ -68,6 +72,7 @@ describe("WithdrawalQueue", () => {
     decline.mockReset();
     vi.mocked(useApproveWithdrawal).mockReturnValue({
       mutate: approve,
+      reset: vi.fn(),
       isPending: false,
       error: null,
     } as never);
@@ -78,19 +83,63 @@ describe("WithdrawalQueue", () => {
     } as never);
   });
 
-  it("says why a withdrawal is waiting, and approves it at the version it was read", () => {
+  it("says why a withdrawal is waiting, and sends it only after a review", () => {
     withQueue([QUEUED]);
     render(<WithdrawalQueue onStepUpRequired={vi.fn()} />);
 
-    expect(screen.getByText("First payout to this bank account")).toBeInTheDocument();
+    expect(
+      screen.getByText("First payout to this bank account"),
+    ).toBeInTheDocument();
     // The amount sent, and the balance it took (no fee on this one).
     expect(screen.getAllByText("₹4,500")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Approve and send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review and send…" }));
 
+    // Nothing is sent by opening the review.
+    expect(approve).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(/••••9012 · SBIN0001234/),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Check the name matches/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Send ₹4,500" }),
+    );
     expect(approve).toHaveBeenCalledWith(
       { batchId: "batch-1", expectedVersion: 1 },
       expect.objectContaining({ onError: expect.any(Function) }),
     );
+  });
+
+  it("shows the withdrawal's history", () => {
+    withQueue([
+      {
+        ...QUEUED,
+        history: [
+          {
+            id: "e1",
+            event_type: "WITHDRAWAL_REQUESTED",
+            actor_role: "PARTNER",
+            actor_id: "user-partner",
+            actor_name: "Ravi Kumar",
+            approval_basis: "",
+            partner_id: "partner-1",
+            partner_name: "Ravi Kumar",
+            amount_paise: 450_000,
+            reason: "",
+            details: {},
+            occurred_at: "2026-10-27T09:00:00Z",
+          },
+        ],
+      },
+    ]);
+    render(<WithdrawalQueue onStepUpRequired={vi.fn()} />);
+
+    expect(
+      screen.getByText(/Requested by Ravi Kumar · ₹4,500 · sent for review/),
+    ).toBeInTheDocument();
   });
 
   it("declines only with a reason the partner can read", () => {
@@ -117,7 +166,11 @@ describe("WithdrawalQueue", () => {
     withQueue([{ ...QUEUED, status: "PAYING", review_reasons: [] }]);
     render(<WithdrawalQueue onStepUpRequired={vi.fn()} />);
 
-    expect(screen.queryByRole("button", { name: "Approve and send" })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("listitem")).getByText("Sending")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Review and send…" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("listitem")).getByText("Sending"),
+    ).toBeInTheDocument();
   });
 });

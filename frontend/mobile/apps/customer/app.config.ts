@@ -8,19 +8,17 @@ const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
 // restricted to this package and its signing certificate, never committed). iOS uses Apple Maps.
 const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() ?? "";
 
-// Firebase phone sign-in. Its plugins read the Firebase config files, so they switch on only
-// when a build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST).
-// Expo Go and builds without the files are unaffected. iOS needs static frameworks for it.
-// Android needs Kotlin 2.3+: React Native Firebase 27 pulls in firebase-auth 25, compiled with
-// Kotlin 2.4, which React Native 0.88's default Kotlin 2.2 cannot read. Kotlin 2.3 reads it, and
-// Expo SDK 58 pairs Kotlin >= 2.3 with its version-independent KSP.
-// Crashlytics rides with them: it reports through the same Firebase app, so it is on only when
-// Firebase is.
+// Firebase, for Crashlytics crash reports only: sign-in is Django's own code (MSG91) since
+// 23 November 2026. The plugins read the Firebase config files, so they switch on only when a
+// build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST). Expo Go
+// and builds without the files are unaffected. iOS needs static frameworks for React Native
+// Firebase. The Kotlin 2.3 pin arrived with firebase-auth (built with Kotlin 2.4, which React
+// Native 0.88's default Kotlin 2.2 cannot read); it stays because every release so far was built
+// with it, and Expo SDK 58 pairs Kotlin >= 2.3 with its version-independent KSP.
 const firebasePlugins: NonNullable<ExpoConfig["plugins"]> =
   googleServicesFile || googleServiceInfoPlist
     ? [
         "@react-native-firebase/app",
-        "@react-native-firebase/auth",
         "@react-native-firebase/crashlytics",
         [
           "expo-build-properties",
@@ -61,25 +59,29 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
-    associatedDomains: ["applinks:vsolvehub.com"],
+    // www only: the bare vsolvehub.com redirects to www, and Apple will not follow a redirect
+    // when it fetches apple-app-site-association. Backend links use www too (CUSTOMER_SITE_URL).
+    associatedDomains: ["applinks:www.vsolvehub.com"],
     ...(googleServiceInfoPlist ? { googleServicesFile: googleServiceInfoPlist } : {}),
   },
   android: {
     package: "com.vsolvehub.customer",
+    // www only, never also the bare vsolvehub.com: it redirects to www, so Android cannot verify
+    // it, and on Android 11 and older one unverified host switches app links off for every host.
     intentFilters: [
       {
         action: "VIEW",
         autoVerify: true,
         data: [
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/bookings" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/requests" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/engagements" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/jobs" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/activity" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/account" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/catalog" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/book" },
-          { scheme: "https", host: "vsolvehub.com", pathPrefix: "/cart" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/bookings" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/requests" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/engagements" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/jobs" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/activity" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/account" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/catalog" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/book" },
+          { scheme: "https", host: "www.vsolvehub.com", pathPrefix: "/cart" },
         ],
         category: ["BROWSABLE", "DEFAULT"],
       },
@@ -106,8 +108,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "onesignal-expo-plugin",
       {
         mode: process.env.EAS_BUILD_PROFILE === "production" ? "production" : "development",
+        // Status-bar icon: Android draws it as a one-colour shape, so it is the logo's white
+        // silhouette. The full-colour logo is the large icon beside every notification's text
+        // (saved as ic_onesignal_large_icon_default, which OneSignal uses unless a push names another).
         smallIcons: ["./assets/android-icon-monochrome.png"],
-        smallIconAccentColor: "#f87000",
+        largeIcons: ["./assets/logo-mark.png"],
+        // The logo's orange, measured from the owner's artwork. Android 12-16 paints the small icon
+        // in this one colour; Android 17+ shows the full-colour launcher icon instead.
+        smallIconAccentColor: "#fe6c01",
         disableLocation: true,
       },
     ],
@@ -122,6 +130,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-splash-screen",
       {
         image: "./assets/splash.png",
+        // Android 12+ crops the splash image to a 192dp circle; splash.png keeps the logo inside
+        // its own inscribed circle, so 190dp shows it whole (the 100dp default left it tiny).
+        imageWidth: 190,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
       },

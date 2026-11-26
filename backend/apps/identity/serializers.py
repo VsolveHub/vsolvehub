@@ -109,51 +109,6 @@ class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
         return value
 
 
-class FirebasePrecheckSerializer(serializers.Serializer[dict[str, object]]):
-    phone_number = PhoneNumberField(max_length=32, trim_whitespace=True)
-    intended_role = serializers.ChoiceField(
-        choices=["customer", "partner", "operations"],
-        required=False,
-        allow_blank=True,
-        default="",
-        write_only=True,
-    )
-
-
-class FirebaseVerifySerializer(serializers.Serializer[dict[str, object]]):
-    id_token = serializers.CharField(
-        write_only=True,
-        trim_whitespace=True,
-        help_text="Firebase ID token issued after client-side Phone Auth.",
-    )
-    intended_role = serializers.ChoiceField(
-        choices=["customer", "partner", "operations"],
-        required=False,
-        allow_blank=True,
-        default="",
-        write_only=True,
-    )
-    referral_code = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=32,
-        write_only=True,
-        help_text="Applied only when this verification creates a new account.",
-    )
-    device_identifier = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=128,
-        write_only=True,
-    )
-    device_label = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=100,
-        write_only=True,
-    )
-
-
 class UserSerializer(serializers.ModelSerializer[User]):
     display_name = serializers.CharField(
         source="customer_profile.display_name",
@@ -312,19 +267,35 @@ class ActiveRoleSerializer(serializers.Serializer[dict[str, object]]):
     active_role = serializers.CharField(read_only=True, allow_null=True)
 
 
-class StepUpSessionSerializer(serializers.Serializer[dict[str, object]]):
-    stepped_up_at = serializers.DateTimeField(read_only=True)
+class StepUpCodeIssuedSerializer(OtpIssuedSerializer):
+    """A step-up code sent to the signed-in person's own number, which is shown masked."""
+
+    phone_number_masked = serializers.CharField(
+        read_only=True, help_text="The number the code went to, all but the last four hidden."
+    )
 
 
-class FirebaseStepUpSerializer(serializers.Serializer[dict[str, object]]):
-    id_token = serializers.CharField(
+class StepUpVerifySerializer(serializers.Serializer[dict[str, object]]):
+    challenge_id = serializers.UUIDField()
+    code = serializers.CharField(
+        min_length=settings.OTP_CODE_LENGTH,
+        max_length=settings.OTP_CODE_LENGTH,
+        trim_whitespace=False,
         write_only=True,
+    )
+    phone_number = PhoneNumberField(
+        max_length=32,
         trim_whitespace=True,
+        required=False,
         help_text=(
-            "Firebase ID token from a phone verification just completed for the signed-in "
-            "person's own number."
+            "Deprecated and optional. The code is always checked against the signed-in "
+            "person's own number; a different number here is refused."
         ),
     )
+
+
+class StepUpSessionSerializer(serializers.Serializer[dict[str, object]]):
+    stepped_up_at = serializers.DateTimeField(read_only=True)
 
 
 class ConsentReceiptCreateSerializer(serializers.Serializer[dict[str, object]]):

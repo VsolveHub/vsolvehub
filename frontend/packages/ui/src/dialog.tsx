@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 import { cn } from "./cn";
 import { useTOrDefault } from "./i18n";
-import { useHydrated } from "./use-hydrated";
 
 /**
  * Modal dialog and bottom sheet, built on the native `<dialog>` element.
@@ -56,11 +54,7 @@ interface BaseProps {
   className?: string;
 }
 
-function useModalDialog(
-  open: boolean,
-  onOpenChange: (open: boolean) => void,
-  topLayer = true,
-) {
+function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
   const ref = useRef<HTMLDialogElement>(null);
   /**
    * What had focus before the dialog opened — almost always the trigger.
@@ -84,11 +78,10 @@ function useModalDialog(
     if (open && !dialog.open) {
       trigger.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      if (topLayer) dialog.showModal();
-      else dialog.show();
+      dialog.showModal();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, topLayer]);
+  }, [open]);
 
   useEffect(() => {
     if (open) return;
@@ -115,9 +108,7 @@ function useModalDialog(
     const handleClose = () => onOpenChange(false);
     dialog.addEventListener("close", handleClose);
     return () => dialog.removeEventListener("close", handleClose);
-    // `open` because a dialog kept out of the top layer is only mounted while
-    // open, so each opening is a new element to listen on.
-  }, [onOpenChange, open]);
+  }, [onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -130,44 +121,6 @@ function useModalDialog(
   }, [open]);
 
   return ref;
-}
-
-/**
- * What `showModal()` gives for free, for a dialog kept out of the top layer:
- * the page behind goes inert, and Escape dismisses.
- *
- * Only what is already on `<body>` when the dialog opens goes inert. Whatever a
- * third-party script appends while it is open — reCAPTCHA's picture challenge —
- * stays reachable, and that is the reason to leave the top layer at all.
- */
-function usePageLayerModality(
-  active: boolean,
-  layer: RefObject<HTMLElement | null>,
-  dismiss: ((open: boolean) => void) | null,
-) {
-  useEffect(() => {
-    const root = layer.current;
-    if (!active || !root) return;
-
-    const madeInert: Element[] = [];
-    for (const element of Array.from(document.body.children)) {
-      if (element === root || element.hasAttribute("inert")) continue;
-      element.setAttribute("inert", "");
-      madeInert.push(element);
-    }
-    return () => {
-      for (const element of madeInert) element.removeAttribute("inert");
-    };
-  }, [active, layer]);
-
-  useEffect(() => {
-    if (!active || !dismiss) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") dismiss(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [active, dismiss]);
 }
 
 function CloseButton({ onClick }: { onClick: () => void }) {
@@ -208,32 +161,15 @@ export function Dialog({
   footer,
   dismissable = true,
   className,
-  topLayer = true,
-}: BaseProps & {
-  /**
-   * `false` keeps the dialog out of the browser's top layer: it is portalled to
-   * `<body>` with its own backdrop and opened with `show()`, and the page behind
-   * is made inert by hand.
-   *
-   * For a dialog that hosts a third-party overlay. reCAPTCHA appends its picture
-   * challenge to `<body>`; a top-layer modal paints over it whatever its
-   * z-index, and makes it inert, so the challenge can be neither seen nor
-   * solved and the phone login never sends its code.
-   */
-  topLayer?: boolean;
-}) {
-  const ref = useModalDialog(open, onOpenChange, topLayer);
-  const layer = useRef<HTMLDivElement>(null);
-  const hydrated = useHydrated();
+}: BaseProps) {
+  const ref = useModalDialog(open, onOpenChange);
   const id = useId();
-  usePageLayerModality(open && !topLayer, layer, dismissable ? onOpenChange : null);
 
-  const dialog = (
+  return (
     <dialog
       ref={ref}
       aria-labelledby={`${id}-title`}
       aria-describedby={description ? `${id}-description` : undefined}
-      aria-modal={topLayer ? undefined : true}
       onCancel={(event) => {
         // `cancel` fires on Escape. Preventing it is what makes a dialog
         // non-dismissable.
@@ -276,24 +212,6 @@ export function Dialog({
       </div>
     </dialog>
   );
-
-  if (topLayer) return dialog;
-  if (!hydrated || !open) return null;
-
-  // Below reCAPTCHA's challenge (z-index 2000000000), above the app's own chrome.
-  return createPortal(
-    <div ref={layer} className="fixed inset-0 z-[1000]">
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-navy-900/50 backdrop-blur-sm"
-        onClick={() => {
-          if (dismissable) onOpenChange(false);
-        }}
-      />
-      {dialog}
-    </div>,
-    document.body,
-  );
 }
 
 export function Sheet({
@@ -307,9 +225,11 @@ export function Sheet({
   className,
   fullScreen = false,
   side = "bottom",
-}: BaseProps & { fullScreen?: boolean; side?: SheetSide }) {
+  backdrop = true,
+}: BaseProps & { fullScreen?: boolean; side?: SheetSide; /** false: no dimmed layer behind the sheet. */ backdrop?: boolean }) {
   const ref = useModalDialog(open, onOpenChange);
   const id = useId();
+  const backdropClass = backdrop ? "backdrop:bg-navy-900/40" : "backdrop:bg-transparent";
 
   return (
     <dialog
@@ -324,15 +244,15 @@ export function Sheet({
       }}
       className={cn(
         fullScreen
-          ? "fixed inset-0 m-0 max-h-none h-dvh w-full max-w-none rounded-none border-0 p-0 bg-surface text-text shadow-none z-50 backdrop:bg-navy-900/40"
+          ? `fixed inset-0 m-0 max-h-none h-dvh w-full max-w-none rounded-none border-0 p-0 bg-surface text-text shadow-none z-50 ${backdropClass}`
           : side === "end"
             ? // A record inspector on a wide screen, the familiar sheet on a
               // phone. Written as one string rather than merging a `lg:` override
               // over the bottom-sheet classes because `cn` is `clsx` and does not
               // resolve conflicting utilities — the behaviour would then depend
               // on stylesheet order rather than on this line.
-              "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40 lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:m-0 lg:h-dvh lg:max-h-none lg:w-full lg:max-w-md lg:rounded-none lg:rounded-l-[20px] lg:border-0 lg:border-l lg:border-line/60"
-            : "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40",
+              `fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay ${backdropClass} lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:m-0 lg:h-dvh lg:max-h-none lg:w-full lg:max-w-md lg:rounded-none lg:rounded-l-[20px] lg:border-0 lg:border-l lg:border-line/60`
+            : `fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay ${backdropClass}`,
         className,
       )}
     >

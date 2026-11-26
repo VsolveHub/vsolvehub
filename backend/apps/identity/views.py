@@ -14,7 +14,6 @@ from rest_framework.exceptions import AuthenticationFailed, NotFound, Permission
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.identity.account_deletion import AccountDeletionRefusedError
@@ -27,14 +26,11 @@ from apps.identity.exceptions import (
     NoAccountForRoleApiError,
     OtpThrottled,
     OtpUnavailableApiError,
-)
-from apps.identity.firebase_auth import (
-    StepUpIdentityMismatchError,
-    verify_firebase_login,
-    verify_firebase_step_up,
+    StepUpIdentityMismatchApiError,
 )
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
+from apps.identity.phone import normalize_phone_number
 from apps.identity.serializers import (
     ActiveRoleSerializer,
     AuthenticatedSessionSerializer,
@@ -43,9 +39,6 @@ from apps.identity.serializers import (
     ConsentReceiptSerializer,
     CsrfTokenSerializer,
     CustomerProfileUpdateSerializer,
-    FirebasePrecheckSerializer,
-    FirebaseStepUpSerializer,
-    FirebaseVerifySerializer,
     OtpIssuedSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
@@ -53,7 +46,9 @@ from apps.identity.serializers import (
     PrivacyRequestSerializer,
     RoleSwitchSerializer,
     SessionStateSerializer,
+    StepUpCodeIssuedSerializer,
     StepUpSessionSerializer,
+    StepUpVerifySerializer,
     UserSerializer,
     UserSessionSerializer,
 )
@@ -62,10 +57,10 @@ from apps.identity.services import (
     NoAccountForRoleError,
     OtpRateLimitError,
     OtpVerificationError,
-    check_firebase_precheck,
     create_authenticated_session,
     create_privacy_request,
     issue_login_otp,
+    issue_step_up_otp,
     mark_session_step_up,
     record_consent,
     revoke_current_session,
@@ -73,10 +68,10 @@ from apps.identity.services import (
     switch_active_role,
     update_customer_profile,
     verify_login_otp,
+    verify_step_up_otp,
 )
 from common.errors.serializers import ApiErrorSerializer
 from common.http import client_ip
-from common.observability.context import get_request_id
 from common.schema import OTP_RATE_LIMIT_EXAMPLE, SESSION_EXPIRED_EXAMPLE
 
 
@@ -128,6 +123,7 @@ class OtpRequestView(APIView):
                 request_ip=_request_ip(request),
                 device_identifier=data.get("device_identifier", ""),
                 intended_role=data.get("intended_role", ""),
+                allow_review_code=True,
             )
         except OtpRateLimitError as exc:
             raise OtpThrottled(wait=exc.retry_after_seconds) from exc
@@ -168,126 +164,6 @@ class OtpVerifyView(APIView):
                 code=data["code"],
                 referral_code=data.get("referral_code", ""),
             )
-        except AccountBlockedError as exc:
-            raise AccountBlockedApiError from exc
-        except OtpVerificationError as exc:
-            raise InvalidOtpApiError from exc
-
-        session = create_authenticated_session(
-            request=request._request,
-            user=user,
-            device_identifier=data.get("device_identifier", ""),
-            device_label=data.get("device_label", ""),
-        )
-        response_data = {
-            "user": UserSerializer(user).data,
-            "active_role": session.active_role.code if session.active_role else None,
-            "session_expires_at": session.expires_at,
-        }
-        return Response(response_data)
-
-
-class FirebasePrecheckView(APIView):
-    """Pre-check rate limits and intended role gate before requesting Firebase SMS.
-
-    Note that this is a UX/rate-limit aid and verify is the real gate.
-    """
-
-    authentication_classes = ()
-    permission_classes = (AllowAny,)
-
-    @extend_schema(
-        tags=["Authentication"],
-        request=FirebasePrecheckSerializer,
-        responses={
-            204: OpenApiResponse(
-                description="Precheck allowed; client may proceed with Firebase SMS.",
-            ),
-            400: ApiErrorSerializer,
-            404: OpenApiResponse(
-                response=ApiErrorSerializer,
-                description=(
-                    "Firebase auth is disabled or `intended_role` was set and this number "
-                    "holds no such account."
-                ),
-            ),
-            429: OpenApiResponse(
-                response=ApiErrorSerializer,
-                examples=[OTP_RATE_LIMIT_EXAMPLE],
-            ),
-        },
-    )
-    def post(self, request: Request) -> Response:
-        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
-            raise NotFound("Firebase authentication is disabled.")
-
-        serializer = FirebasePrecheckSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        try:
-            check_firebase_precheck(
-                phone_number=data["phone_number"],
-                request_ip=_request_ip(request),
-                intended_role=data.get("intended_role", ""),
-            )
-        except OtpRateLimitError as exc:
-            raise OtpThrottled(wait=exc.retry_after_seconds) from exc
-        except NoAccountForRoleError as exc:
-            raise NoAccountForRoleApiError from exc
-        except AccountBlockedError as exc:
-            raise AccountBlockedApiError from exc
-        except OtpVerificationError as exc:
-            raise InvalidOtpApiError from exc
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class FirebaseVerifyView(APIView):
-    """Verify Firebase ID token, provision the user session, and issue auth cookies."""
-
-    authentication_classes = ()
-    permission_classes = (AllowAny,)
-    throttle_classes = (ScopedRateThrottle,)
-    throttle_scope = "firebase_verify"
-
-    @extend_schema(
-        tags=["Authentication"],
-        request=FirebaseVerifySerializer,
-        responses={
-            200: AuthenticatedSessionSerializer,
-            400: ApiErrorSerializer,
-            404: OpenApiResponse(
-                response=ApiErrorSerializer,
-                description=(
-                    "Firebase auth is disabled or `intended_role` was set and this number "
-                    "holds no such account."
-                ),
-            ),
-            429: OpenApiResponse(
-                response=ApiErrorSerializer,
-                description="Rate limit exceeded.",
-            ),
-        },
-    )
-    def post(self, request: Request) -> Response:
-        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
-            raise NotFound("Firebase authentication is disabled.")
-
-        serializer = FirebaseVerifySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        try:
-            user = verify_firebase_login(
-                id_token=data["id_token"],
-                intended_role=data.get("intended_role", ""),
-                referral_code=data.get("referral_code", ""),
-                request_ip=_request_ip(request),
-                request_id=get_request_id() or "",
-            )
-        except NoAccountForRoleError as exc:
-            raise NoAccountForRoleApiError from exc
         except AccountBlockedError as exc:
             raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
@@ -486,92 +362,98 @@ class RoleSwitchView(APIView):
         return Response({"active_role": session.active_role.code if session.active_role else None})
 
 
-class FinanceStepUpView(APIView):
-    permission_classes = (IsAuthenticated,)
-
-    @extend_schema(
-        tags=["Authentication"],
-        request=OtpVerifySerializer,
-        responses={200: StepUpSessionSerializer},
-    )
-    def post(self, request: Request) -> Response:
-        serializer = OtpVerifySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        try:
-            verified_user = verify_login_otp(
-                challenge_id=data["challenge_id"],
-                phone_number=data["phone_number"],
-                code=data["code"],
-            )
-        except AccountBlockedError as exc:
-            raise AccountBlockedApiError from exc
-        except OtpVerificationError as exc:
-            raise InvalidOtpApiError from exc
-        user = cast(User, request.user)
-        session_key = request.session.session_key
-        if verified_user.pk != user.pk or not session_key:
-            raise PermissionDenied("Step-up verification did not match the current session.")
-        session = mark_session_step_up(user=user, session_key=session_key)
-        return Response({"stepped_up_at": session.stepped_up_at})
+#: Shown digits at each end of a masked number: the country code, and the last four.
+_MASK_KEEP_START, _MASK_KEEP_END = 3, 4
 
 
-class FirebaseStepUpView(APIView):
-    """`FinanceStepUpView` for deployments whose codes are sent by Firebase (contract 1.77.0).
+def _masked_phone(phone_number: str) -> str:
+    if len(phone_number) <= _MASK_KEEP_START + _MASK_KEEP_END:
+        return "••••"
+    return f"{phone_number[:_MASK_KEEP_START]} •••••• {phone_number[-_MASK_KEEP_END:]}"
 
-    Same outcome, same stamp: the session's `stepped_up_at`, which `HasRecentOperationsStepUp`
-    reads. Only the proof differs — a fresh, single-use Firebase ID token for the signed-in
-    person's own number instead of a Django OTP challenge.
+
+class FinanceStepUpCodeView(APIView):
+    """Sends a step-up code to the signed-in person's own number. Takes no number.
+
+    A step-up re-proves the person already signed in, so the number comes from their account,
+    never from the request.
     """
 
     permission_classes = (IsAuthenticated,)
-    throttle_classes = (ScopedRateThrottle,)
-    throttle_scope = "firebase_verify"
 
     @extend_schema(
         tags=["Authentication"],
-        request=FirebaseStepUpSerializer,
+        request=None,
         responses={
-            200: StepUpSessionSerializer,
-            400: ApiErrorSerializer,
-            403: OpenApiResponse(
+            202: StepUpCodeIssuedSerializer,
+            429: OpenApiResponse(
                 response=ApiErrorSerializer,
-                description="The verified number is not the signed-in person's.",
+                examples=[OTP_RATE_LIMIT_EXAMPLE],
             ),
-            404: OpenApiResponse(
-                response=ApiErrorSerializer,
-                description="Firebase auth is disabled.",
-            ),
-            429: OpenApiResponse(response=ApiErrorSerializer, description="Rate limit exceeded."),
+            503: ApiErrorSerializer,
         },
     )
     def post(self, request: Request) -> Response:
-        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
-            raise NotFound("Firebase authentication is disabled.")
-
-        serializer = FirebaseStepUpSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
         user = cast(User, request.user)
+        try:
+            issued = issue_step_up_otp(user=user, request_ip=_request_ip(request))
+        except OtpRateLimitError as exc:
+            raise OtpThrottled(wait=exc.retry_after_seconds) from exc
+        except OtpDeliveryError as exc:
+            raise OtpUnavailableApiError from exc
+        payload: dict[str, object] = {
+            "challenge_id": issued.challenge.id,
+            "expires_in_seconds": settings.OTP_TTL_SECONDS,
+            "resend_after_seconds": settings.OTP_RESEND_COOLDOWN_SECONDS,
+            "code_length": settings.OTP_CODE_LENGTH,
+            "development_code": issued.development_code,
+            "phone_number_masked": _masked_phone(user.phone_number),
+        }
+        return Response(payload, status=status.HTTP_202_ACCEPTED)
+
+
+class FinanceStepUpView(APIView):
+    """Confirms the step-up code, against the signed-in person's own number only."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=StepUpVerifySerializer,
+        responses={
+            200: StepUpSessionSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`invalid_otp`: the code is wrong, used or expired.",
+            ),
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description=(
+                    "`step_up_identity_mismatch`: a number other than the signed-in person's "
+                    "was sent; or `account_blocked`."
+                ),
+            ),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = StepUpVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = cast(User, request.user)
+        claimed = data.get("phone_number")
+        if claimed and normalize_phone_number(str(claimed)) != normalize_phone_number(
+            user.phone_number
+        ):
+            raise StepUpIdentityMismatchApiError
         session_key = request.session.session_key
         if not session_key:
             raise PermissionDenied("Step-up verification did not match the current session.")
-
         try:
-            verify_firebase_step_up(
-                id_token=serializer.validated_data["id_token"],
-                user=user,
-                request_ip=_request_ip(request),
-                request_id=get_request_id() or "",
-            )
-        except StepUpIdentityMismatchError as exc:
-            raise PermissionDenied(
-                "Step-up verification did not match the current session."
-            ) from exc
+            verify_step_up_otp(user=user, challenge_id=data["challenge_id"], code=data["code"])
         except AccountBlockedError as exc:
             raise AccountBlockedApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
-
         session = mark_session_step_up(user=user, session_key=session_key)
         return Response({"stepped_up_at": session.stepped_up_at})
 

@@ -684,7 +684,7 @@ class Command(BaseCommand):
                 batch_id=paid_batch.id, expected_version=paid_batch.version, actor=ops_primary
             )
             paid_batch = start_paying_batch(
-                batch_id=paid_batch.id, expected_version=paid_batch.version
+                batch_id=paid_batch.id, expected_version=paid_batch.version, actor=ops_primary
             )
             for reserved in paid_batch.items.all():
                 submitted = submit_payout_item(item_id=reserved.id)

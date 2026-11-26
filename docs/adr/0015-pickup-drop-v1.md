@@ -24,7 +24,7 @@ See `docs/parcel/README.md` §2 (D1–D24). In short:
 - The pickup code is the Rides start code. The delivery PIN is an HMAC like it, never stored and
   never logged, and exists only when PIN confirmation is on.
 - The return leg is priced by the same fare engine, with the same rate card version.
-- Contract `1.112.0`; the API is `docs/parcel/README.md` §4.2.
+- Contract `1.119.0`; the API is `docs/parcel/README.md` §4.2.
 
 ## Consequences
 

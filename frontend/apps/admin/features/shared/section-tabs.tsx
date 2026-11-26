@@ -27,10 +27,13 @@ export function SectionTabs({
   title,
   description,
   tabs,
+  lead,
 }: {
   title: string;
   description: string;
   tabs: SectionTab[];
+  /** Above the tabs, shared by all of them: a summary of what needs attention, say. */
+  lead?: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -50,6 +53,7 @@ export function SectionTabs({
         <h1 className="text-2xl font-bold text-navy-900">{title}</h1>
         <p className="mt-1 text-sm text-text-secondary">{description}</p>
       </header>
+      {lead}
       <div role="tablist" aria-label={title} className="flex flex-wrap gap-1 border-b border-line">
         {tabs.map((entry) => {
           const on = entry.id === current;

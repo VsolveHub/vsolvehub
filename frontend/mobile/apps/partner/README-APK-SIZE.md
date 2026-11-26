@@ -150,9 +150,9 @@ Look into each one and propose a fix.
    `extra` in the app config are replaced by the next `eas update`, so they can't be used for
    this. `Updates.channel` is built into the APK and survives updates. This needs a small
    backend change too.
-3. **Services locked to a signing key.** The Google Maps key and Firebase phone login check
-   the app's signing fingerprint (SHA-1). The upload key's fingerprint must be added, or the
-   map is blank and login may fail on website installs.
+3. **Services locked to a signing key.** The Google Maps key checks the app's signing
+   fingerprint (SHA-1). The upload key's fingerprint must be added, or the map is blank on
+   website installs.
 4. **App Links are broken today.** In
    [assetlinks.json](../../../apps/partner/public/.well-known/assetlinks.json) the fingerprint
    is 30 bytes long; a real SHA-256 is 32. It needs the real fingerprints, for Play and for
@@ -228,7 +228,7 @@ expo.dev, under the `vsolve-partner` project.
    assetlinks fix.
 6. **Test on real phones**, at least one cheap phone and one 32-bit phone if we have one:
    - install from the APK, and install over an older website APK (the login must stay);
-   - phone number login (Firebase);
+   - phone number login (MSG91 code);
    - push notification sound with the app closed, and the looping offer ringtone;
    - the map on the job screen;
    - Razorpay payment screen;
@@ -245,7 +245,7 @@ expo.dev, under the `vsolve-partner` project.
 - [ ] The Play Store build is unchanged, or the owner approved each change.
 - [ ] Every item in the step 6 test list passes on a real phone.
 - [ ] Website installs see the website, not Play, when an update is required.
-- [ ] `assetlinks.json`, the Maps key and Firebase have the right fingerprints.
+- [ ] `assetlinks.json` and the Maps key have the right fingerprints.
 - [ ] APKs are on R2 with versioned names, correct headers and a SHA-256 checksum.
 - [ ] The partner website has a download page with simple install steps.
 - [ ] A short note in this folder on how to release the next version (commands, upload, checksum).

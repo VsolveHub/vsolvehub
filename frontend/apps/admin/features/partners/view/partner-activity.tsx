@@ -7,6 +7,7 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { BOOKING_KIND_LABEL, bookingHref } from "@/features/customers/queries";
+import { partnerActivityKey } from "@/features/partners/queries";
 import { getApiClient } from "@/lib/api/browser";
 
 type Activity = Schemas["OperationsPartnerActivity"];
@@ -15,7 +16,7 @@ const WHEN = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "
 
 export function usePartnerActivity(partnerId: string) {
   return useQuery({
-    queryKey: ["ops-partner-activity", partnerId],
+    queryKey: partnerActivityKey(partnerId),
     queryFn: (): Promise<Activity> =>
       request(() =>
         getApiClient().GET("/api/v1/operations/partners/{partner_id}/activity/", {

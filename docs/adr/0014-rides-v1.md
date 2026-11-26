@@ -142,7 +142,9 @@ the Partner app Rides workspace and the Operations console are the agreed design
     whole branch; later Rides endpoints join the 1.99.0 changelog entry. On 22 November `main` was
     merged in after it had taken 1.99.0 to 1.110.0, so the Rides entry became **1.111.0**, and this
     record became ADR 0014 (the AI booking assistant had merged as 0013) and the proposal became
-    **0031** (`main` had merged `0030-partner-area-requests.md`).
+    **0031** (`main` had merged `0030-partner-area-requests.md`). On 26 November `main` was merged in
+    again after it had taken 1.111.0 to 1.117.0, so Rides became **1.118.0** and Pick up & Drop
+    **1.119.0**.
 
 ### Decided while building pricing, supply, dispatch and the revision 2 rework
 

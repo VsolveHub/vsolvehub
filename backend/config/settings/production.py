@@ -8,6 +8,7 @@ from config.settings.guards import (
     guard_payout_account_cooling,
     guard_payout_clearing,
     guard_per_host_sessions,
+    guard_review_sign_in,
 )
 
 DEBUG = False
@@ -53,6 +54,7 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
 
 if OTP_PROVIDER == "development" or OTP_DEVELOPMENT_CODE_ENABLED:
     raise ImproperlyConfigured("Development OTP delivery/exposure is forbidden in production.")
+guard_review_sign_in(OTP_REVIEW_PHONE_NUMBER, OTP_REVIEW_CODE, code_length=OTP_CODE_LENGTH)
 if GEOCODING_PROVIDER != "google":
     raise ImproperlyConfigured("GEOCODING_PROVIDER must be google in production.")
 if not GOOGLE_MAPS_SERVER_KEY:
@@ -171,6 +173,15 @@ if PAYOUT_PROVIDER == "cashfree":
         )
     if not CASHFREE_PAYOUT_API_BASE_URL.startswith("https://"):
         raise ImproperlyConfigured("CASHFREE_PAYOUT_API_BASE_URL must use HTTPS.")
+    # Every bank account a Partner adds is checked with the bank first; without these keys
+    # adding one fails, so the deployment refuses to start instead of failing for Partners.
+    if not (CASHFREE_VERIFICATION_CLIENT_ID and CASHFREE_VERIFICATION_CLIENT_SECRET):
+        raise ImproperlyConfigured(
+            "CASHFREE_VERIFICATION_CLIENT_ID and CASHFREE_VERIFICATION_CLIENT_SECRET (Secure ID "
+            "keys) must be set when PAYOUT_PROVIDER is cashfree."
+        )
+    if not CASHFREE_VERIFICATION_API_BASE_URL.startswith("https://"):
+        raise ImproperlyConfigured("CASHFREE_VERIFICATION_API_BASE_URL must use HTTPS.")
 if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER not in ("razorpayx", "cashfree"):
     raise ImproperlyConfigured(
         "PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx or PAYOUT_PROVIDER=cashfree."

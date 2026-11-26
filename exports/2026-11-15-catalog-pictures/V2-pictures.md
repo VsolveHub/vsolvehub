@@ -53,14 +53,14 @@ These are the squares customers tap first, so do them first.
 
 ### Event & Media (8)
 
-- [ ] **Photography** (show a DSLR camera with a lens): `tiles-v2/event-media/photography.jpeg`
-- [ ] **Videography** (show a video camera on a tripod): `tiles-v2/event-media/videography.jpeg`
-- [ ] **Video Editing** (show a laptop with a video timeline on screen): `tiles-v2/event-media/video-editing.jpeg`
-- [ ] **Photo Editing** (show a monitor with a photo being retouched): `tiles-v2/event-media/photo-editing.jpeg`
-- [ ] **Album & Printing** (show an open wedding photo album): `tiles-v2/event-media/album-printing.jpeg`
-- [ ] **DJ & Sound** (show a DJ console with two speakers): `tiles-v2/event-media/dj-sound.jpeg`
-- [ ] **Event Management** (show a clipboard with an event plan, balloons behind): `tiles-v2/event-media/event-management.jpeg`
-- [ ] **Entertainment Services** (show a microphone under a spotlight): `tiles-v2/event-media/entertainment-services.jpeg`
+- [x] **Photography** (show a DSLR camera with a lens): `tiles-v2/event-media/photography.jpeg`
+- [x] **Videography** (show a video camera on a tripod): `tiles-v2/event-media/videography.jpeg`
+- [x] **Video Editing** (show a laptop with a video timeline on screen): `tiles-v2/event-media/video-editing.jpeg`
+- [x] **Photo Editing** (show a monitor with a photo being retouched): `tiles-v2/event-media/photo-editing.jpeg`
+- [x] **Album & Printing** (show an open wedding photo album): `tiles-v2/event-media/album-printing.jpeg`
+- [x] **DJ & Sound** (show a DJ console with two speakers): `tiles-v2/event-media/dj-sound.jpeg`
+- [x] **Event Management** (show a clipboard with an event plan, balloons behind): `tiles-v2/event-media/event-management.jpeg`
+- [x] **Entertainment Services** (show a microphone under a spotlight): `tiles-v2/event-media/entertainment-services.jpeg`
 
 ## Service photos
 
@@ -68,14 +68,14 @@ These are the squares customers tap first, so do them first.
 
 Show one worker doing the job on a real building site.
 
-- [ ] **Mason** (show a mason laying bricks on a building site): `catalog-v2/construction-labour/mason.jpeg`
-- [ ] **Shuttering Carpenter** (show a carpenter fixing wooden shuttering for a column): `catalog-v2/construction-labour/shuttering-carpenter.jpeg`
-- [ ] **Bar Bending (Steel Work)** (show a worker bending and tying steel rods): `catalog-v2/construction-labour/bar-bending-steel-work.jpeg`
-- [ ] **Concrete Labour** (show workers pouring concrete into a slab): `catalog-v2/construction-labour/concrete-labour.jpeg`
-- [ ] **Welding Worker** (show a welder with a mask welding a gate): `catalog-v2/construction-labour/welding-worker.jpeg`
-- [ ] **Fabrication Worker** (show a worker cutting a steel frame): `catalog-v2/construction-labour/fabrication-worker.jpeg`
-- [ ] **Scaffolding Worker** (show workers putting up scaffolding on a building): `catalog-v2/construction-labour/scaffolding-worker.jpeg`
-- [ ] **Road & Civil Worker** (show workers laying paver blocks): `catalog-v2/construction-labour/road-civil-worker.jpeg`
+- [x] **Mason** (show a mason laying bricks on a building site): `catalog-v2/construction-labour/mason.jpeg`
+- [x] **Shuttering Carpenter** (show a carpenter fixing wooden shuttering for a column): `catalog-v2/construction-labour/shuttering-carpenter.jpeg`
+- [x] **Bar Bending (Steel Work)** (show a worker bending and tying steel rods): `catalog-v2/construction-labour/bar-bending-steel-work.jpeg`
+- [x] **Concrete Labour** (show workers pouring concrete into a slab): `catalog-v2/construction-labour/concrete-labour.jpeg`
+- [x] **Welding Worker** (show a welder with a mask welding a gate): `catalog-v2/construction-labour/welding-worker.jpeg`
+- [x] **Fabrication Worker** (show a worker cutting a steel frame): `catalog-v2/construction-labour/fabrication-worker.jpeg`
+- [x] **Scaffolding Worker** (show workers putting up scaffolding on a building): `catalog-v2/construction-labour/scaffolding-worker.jpeg`
+- [x] **Road & Civil Worker** (show workers laying paver blocks): `catalog-v2/construction-labour/road-civil-worker.jpeg`
 
 ### Event & Media › Photography (17)
 

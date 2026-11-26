@@ -15,19 +15,23 @@ from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.commerce.models import Booking
 from apps.foundation.services import enqueue_outbox_event
 from apps.fulfilment.models import WorkOutcome, WorkTask
+from apps.identity.hashing import keyed_hash
 from apps.identity.models import User
 from apps.notifications.models import KillSwitch
 from apps.notifications.services import is_engaged
 from apps.partners.models import PartnerApplication, PartnerProfile
 from apps.payouts.exceptions import (
     LedgerEntryNotPayableApiError,
+    PayoutAccountBankCheckUnavailableApiError,
+    PayoutAccountInUseApiError,
+    PayoutAccountNotValidAtBankApiError,
     PayoutAccountProviderApiError,
     PayoutAccountRejectedApiError,
     PayoutAccountReviewInvalidApiError,
@@ -36,24 +40,31 @@ from apps.payouts.exceptions import (
     PayoutBatchConflictApiError,
     PayoutBatchInvalidApiError,
     SelfApprovalDeniedApiError,
+    SelfPaymentDeniedApiError,
     WithdrawalRefusedApiError,
 )
 from apps.payouts.models import (
+    ONE_LIVE_PARTNER_PER_BANK_ACCOUNT,
     PartnerEarningHold,
     PartnerLedgerEntry,
     PartnerPayoutAccount,
+    PayoutAuditEvent,
     PayoutBatch,
     PayoutBatchItem,
     PayoutItemEntry,
     PayoutWebhookEvent,
 )
 from apps.payouts.providers import (
+    BankAccountCheck,
+    BankAccountVerifier,
     CashfreePayoutProvider,
     PayoutProviderAmbiguousError,
     PayoutProviderError,
     PayoutProviderRejectedError,
     ProviderPayout,
     RazorpayXPayoutProvider,
+    bank_check_required,
+    get_bank_account_verifier,
     get_payout_account_provider,
     get_payout_provider,
 )
@@ -64,6 +75,7 @@ from apps.payouts.selectors import (
     payable_entries,
     with_hold_flags,
 )
+from apps.pricing.tax import pre_gst_paise
 from apps.rental.models import RentalBooking
 
 logger = logging.getLogger(__name__)
@@ -96,6 +108,16 @@ def payout_idempotency_key(*, batch_id: UUID, partner_id: UUID) -> str:
 #: Ledger statuses a batch may take. `PENDING` is excluded on purpose — it is what a
 #: payout-holding case leaves behind.
 RESERVABLE_STATUSES = (PartnerLedgerEntry.Status.AVAILABLE, PartnerLedgerEntry.Status.RELEASED)
+
+
+def visit_work_value_paise(*, gross_paise: int, pricing: dict[str, Any]) -> int:
+    """The GST-inclusive visit amount with its GST taken out: what the work itself is worth.
+
+    Both the Partner's earning and the commission are shares of this, never of the GST, which is
+    owed to the government. The rate is the one frozen into the quote at checkout.
+    """
+
+    return pre_gst_paise(gross_paise, int(pricing["gst_rate_basis_points"]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,11 +163,12 @@ def estimated_booking_earning(booking: Booking) -> BookingEarningEstimate | None
     if unit is None:
         return None
     quote_unit = unit.quote_unit
-    gross_paise = quote_unit.task_subtotal_paise + quote_unit.minimum_visit_adjustment_paise
-    commission_paise = _commission_for(
-        gross_paise=gross_paise,
-        pricing=quote_unit.quote.pricing_policy_snapshot,
+    pricing = quote_unit.quote.pricing_policy_snapshot
+    gross_paise = visit_work_value_paise(
+        gross_paise=quote_unit.task_subtotal_paise + quote_unit.minimum_visit_adjustment_paise,
+        pricing=pricing,
     )
+    commission_paise = _commission_for(gross_paise=gross_paise, pricing=pricing)
     return BookingEarningEstimate(
         gross_paise=gross_paise,
         commission_paise=commission_paise,
@@ -217,11 +240,14 @@ def settle_booking_earning(
     unit = booking.fulfilment_unit
     if unit is None:
         return None
-    gross = settled_gross_paise(booking)
-    if gross <= 0:
+    delivered = settled_gross_paise(booking)
+    if delivered <= 0:
         return None
 
     pricing = unit.quote_unit.quote.pricing_policy_snapshot
+    # Task prices include GST. The Partner earns, and V Solve Hub takes commission on, the work's
+    # value without it; the GST stays with V Solve Hub to pay over.
+    gross = visit_work_value_paise(gross_paise=delivered, pricing=pricing)
     commission = _commission_for(gross_paise=gross, pricing=pricing)
     # A dispute or an open safety case holds the money back until somebody decides. The entry is
     # still written — the Partner earned it — it simply is not yet payable.
@@ -237,6 +263,9 @@ def settle_booking_earning(
         currency=unit.currency,
         calculation_snapshot={
             "booking_status": booking.status,
+            "delivered_including_gst_paise": delivered,
+            "gst_rate_basis_points": int(pricing["gst_rate_basis_points"]),
+            "gst_paise": delivered - gross,
             "settled_gross_paise": gross,
             "commission_basis_points": int(pricing["commission_basis_points"]),
             "commission_floor_paise": int(pricing["commission_floor_paise"]),
@@ -259,10 +288,13 @@ def settle_rental_earning(
     constraint ``payouts_one_earning_per_rental_booking``: a replayed settlement
     returns the existing row. Two concurrent callers cannot both win.
 
-    The owner's share is ``price_paise - platform_fee_paise``, plus any agreed
-    transport less its commission (0% today). The deposit is excluded — it is
-    the customer's refundable security. The platform fee is V Solve Hub's
-    revenue (commission).
+    The owner's share is the whole rent, plus any agreed transport less its
+    commission (0% today). The deposit is excluded — it is the customer's
+    refundable security.
+
+    The platform fee is **not** taken from the owner: the customer paid it on top
+    of the rent (``booking_amount_due``), so it is already V Solve Hub's. Deducting
+    it here as well took it twice — once from each side.
 
     Returns ``None`` for a booking that has not reached ``RETURNED`` or
     ``DISPUTED`` — the partner has not earned the fee yet.
@@ -287,7 +319,9 @@ def settle_rental_earning(
     transport = int(rb.transport_paise)
     transport_fee = int(rb.transport_fee_paise)
     gross = int(rb.price_paise) + transport
-    commission = int(rb.platform_fee_paise) + transport_fee
+    # Only the platform's share of the transport comes off the owner. The rental platform fee
+    # was charged to the customer on top of the rent and never passed through the owner.
+    commission = transport_fee
     net = gross - commission
     if net <= 0:
         return None
@@ -308,6 +342,7 @@ def settle_rental_earning(
             "price_paise": int(rb.price_paise),
             "platform_fee_percent": int(rb.platform_fee_percent),
             "platform_fee_paise": int(rb.platform_fee_paise),
+            "platform_fee_paid_by": "customer",
             "transport_paise": transport,
             "transport_fee_percent": int(rb.transport_fee_percent),
             "transport_fee_paise": transport_fee,
@@ -628,6 +663,119 @@ def _attach_entries(item: PayoutBatchItem, entries: list[PartnerLedgerEntry]) ->
         entry.save(update_fields=("status", "updated_at"))
 
 
+_AuditRole = PayoutAuditEvent.ActorRole
+_AuditType = PayoutAuditEvent.EventType
+
+
+def _audit(
+    batch: PayoutBatch,
+    event_type: str,
+    *,
+    actor: User | None,
+    role: str,
+    approval_basis: str = "",
+    partner_id: UUID | None = None,
+    amount_paise: int | None = None,
+    reason: str = "",
+    details: dict[str, Any] | None = None,
+) -> None:
+    """Append one audit event. Call it inside the transaction that makes the change it records."""
+
+    PayoutAuditEvent.objects.create(
+        batch=batch,
+        event_type=event_type,
+        actor_role=role,
+        actor_id=actor.id if actor is not None else None,
+        approval_basis=approval_basis,
+        partner_id=partner_id,
+        amount_paise=amount_paise,
+        reason=reason[:64],
+        details=details or {},
+    )
+
+
+def _sending_items(batch: PayoutBatch) -> Any:
+    return batch.items.filter(status=PayoutBatchItem.Status.RESERVED)
+
+
+def _refuse_self_payment(batch: PayoutBatch, actor: User) -> None:
+    """Nobody approves or sends money to their own Partner account."""
+
+    if _sending_items(batch).filter(partner__user_id=actor.id).exists():
+        raise SelfPaymentDeniedApiError
+
+
+@dataclass(frozen=True, slots=True)
+class PreviewItem:
+    item_id: UUID
+    partner_id: UUID
+    partner_name: str
+    amount_paise: int
+    account_last4: str
+    ifsc: str
+    #: Why this transfer would not be sent if Pay were pressed now; empty when it would be.
+    skip_reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutBatchPreview:
+    """What pressing Approve or Pay would do right now. Nothing is changed by building it."""
+
+    batch_id: UUID
+    version: int
+    status: str
+    items: list[PreviewItem]
+    send_count: int
+    send_total_paise: int
+    skip_count: int
+    skip_total_paise: int
+    #: The acting user would be approving or sending money to their own Partner account.
+    includes_actor: bool
+
+
+def preview_payout_batch(*, batch_id: UUID, actor: User) -> PayoutBatchPreview:
+    """Run the same last-moment checks Pay runs (`_pre_send_refusal`), without sending anything.
+
+    The answer is true at the moment it is built. Pay checks every transfer again when it is
+    sent, so anything that changes in between is still caught; the batch `version` lets the
+    console refuse a confirm made against a batch that has since changed.
+    """
+
+    batch = PayoutBatch.objects.get(id=batch_id)
+    _refuse_withdrawal_in_run_command(batch)
+    items: list[PreviewItem] = []
+    for item in (
+        _sending_items(batch)
+        .select_related("payout_account", "partner__user")
+        .order_by("partner_id")
+    ):
+        account = item.payout_account
+        items.append(
+            PreviewItem(
+                item_id=item.id,
+                partner_id=item.partner_id,
+                partner_name=item.partner.display_name or item.partner.user.full_name or "",
+                amount_paise=item.amount_paise,
+                account_last4=account.account_last4,
+                ifsc=account.ifsc,
+                skip_reason=_pre_send_refusal(item),
+            )
+        )
+    sending = [row for row in items if not row.skip_reason]
+    skipped = [row for row in items if row.skip_reason]
+    return PayoutBatchPreview(
+        batch_id=batch.id,
+        version=batch.version,
+        status=batch.status,
+        items=items,
+        send_count=len(sending),
+        send_total_paise=sum(row.amount_paise for row in sending),
+        skip_count=len(skipped),
+        skip_total_paise=sum(row.amount_paise for row in skipped),
+        includes_actor=_sending_items(batch).filter(partner__user_id=actor.id).exists(),
+    )
+
+
 @transaction.atomic
 def propose_payout_batch(
     *, reference: str, period_start: Any, period_end: Any, actor: User
@@ -658,6 +806,7 @@ def propose_payout_batch(
     partner_ids = partners_with_payable_earnings(
         now=now, created_from=period_start, created_before=period_end
     )
+    item_count = 0
     for partner in PartnerProfile.objects.filter(id__in=partner_ids).order_by("id"):
         item = _reserve_partner_payout(
             batch=batch,
@@ -668,9 +817,38 @@ def propose_payout_batch(
         )
         if item is not None:
             total += item.amount_paise
+            item_count += 1
+            continue
+        owed = sum(
+            entry.net_paise
+            for entry in payable_entries(
+                partner_id=partner.id, now=now, created_from=period_start, created_before=period_end
+            )
+        )
+        _audit(
+            batch,
+            _AuditType.PARTNER_SKIPPED,
+            actor=actor,
+            role=_AuditRole.OPERATIONS,
+            partner_id=partner.id,
+            amount_paise=owed,
+            reason="no_payable_account" if payable_account(partner) is None else "below_minimum",
+        )
 
     batch.total_paise = total
     batch.save(update_fields=("total_paise", "updated_at"))
+    _audit(
+        batch,
+        _AuditType.RUN_PROPOSED,
+        actor=actor,
+        role=_AuditRole.OPERATIONS,
+        details={
+            "item_count": item_count,
+            "total_paise": total,
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+        },
+    )
     return batch
 
 
@@ -689,10 +867,12 @@ def unpayable_partner_ids(*, period_start: Any, period_end: Any) -> list[UUID]:
 
 @transaction.atomic
 def approve_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) -> PayoutBatch:
-    """Maker-checker: the approver may not be the proposer.
+    """Approve a run: by a second Operations user, or by its proposer after reviewing it.
 
-    Checked here for a typed refusal, and again by `payouts_approver_is_not_the_proposer` in the
-    schema so a future command that forgets cannot succeed either.
+    A one-person Operations team must be able to pay, so the proposer may approve. It is recorded
+    as `SELF` rather than passed off as a second person's approval — the schema refuses that
+    (`payouts_self_approval_is_recorded`) — and logged in `PayoutAuditEvent`. Nobody may approve a
+    run that pays their own Partner account.
     """
 
     batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
@@ -701,13 +881,17 @@ def approve_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) 
     _refuse_withdrawal_in_run_command(batch)
     if batch.status != PayoutBatch.Status.PENDING_APPROVAL:
         raise PayoutBatchInvalidApiError(reason=f"A batch in {batch.status} cannot be approved.")
-    if batch.proposed_by_id == actor.id:
-        raise SelfApprovalDeniedApiError
     if not batch.items.exists():
         raise PayoutBatchInvalidApiError(reason="An empty batch has nothing to approve.")
+    _refuse_self_payment(batch, actor)
 
+    basis = (
+        PayoutBatch.ApprovalBasis.SELF
+        if batch.proposed_by_id == actor.id
+        else PayoutBatch.ApprovalBasis.OPERATIONS
+    )
     batch.status = PayoutBatch.Status.APPROVED
-    batch.approval_basis = PayoutBatch.ApprovalBasis.OPERATIONS
+    batch.approval_basis = basis
     batch.approved_by = actor
     batch.approved_at = timezone.now()
     batch.version += 1
@@ -720,6 +904,14 @@ def approve_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) 
             "version",
             "updated_at",
         )
+    )
+    _audit(
+        batch,
+        _AuditType.RUN_APPROVED,
+        actor=actor,
+        role=_AuditRole.OPERATIONS,
+        approval_basis=basis,
+        details={"item_count": batch.items.count(), "total_paise": batch.total_paise},
     )
     return batch
 
@@ -758,14 +950,25 @@ def cancel_payout_batch(*, batch_id: UUID, expected_version: int, actor: User) -
             reason=f"A batch in {batch.status} can no longer be cancelled."
         )
 
+    released = 0
+    released_count = 0
     for item in batch.items.select_for_update().filter(status=PayoutBatchItem.Status.RESERVED):
         _close_item(item, status=PayoutBatchItem.Status.RELEASED, failure_code="batch_cancelled")
+        released += item.amount_paise
+        released_count += 1
 
     batch.status = PayoutBatch.Status.CANCELLED
     batch.cancelled_by = actor
     batch.cancelled_at = timezone.now()
     batch.version += 1
     batch.save(update_fields=("status", "cancelled_by", "cancelled_at", "version", "updated_at"))
+    _audit(
+        batch,
+        _AuditType.RUN_CANCELLED,
+        actor=actor,
+        role=_AuditRole.OPERATIONS,
+        details={"released_count": released_count, "released_paise": released},
+    )
     return batch
 
 
@@ -828,6 +1031,10 @@ def partner_balance_paise(partner: PartnerProfile) -> dict[str, int]:
     }
 
 
+#: An account money can go to, or will once Operations verifies it.
+_LIVE_ACCOUNT_STATUSES = (PartnerPayoutAccount.Status.PENDING, PartnerPayoutAccount.Status.VERIFIED)
+
+
 @transaction.atomic
 def register_payout_account(
     *,
@@ -838,28 +1045,79 @@ def register_payout_account(
     actor: User | None = None,
     provider_contact_id: str = "",
     provider_fund_account_id: str = "",
+    bank_check: BankAccountCheck | None = None,
+    bank_check_provider: str = "",
+    account_fingerprint: str = "",
 ) -> PartnerPayoutAccount:
     """Replace a Partner's account, starting the cooling clock.
 
     The previous account is marked `REPLACED` rather than deleted: a payout that already went
     through it must stay explicable.
+
+    Raises `PayoutAccountInUseApiError` when another Partner's live account has the same
+    `account_fingerprint`, and then nothing is replaced either.
     """
 
     PartnerPayoutAccount.objects.select_for_update().filter(
         partner_id=partner_id,
-        status__in=(PartnerPayoutAccount.Status.PENDING, PartnerPayoutAccount.Status.VERIFIED),
+        status__in=_LIVE_ACCOUNT_STATUSES,
     ).update(status=PartnerPayoutAccount.Status.REPLACED)
 
-    return PartnerPayoutAccount.objects.create(
-        partner_id=partner_id,
-        account_last4=account_last4,
-        ifsc=ifsc,
-        holder_name=holder_name,
-        provider_contact_id=provider_contact_id,
-        provider_fund_account_id=provider_fund_account_id,
-        effective_from=timezone.now() + timedelta(hours=settings.PAYOUT_ACCOUNT_COOLING_HOURS),
-        created_by=actor,
+    try:
+        # A savepoint, so a refused insert can be turned into the API error below.
+        with transaction.atomic():
+            return PartnerPayoutAccount.objects.create(
+                partner_id=partner_id,
+                account_last4=account_last4,
+                ifsc=ifsc,
+                account_fingerprint=account_fingerprint,
+                holder_name=holder_name,
+                provider_contact_id=provider_contact_id,
+                provider_fund_account_id=provider_fund_account_id,
+                effective_from=timezone.now()
+                + timedelta(hours=settings.PAYOUT_ACCOUNT_COOLING_HOURS),
+                created_by=actor,
+                **_bank_check_fields(bank_check, bank_check_provider),
+            )
+    except IntegrityError as exc:
+        # Two Partners who submit one account at the same moment both pass the check in
+        # `submit_partner_payout_account`; the database lets only one of them hold it.
+        if ONE_LIVE_PARTNER_PER_BANK_ACCOUNT in str(exc):
+            raise PayoutAccountInUseApiError() from exc
+        raise
+
+
+def bank_account_fingerprint(*, ifsc: str, account_number: str) -> str:
+    """A keyed hash that names one bank account without storing its number.
+
+    The provider's ids cannot do this job: RazorpayX makes a new fund account for every contact,
+    so one bank account has a different id for each Partner who adds it. Without the server's
+    secret key the hash cannot be turned back into the number. Rotating `SECRET_KEY` changes
+    every fingerprint, so accounts added before a rotation are only matched by provider id.
+    """
+
+    return keyed_hash(f"payout-account:{ifsc.strip().upper()}:{account_number.strip()}")
+
+
+def _held_by_another_partner(*, partner_id: UUID, **match: str) -> bool:
+    return (
+        PartnerPayoutAccount.objects.filter(status__in=_LIVE_ACCOUNT_STATUSES, **match)
+        .exclude(partner_id=partner_id)
+        .exists()
     )
+
+
+def _bank_check_fields(check: BankAccountCheck | None, provider: str) -> dict[str, object]:
+    if check is None:
+        return {}
+    return {
+        "bank_check_provider": provider,
+        "bank_checked_at": timezone.now(),
+        "bank_check_reference": check.reference,
+        "name_at_bank": check.name_at_bank,
+        "name_match_result": check.name_match_result,
+        "name_match_score": check.name_match_score,
+    }
 
 
 def submit_partner_payout_account(
@@ -875,7 +1133,7 @@ def submit_partner_payout_account(
     The provider is called before anything is written, and outside a transaction: a slow
     provider must not hold row locks, and a refused or unreachable provider leaves nothing
     behind. The full account number goes to the provider and nowhere else — only its last four
-    digits and the provider's ids are stored.
+    digits, a keyed hash of it and the provider's ids are stored.
 
     Replacing a verified account makes the Partner unpayable until the new one is verified and
     out of its cooling period. That is the takeover control working, not a side effect.
@@ -883,8 +1141,17 @@ def submit_partner_payout_account(
 
     try:
         provider = get_payout_account_provider()
+        verifier = get_bank_account_verifier()
     except PayoutProviderError as exc:
         raise PayoutAccountsUnavailableApiError() from exc
+    fingerprint = bank_account_fingerprint(ifsc=ifsc, account_number=account_number)
+    # Refused before the bank is asked or the provider is told about an account that another
+    # Partner already holds: neither call should happen for it.
+    if _held_by_another_partner(partner_id=partner.id, account_fingerprint=fingerprint):
+        raise PayoutAccountInUseApiError()
+    check = _check_with_bank(
+        verifier, account_number=account_number, ifsc=ifsc, holder_name=holder_name
+    )
     try:
         contact_id = provider.create_contact(name=holder_name, reference_id=str(partner.id))
         fund_account_id = provider.create_fund_account(
@@ -897,6 +1164,10 @@ def submit_partner_payout_account(
         raise PayoutAccountRejectedApiError() from exc
     except PayoutProviderAmbiguousError as exc:
         raise PayoutAccountProviderApiError() from exc
+    # Accounts added before fingerprints existed have none, so they are matched by the provider's
+    # id instead: Cashfree hands back the existing beneficiary for an account it already holds.
+    if _held_by_another_partner(partner_id=partner.id, provider_fund_account_id=fund_account_id):
+        raise PayoutAccountInUseApiError()
 
     return register_payout_account(
         partner_id=partner.id,
@@ -906,7 +1177,36 @@ def submit_partner_payout_account(
         actor=actor,
         provider_contact_id=contact_id,
         provider_fund_account_id=fund_account_id,
+        bank_check=check,
+        bank_check_provider=verifier.code if verifier is not None else "",
+        account_fingerprint=fingerprint,
     )
+
+
+def _check_with_bank(
+    verifier: BankAccountVerifier | None, *, account_number: str, ifsc: str, holder_name: str
+) -> BankAccountCheck | None:
+    """Ask the bank before the account is registered anywhere. None where no check exists.
+
+    An account the bank says is invalid, blocked, NRE or flagged is refused here, so it never
+    reaches the payout provider or the Operations queue. Nothing is saved either way.
+    """
+
+    if verifier is None:
+        return None
+    try:
+        check = verifier.verify_bank_account(
+            account_number=account_number, ifsc=ifsc, holder_name=holder_name
+        )
+    except PayoutProviderRejectedError as exc:
+        raise PayoutAccountRejectedApiError() from exc
+    except PayoutProviderAmbiguousError as exc:
+        raise PayoutAccountBankCheckUnavailableApiError() from exc
+    except PayoutProviderError as exc:
+        raise PayoutAccountsUnavailableApiError() from exc
+    if not check.is_valid:
+        raise PayoutAccountNotValidAtBankApiError(status_code=check.status_code)
+    return check
 
 
 def _pending_account_for_review(*, account_id: UUID, actor: User) -> PartnerPayoutAccount:
@@ -932,6 +1232,11 @@ def verify_payout_account(*, account_id: UUID, actor: User) -> PartnerPayoutAcco
     if not account.provider_fund_account_id:
         raise PayoutAccountReviewInvalidApiError(
             reason="This account was never registered with the payout provider. "
+            "Ask the Partner to enter their bank details again."
+        )
+    if account.bank_checked_at is None and bank_check_required():
+        raise PayoutAccountReviewInvalidApiError(
+            reason="This account was never checked with the bank. "
             "Ask the Partner to enter their bank details again."
         )
     account.status = PartnerPayoutAccount.Status.VERIFIED
@@ -1077,6 +1382,15 @@ def _claim_for_sending(item_id: UUID) -> _ClaimedPayout | None:
     refusal = _pre_send_refusal(item)
     if refusal:
         _close_item(item, status=PayoutBatchItem.Status.RELEASED, failure_code=refusal)
+        _audit(
+            item.batch,
+            _AuditType.PARTNER_SKIPPED,
+            actor=None,
+            role=_AuditRole.SYSTEM,
+            partner_id=item.partner_id,
+            amount_paise=item.amount_paise,
+            reason=refusal,
+        )
         _settle_batch_if_complete(item.batch_id)
         return None
     item.status = PayoutBatchItem.Status.SUBMITTING
@@ -1590,8 +1904,11 @@ def _settle_batch_if_complete(batch_id: UUID) -> None:
 
 
 @transaction.atomic
-def start_paying_batch(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
-    """Move an approved batch into payment. Submission itself is per item and asynchronous."""
+def start_paying_batch(*, batch_id: UUID, expected_version: int, actor: User) -> PayoutBatch:
+    """Move an approved batch into payment. Submission itself is per item and asynchronous.
+
+    The payer is recorded (`RUN_PAY_STARTED`), and may not be paying their own Partner account.
+    """
 
     batch = PayoutBatch.objects.select_for_update().get(id=batch_id)
     if batch.version != expected_version:
@@ -1601,9 +1918,19 @@ def start_paying_batch(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
         raise PayoutBatchInvalidApiError(
             reason=f"A batch in {batch.status} has not been approved for payment."
         )
+    _refuse_self_payment(batch, actor)
+    sending = list(_sending_items(batch).values_list("amount_paise", flat=True))
     batch.status = PayoutBatch.Status.PAYING
     batch.version += 1
     batch.save(update_fields=("status", "version", "updated_at"))
+    _audit(
+        batch,
+        _AuditType.RUN_PAY_STARTED,
+        actor=actor,
+        role=_AuditRole.OPERATIONS,
+        approval_basis=batch.approval_basis,
+        details={"item_count": len(sending), "total_paise": sum(sending)},
+    )
     _request_submissions(batch)
     return batch
 
@@ -1975,6 +2302,19 @@ def request_withdrawal(*, partner: PartnerProfile, actor: User) -> PayoutBatchIt
         idempotency_key=payout_idempotency_key(batch_id=batch.id, partner_id=partner.id),
     )
     _attach_entries(item, lines)
+    _audit(
+        batch,
+        _AuditType.WITHDRAWAL_REQUESTED,
+        actor=actor,
+        role=_AuditRole.PARTNER,
+        approval_basis=batch.approval_basis,
+        partner_id=partner.id,
+        amount_paise=quote.send_paise,
+        details={
+            "fee_paise": quote.fee_paise,
+            "review_reasons": list(quote.review_reasons),
+        },
+    )
     if not needs_review:
         _request_submissions(batch)
     return item
@@ -2007,6 +2347,7 @@ def approve_withdrawal(*, batch_id: UUID, expected_version: int, actor: User) ->
     batch = _withdrawal_awaiting_review(batch_id=batch_id, expected_version=expected_version)
     if batch.proposed_by_id == actor.id:
         raise SelfApprovalDeniedApiError
+    _refuse_self_payment(batch, actor)
     batch.status = PayoutBatch.Status.PAYING
     batch.approval_basis = PayoutBatch.ApprovalBasis.OPERATIONS
     batch.approved_by = actor
@@ -2021,6 +2362,14 @@ def approve_withdrawal(*, batch_id: UUID, expected_version: int, actor: User) ->
             "version",
             "updated_at",
         )
+    )
+    _audit(
+        batch,
+        _AuditType.WITHDRAWAL_APPROVED,
+        actor=actor,
+        role=_AuditRole.OPERATIONS,
+        approval_basis=PayoutBatch.ApprovalBasis.OPERATIONS,
+        amount_paise=batch.total_paise,
     )
     _request_submissions(batch)
     return batch
@@ -2041,6 +2390,15 @@ def decline_withdrawal(
     if len(note) < DECLINE_REASON_MIN_LENGTH:
         raise PayoutBatchInvalidApiError(reason="Tell the Partner why, in a few words.")
     batch = _withdrawal_awaiting_review(batch_id=batch_id, expected_version=expected_version)
+    _audit(
+        batch,
+        _AuditType.WITHDRAWAL_DECLINED,
+        actor=actor,
+        role=_AuditRole.OPERATIONS,
+        amount_paise=batch.total_paise,
+        reason="declined_by_operations",
+        details={"note": note[:240]},
+    )
     for item in batch.items.select_for_update().filter(status=PayoutBatchItem.Status.RESERVED):
         _close_item(
             item, status=PayoutBatchItem.Status.RELEASED, failure_code="declined_by_operations"

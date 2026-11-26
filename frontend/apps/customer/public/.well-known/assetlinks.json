@@ -5,7 +5,10 @@
       "namespace": "android_app",
       "package_name": "com.vsolvehub.customer",
       "sha256_cert_fingerprints": [
-        "14:6D:E9:7F:48:9A:2F:5D:8E:24:9C:1D:6E:7F:5A:8B:3C:9E:2D:4F:6A:8B:1C:3E:5F:7A:9B:2C:4D:6E"
+        "B2:37:54:22:40:27:E6:1A:46:9F:34:AA:FD:6A:F0:42:0D:7D:14:3F:73:FA:F6:83:2F:CF:BA:3B:C8:AB:58:DD",
+        "AC:8F:BB:80:A7:6C:72:68:00:B1:D9:4A:41:68:83:5F:CC:FD:15:66:6F:7B:98:12:50:EF:EF:72:4B:DF:D8:58",
+        "76:DD:8D:C3:8A:6F:6D:B4:38:16:65:DF:A4:66:FA:4E:18:69:3F:03:AF:A0:2C:67:C8:5F:3D:F5:9D:5B:F6:13",
+        "A2:BB:06:5F:C0:BB:7F:FF:08:84:09:98:C0:B4:B3:4D:FB:C1:A4:CE:F8:57:AA:F8:E4:BD:17:E4:5B:91:B8:18"
       ]
     }
   }

@@ -20,10 +20,7 @@ SIGN_IN_PATHS = frozenset(
     {
         "/api/v1/auth/otp/request/",
         "/api/v1/auth/otp/verify/",
-        "/api/v1/auth/firebase/precheck/",
-        "/api/v1/auth/firebase/verify/",
         "/api/v1/auth/mobile/otp/verify/",
-        "/api/v1/auth/mobile/firebase/verify/",
     },
 )
 

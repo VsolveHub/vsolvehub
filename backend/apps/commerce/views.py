@@ -388,9 +388,14 @@ class OperationsRefundListView(APIView):
         },
     )
     def get(self, request: Request) -> Response:
-        queryset = Refund.objects.prefetch_related(
-            "allocations__payment_allocation__fulfilment_unit"
-        ).order_by("-created_at", "id")
+        queryset = (
+            Refund.objects.select_related("payment_attempt", "requested_by")
+            .prefetch_related(
+                "allocations__payment_allocation__fulfilment_unit",
+                "requested_by__userrole_set__role",
+            )
+            .order_by("-created_at", "id")
+        )
 
         paginator = OperationsRefundCursorPagination()
         page = paginator.paginate_queryset(queryset, request, self)

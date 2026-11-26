@@ -1,6 +1,6 @@
 "use client";
 
-import { queryKeys, usePhoneAuthFlow } from "@vsolve/query";
+import { queryKeys, useOtpFlow } from "@vsolve/query";
 import { Button, ErrorState, OtpForm, Spinner } from "@vsolve/ui";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -36,7 +36,7 @@ export function LoginStage({ summary }: LoginStageProps) {
   const session = useCustomerSession();
   const queryClient = useQueryClient();
 
-  const flow = usePhoneAuthFlow(getApiClient(), {
+  const flow = useOtpFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     // The verify mutation writes the session into the cache and tells sibling
     // tabs; this returns the customer to what they were doing.

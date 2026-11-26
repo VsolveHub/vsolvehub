@@ -33,10 +33,15 @@ from typing import Any
 
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Now
 
 from apps.commerce.models import Booking
 from apps.partners.models import PartnerProfile
 from apps.rental.models import RentalBooking
+
+#: One bank account is live for at most one Partner. `apps.payouts.services` turns a violation
+#: into `payout_account_in_use`, so the name is shared rather than repeated.
+ONE_LIVE_PARTNER_PER_BANK_ACCOUNT = "payouts_one_live_partner_per_bank_account"
 
 
 class PartnerPayoutAccount(models.Model):
@@ -49,7 +54,9 @@ class PartnerPayoutAccount(models.Model):
     payout; it applies to the batch flow too, at no cost.
 
     Only the last four digits are stored in a readable field. The full number lives with the
-    payout provider, which is the only party that needs it.
+    payout provider, which is the only party that needs it. `account_fingerprint` is a keyed
+    hash of it, kept so the same bank account cannot be live for two Partners whatever ids the
+    provider hands out.
     """
 
     class Status(models.TextChoices):
@@ -68,6 +75,9 @@ class PartnerPayoutAccount(models.Model):
     provider_fund_account_id = models.CharField(max_length=128, blank=True)
     account_last4 = models.CharField(max_length=4)
     ifsc = models.CharField(max_length=16, blank=True)
+    #: `services.bank_account_fingerprint`: names the bank account without storing its number.
+    #: Empty on accounts added before it existed, which the unique constraint leaves out.
+    account_fingerprint = models.CharField(max_length=64, blank=True)
     holder_name = models.CharField(max_length=140)
     verified_at = models.DateTimeField(null=True, blank=True)
     #: The Operations user who verified or rejected it. Never the person who registered it.
@@ -82,6 +92,16 @@ class PartnerPayoutAccount(models.Model):
     rejection_reason = models.CharField(max_length=240, blank=True)
     #: Not payable before this instant, even once verified.
     effective_from = models.DateTimeField()
+    #: What the bank said when the account was added (`apps.payouts.providers.BankAccountCheck`).
+    #: Empty and null when no check ran: RazorpayX, or an account added before checks existed.
+    #: Only valid accounts are ever stored, so there is no validity flag to read.
+    bank_check_provider = models.CharField(max_length=16, blank=True)
+    bank_checked_at = models.DateTimeField(null=True, blank=True)
+    bank_check_reference = models.CharField(max_length=64, blank=True)
+    #: The holder's name as the bank holds it: the one fact a reviewer cannot get from the Partner.
+    name_at_bank = models.CharField(max_length=140, blank=True)
+    name_match_result = models.CharField(max_length=32, blank=True)
+    name_match_score = models.CharField(max_length=8, blank=True)
     #: Who registered it. An account change is the event a takeover investigation starts from.
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -100,6 +120,14 @@ class PartnerPayoutAccount(models.Model):
                 fields=("partner",),
                 condition=models.Q(status__in=("PENDING", "VERIFIED")),
                 name="payouts_one_live_account_per_partner",
+            ),
+            # The service refuses an account another Partner holds before it calls anyone; this
+            # is what stops two Partners who submit the same account at the same moment.
+            models.UniqueConstraint(
+                fields=("account_fingerprint",),
+                condition=models.Q(status__in=("PENDING", "VERIFIED"))
+                & ~models.Q(account_fingerprint=""),
+                name=ONE_LIVE_PARTNER_PER_BANK_ACCOUNT,
             ),
         ]
 
@@ -343,10 +371,13 @@ class PartnerEarningHold(models.Model):
 class PayoutBatch(models.Model):
     """A reviewed set of reservations, paid once.
 
-    Two kinds share every rule below. A `RUN` is proposed by one Operations user and approved by
-    another. A `WITHDRAWAL` is one Partner taking their own available balance: proposed by the
-    Partner, approved by policy when it passes the withdrawal rules (`approval_basis=POLICY`), or
-    by Operations when it does not — the first payout to a new bank account always goes to them.
+    Two kinds share every rule below. A `RUN` is proposed by an Operations user and approved
+    either by another (`OPERATIONS`) or by the same person after reviewing exactly what will be
+    sent (`SELF`), so a one-person Operations team can pay. Who did what is kept, append-only, in
+    `PayoutAuditEvent`. A `WITHDRAWAL` is one Partner taking their own available balance:
+    proposed by the Partner, approved by policy when it passes the withdrawal rules
+    (`approval_basis=POLICY`), or by Operations when it does not — the first payout to a new bank
+    account always goes to them.
     Both reserve the same ledger entries the same way and are sent by the same command, so there
     is one money path rather than two.
     """
@@ -358,6 +389,8 @@ class PayoutBatch(models.Model):
     class ApprovalBasis(models.TextChoices):
         #: Maker-checker: a second Operations user approved it.
         OPERATIONS = "OPERATIONS", "Approved by Operations"
+        #: The Operations user who proposed the run approved it too, after its review.
+        SELF = "SELF", "Approved by the proposer"
         #: A withdrawal that passed every rule, approved without a person.
         POLICY = "POLICY", "Approved by withdrawal policy"
 
@@ -414,13 +447,18 @@ class PayoutBatch(models.Model):
         ordering = ("-created_at", "id")
         constraints = [
             models.CheckConstraint(
-                # Maker-checker, in the schema. A command that forgot to check would still be
-                # refused by PostgreSQL, which is the point of putting it here.
+                # A proposer approving their own batch is allowed only for a run, and only when it
+                # is recorded as such: a self-approval can never pass for a second person's.
                 condition=(
                     models.Q(approved_by__isnull=True)
                     | ~models.Q(approved_by=models.F("proposed_by"))
+                    | models.Q(kind="RUN", approval_basis="SELF")
                 ),
-                name="payouts_approver_is_not_the_proposer",
+                name="payouts_self_approval_is_recorded",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(approval_basis="SELF") | models.Q(kind="RUN"),
+                name="payouts_self_approval_only_for_runs",
             ),
             models.CheckConstraint(
                 condition=models.Q(period_end__gt=models.F("period_start")),
@@ -601,3 +639,63 @@ class PayoutWebhookEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.event_type}:{self.provider_event_id}"
+
+
+class PayoutAuditEvent(models.Model):
+    """One thing that happened to a payout run or withdrawal, written once and never changed.
+
+    Append-only twice over: `save` refuses to change a stored row and `delete` refuses, and a
+    PostgreSQL trigger (migration 0006) rejects UPDATE and DELETE from anywhere, the shell and raw
+    SQL included. TRUNCATE stays allowed, because the test database is emptied that way.
+
+    People are stored by id and role only, with no foreign key and no name, phone or bank number:
+    an account deleted later leaves its history intact, and the history holds no personal data
+    that erasure would have to remove. Each event is written in the same transaction as the
+    change it records, so neither exists without the other. `occurred_at` is the database's own
+    clock.
+    """
+
+    class EventType(models.TextChoices):
+        RUN_PROPOSED = "RUN_PROPOSED", "Run proposed"
+        RUN_APPROVED = "RUN_APPROVED", "Run approved"
+        RUN_PAY_STARTED = "RUN_PAY_STARTED", "Payment started"
+        RUN_CANCELLED = "RUN_CANCELLED", "Run cancelled"
+        PARTNER_SKIPPED = "PARTNER_SKIPPED", "Partner skipped"
+        WITHDRAWAL_REQUESTED = "WITHDRAWAL_REQUESTED", "Withdrawal requested"
+        WITHDRAWAL_APPROVED = "WITHDRAWAL_APPROVED", "Withdrawal approved"
+        WITHDRAWAL_DECLINED = "WITHDRAWAL_DECLINED", "Withdrawal declined"
+
+    class ActorRole(models.TextChoices):
+        OPERATIONS = "OPERATIONS", "Operations"
+        PARTNER = "PARTNER", "Partner"
+        SYSTEM = "SYSTEM", "System"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    batch = models.ForeignKey(PayoutBatch, on_delete=models.PROTECT, related_name="audit_events")
+    event_type = models.CharField(max_length=24, choices=EventType.choices)
+    actor_role = models.CharField(max_length=12, choices=ActorRole.choices)
+    #: The user who acted; null when the system did (a transfer skipped at send time).
+    actor_id = models.UUIDField(null=True, blank=True)
+    approval_basis = models.CharField(max_length=12, blank=True)
+    #: For `PARTNER_SKIPPED`: who was left out, how much, and why.
+    partner_id = models.UUIDField(null=True, blank=True)
+    amount_paise = models.BigIntegerField(null=True, blank=True)
+    reason = models.CharField(max_length=64, blank=True)
+    #: Counts and totals at the moment of the event (`item_count`, `total_paise`, …).
+    details = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(db_default=Now(), editable=False)
+
+    class Meta:
+        ordering = ("occurred_at", "id")
+        indexes = [models.Index(fields=("batch", "occurred_at"), name="payouts_audit_batch_idx")]
+
+    def __str__(self) -> str:
+        return f"{self.batch_id}:{self.event_type}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValueError("Payout audit events are append-only and cannot be changed.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:  # noqa: ARG002
+        raise ValueError("Payout audit events are append-only and cannot be deleted.")

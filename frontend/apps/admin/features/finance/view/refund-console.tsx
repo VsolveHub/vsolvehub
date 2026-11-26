@@ -7,6 +7,12 @@ import type { Schemas } from "@vsolve/api-client";
 import { maskId } from "@/features/shared/identifiers";
 import {
   MAX_UNITS,
+  STARTED_BY_LABEL,
+  STARTED_BY_MEANING,
+  STARTED_BY_TONE,
+  paidForLabel,
+  reasonLabel,
+  type RefundStartedBy,
   RECONCILIATION_LABEL,
   RECONCILIATION_TONE,
   STATUS_LABEL,
@@ -163,6 +169,11 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
   const refundsQuery = useOperationsRefunds();
 
   const allRefunds = refundsQuery.data?.pages.flatMap((page) => page.results) ?? [];
+  const [startedBy, setStartedBy] = useState<RefundStartedBy | "ALL">("ALL");
+  const [issuing, setIssuing] = useState(false);
+  const shownRefunds =
+    startedBy === "ALL" ? allRefunds : allRefunds.filter((r) => r.started_by === startedBy);
+  const countBy = (who: RefundStartedBy) => allRefunds.filter((r) => r.started_by === who).length;
 
   const errors = validateRefund(draft);
   const units = parseUnitIds(draft.unitIds);
@@ -187,67 +198,210 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
   return (
     <div>
       <Card className="p-5">
-        <h2 className="text-base font-bold text-text">Refund several visits on one Order</h2>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          To refund or cancel one visit, open it from Home services › Bookings — no ids needed.
-          This form is for refunding several visits of one Order together. Refunds are per
-          visit: Django works out how much is left on each one, and cannot refund more than was
-          paid.
-        </p>
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Order id" required error={submitted ? errors.orderId : undefined}>
-            <Input
-              value={draft.orderId}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => set("orderId", event.target.value)}
-            />
-          </Field>
-
-          <Field
-            label="Reason code"
-            description="As Operations records it, for example service-not-delivered."
-            required
-            error={submitted ? errors.reasonCode : undefined}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-text">All refunds</h2>
+            <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+              Every refund, including the ones the system started on its own after a
+              cancellation. Reconcile asks Razorpay where a refund has got to.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refundsQuery.refetch()}
+            loading={refundsQuery.isRefetching}
           >
-            <Input
-              value={draft.reasonCode}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(event) => set("reasonCode", event.target.value)}
-            />
-          </Field>
+            Refresh
+          </Button>
         </div>
 
-        <Field
-          className="mt-4"
-          label="Fulfilment unit ids"
-          description={`One id per line. Up to ${MAX_UNITS} visits in one refund.`}
-          required
-          error={submitted ? errors.unitIds : undefined}
-        >
-          <Textarea
-            rows={4}
-            value={draft.unitIds}
-            spellCheck={false}
-            onChange={(event) => set("unitIds", event.target.value)}
-          />
-        </Field>
-
-        {!confirming ? (
-          <Button
+        {refundsQuery.isLoading ? (
+          <p className="mt-4 text-sm text-text-secondary">Loading refunds...</p>
+        ) : refundsQuery.isError ? (
+          <ErrorState
+            inline
             className="mt-4"
-            variant="outline"
-            onClick={() => {
-              setSubmitted(true);
-              if (Object.keys(errors).length === 0) setConfirming(true);
-            }}
-          >
-            Review this refund
-          </Button>
-        ) : null}
+            title="Could not load refunds"
+            message="Check your connection or session step-up status and try again."
+          />
+        ) : allRefunds.length === 0 ? (
+          <p className="mt-4 text-sm text-text-muted">No refunds recorded yet.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <div role="group" aria-label="Show refunds started by" className="mb-3 flex flex-wrap gap-2">
+              {(["ALL", "AUTOMATIC", "CUSTOMER", "OPERATIONS"] as const).map((who) => (
+                <Button
+                  key={who}
+                  size="sm"
+                  variant={startedBy === who ? "primary" : "outline"}
+                  aria-pressed={startedBy === who}
+                  onClick={() => setStartedBy(who)}
+                >
+                  {who === "ALL"
+                    ? `All (${allRefunds.length})`
+                    : `${STARTED_BY_LABEL[who]} (${countBy(who)})`}
+                </Button>
+              ))}
+            </div>
+            {shownRefunds.length === 0 ? (
+              <p className="text-sm text-text-muted">
+                None in the refunds loaded so far.
+                {refundsQuery.hasNextPage ? " Load more to look further back." : ""}
+              </p>
+            ) : null}
+            <table className="w-full text-left border-collapse text-xs sm:text-sm">
+              <thead className="border-b border-border text-text-secondary">
+                <tr>
+                  <th className="py-2 pr-3 font-semibold">When</th>
+                  <th className="py-2 pr-3 font-semibold">For and why</th>
+                  <th className="py-2 pr-3 font-semibold">Started by</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Amount</th>
+                  <th className="py-2 pr-3 font-semibold">Where it is</th>
+                  <th className="py-2 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {shownRefunds.map((r) => (
+                  <tr key={r.id} className="align-top hover:bg-surface-elevated/40">
+                    <td className="py-2.5 pr-3 whitespace-nowrap text-text-secondary" data-numeric>
+                      {new Intl.DateTimeFormat("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                        timeZone: "Asia/Kolkata",
+                      }).format(new Date(r.created_at))}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span className="block font-semibold text-text">{paidForLabel(r.paid_for)}</span>
+                      <span className="block text-text-secondary">{reasonLabel(r.reason_code)}</span>
+                      <span className="block font-mono text-xs text-text-muted" data-numeric>
+                        {r.order_id ? `Order ${maskId(r.order_id)} · ` : ""}Refund {maskId(r.id)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span title={STARTED_BY_MEANING[r.started_by]}>
+                        <Badge tone={STARTED_BY_TONE[r.started_by]}>
+                          {STARTED_BY_LABEL[r.started_by]}
+                        </Badge>
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right font-semibold text-text" data-numeric>
+                      {formatMoney(r.amount.amount_paise)}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                        {r.reconciliation_state !== "IN_SYNC" ? (
+                          <Badge tone={RECONCILIATION_TONE[r.reconciliation_state]}>
+                            {RECONCILIATION_LABEL[r.reconciliation_state]}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={reconcile.isPending && reconcile.variables === r.id}
+                        onClick={() => {
+                          reconcile.mutate(r.id, {
+                            onError: (error) => raiseStepUp(error, "the provider was asked"),
+                          });
+                        }}
+                      >
+                        Reconcile
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {refundsQuery.hasNextPage ? (
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  loading={refundsQuery.isFetchingNextPage}
+                  onClick={() => refundsQuery.fetchNextPage()}
+                >
+                  Load more
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </Card>
+      <div className="mt-5 flex justify-end">
+        <Button size="sm" variant={issuing ? "ghost" : "outline"} onClick={() => setIssuing((on) => !on)}>
+          {issuing ? "Close" : "Refund several visits of one order…"}
+        </Button>
+      </div>
+      {issuing ? (
+        <>
+        <Card className="mt-5 p-5">
+          <h2 className="text-base font-bold text-text">Refund several visits on one Order</h2>
+          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+            To refund or cancel one visit, open it from Home services › Bookings — no ids needed.
+            This form is for refunding several visits of one Order together. Refunds are per
+            visit: Django works out how much is left on each one, and cannot refund more than was
+            paid.
+          </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Order id" required error={submitted ? errors.orderId : undefined}>
+              <Input
+                value={draft.orderId}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => set("orderId", event.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Reason code"
+              description="As Operations records it, for example service-not-delivered."
+              required
+              error={submitted ? errors.reasonCode : undefined}
+            >
+              <Input
+                value={draft.reasonCode}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => set("reasonCode", event.target.value)}
+              />
+            </Field>
+          </div>
+
+          <Field
+            className="mt-4"
+            label="Fulfilment unit ids"
+            description={`One id per line. Up to ${MAX_UNITS} visits in one refund.`}
+            required
+            error={submitted ? errors.unitIds : undefined}
+          >
+            <Textarea
+              rows={4}
+              value={draft.unitIds}
+              spellCheck={false}
+              onChange={(event) => set("unitIds", event.target.value)}
+            />
+          </Field>
+
+          {!confirming ? (
+            <Button
+              className="mt-4"
+              variant="outline"
+              onClick={() => {
+                setSubmitted(true);
+                if (Object.keys(errors).length === 0) setConfirming(true);
+              }}
+            >
+              Review this refund
+            </Button>
+          ) : null}
+        </Card>
+        </>
+      ) : null}
 
       {confirming ? (
         <Card className="mt-5 border-danger-line bg-danger-surface p-5">
@@ -342,101 +496,6 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
         />
       ) : null}
 
-      <Card className="mt-5 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-bold text-text">Refunds ledger & history</h2>
-            <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-              Every platform refund. Reconcile asks the provider where a refund has got to.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refundsQuery.refetch()}
-            loading={refundsQuery.isRefetching}
-          >
-            Refresh
-          </Button>
-        </div>
-
-        {refundsQuery.isLoading ? (
-          <p className="mt-4 text-sm text-text-secondary">Loading refunds...</p>
-        ) : refundsQuery.isError ? (
-          <ErrorState
-            inline
-            className="mt-4"
-            title="Could not load refunds"
-            message="Check your connection or session step-up status and try again."
-          />
-        ) : allRefunds.length === 0 ? (
-          <p className="mt-4 text-sm text-text-muted">No refunds recorded yet.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm">
-              <thead className="border-b border-border text-text-secondary">
-                <tr>
-                  <th className="py-2 pr-3 font-semibold">Refund ID</th>
-                  <th className="py-2 pr-3 font-semibold">Order</th>
-                  <th className="py-2 pr-3 font-semibold">Amount</th>
-                  <th className="py-2 pr-3 font-semibold">Status</th>
-                  <th className="py-2 pr-3 font-semibold">Reconciliation</th>
-                  <th className="py-2 text-right font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {allRefunds.map((r) => (
-                  <tr key={r.id} className="hover:bg-surface-elevated/40">
-                    <td className="py-2.5 pr-3 font-mono text-xs text-text-secondary" data-numeric>
-                      {maskId(r.id)}
-                    </td>
-                    <td className="py-2.5 pr-3 font-mono text-xs text-text-secondary" data-numeric>
-                      {r.order_id ? maskId(r.order_id) : "—"}
-                    </td>
-                    <td className="py-2.5 pr-3 font-semibold text-text" data-numeric>
-                      {formatMoney(r.amount.amount_paise)}
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <Badge tone={RECONCILIATION_TONE[r.reconciliation_state]}>
-                        {RECONCILIATION_LABEL[r.reconciliation_state]}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        loading={reconcile.isPending && reconcile.variables === r.id}
-                        onClick={() => {
-                          reconcile.mutate(r.id, {
-                            onError: (error) => raiseStepUp(error, "the provider was asked"),
-                          });
-                        }}
-                      >
-                        Reconcile
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {refundsQuery.hasNextPage ? (
-              <div className="mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  loading={refundsQuery.isFetchingNextPage}
-                  onClick={() => refundsQuery.fetchNextPage()}
-                >
-                  Load more
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Card>
     </div>
   );
 }

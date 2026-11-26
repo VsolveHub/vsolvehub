@@ -117,17 +117,24 @@ export function ListingHome() {
   const h = summary.data;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-0.5 px-0.5">
+        <h1 className="text-xl font-bold tracking-tight text-text">{t("listings.home.title")}</h1>
+        <p className="text-sm text-text-secondary">
+          {now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tally label={t("listings.home.openJobs")} value={h?.active_listings ?? open.length} icon={<Briefcase className="size-3.5" />} />
-        <Tally label={t("listings.home.newApplicants")} value={h?.new_applications ?? toReview.length} tone="text-action" icon={<Users className="size-3.5" />} />
+        <Tally label={t("listings.home.newApplicants")} value={h?.new_applications ?? toReview.length} icon={<Users className="size-3.5" />} />
         <Tally label={t("listings.home.shortlisted")} value={totals.shortlisted} icon={<UserRoundCheck className="size-3.5" />} />
-        <Tally label={t("listings.home.hiredConnected")} value={totals.connected} tone="text-success-text" hint={t("listings.home.jobViewsHint", { count: totals.views })} />
+        <Tally icon={<UserRoundCheck className="size-3.5" />} label={t("listings.home.hiredConnected")} value={totals.connected} hint={t("listings.home.jobViewsHint", { count: totals.views })} />
       </div>
 
       {open.length === 0 ? (
         <Card padding="lg" className="flex flex-col items-center gap-3 text-center">
-          <p className="font-bold text-navy-900">{t("listings.home.noOpenJobs")}</p>
+          <p className="font-bold text-text">{t("listings.home.noOpenJobs")}</p>
           <p className="text-sm text-text-secondary">
             {t("listings.home.noOpenJobsHint")}
           </p>
@@ -269,12 +276,12 @@ function Tally({
   icon?: ReactNode;
 }) {
   return (
-    <Card padding="none" className="px-3 py-3">
+    <Card padding="none" className="px-4 py-4">
       <p className="flex items-center gap-1 text-xs font-semibold text-text-muted">
         {icon}
         {label}
       </p>
-      <p className={`mt-0.5 text-2xl font-extrabold ${tone ?? "text-navy-900"}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-bold ${tone ?? "text-text"}`}>{value}</p>
       {hint ? <p className="text-[11px] text-text-secondary">{hint}</p> : null}
     </Card>
   );
@@ -282,13 +289,12 @@ function Tally({
 
 function Group({
   title,
-  icon,
   count,
   empty,
   children,
 }: {
   title: string;
-  icon: ReactNode;
+  icon?: ReactNode;
   count: number;
   empty: string;
   children: ReactNode;
@@ -296,10 +302,9 @@ function Group({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2 px-0.5">
-        <span className="text-text-muted">{icon}</span>
-        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-text-muted">{title}</h2>
+        <h2 className="text-sm font-semibold text-text">{title}</h2>
         {count > 0 ? (
-          <span className="rounded-full bg-action px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-action-text">
+          <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-text-secondary">
             {count}
           </span>
         ) : null}
@@ -333,10 +338,10 @@ function Row({
       <Link href={href} className="block">
         <Card padding="none" className="flex items-center gap-3 px-4 py-3 transition hover:border-line-strong">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold text-navy-900">{title}</p>
+            <p className="truncate font-semibold text-text">{title}</p>
             <p className="truncate text-sm text-text-secondary">{sub}</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              {meta ? <span className="text-sm font-semibold text-navy-900">{meta}</span> : null}
+              {meta ? <span className="text-sm font-semibold text-text">{meta}</span> : null}
               {badge}
             </div>
           </div>

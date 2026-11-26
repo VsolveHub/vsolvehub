@@ -14,6 +14,20 @@ class OtpUnavailableApiError(APIException):
     default_code = "otp_unavailable"
 
 
+class StepUpIdentityMismatchApiError(APIException):
+    """The confirmation was for a number other than the signed-in person's own.
+
+    Its own code so the console can say so, instead of calling a correct code wrong.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = (
+        "That confirmation was for a different phone number. Confirm with the number you "
+        "signed in with."
+    )
+    default_code = "step_up_identity_mismatch"
+
+
 class InvalidOtpApiError(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "The code is invalid or expired."

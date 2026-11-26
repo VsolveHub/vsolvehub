@@ -6,6 +6,11 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { getApiClient } from "@/lib/api/browser";
 
+/** A partner's balance and recent work. Anything that moves their money refreshes it. */
+export function partnerActivityKey(partnerId: string) {
+  return ["ops-partner-activity", partnerId] as const;
+}
+
 /**
  * Partner management.
  *

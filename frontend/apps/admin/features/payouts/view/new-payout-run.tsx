@@ -7,7 +7,8 @@ import { useState } from "react";
 import { dayEndIso, dayStartIso, useProposePayoutBatch, useUnpayablePartners } from "../queries";
 
 /**
- * Propose a payout run for a period. A second person approves it, then it is paid.
+ * Propose a payout run for a period. It is approved (by a colleague, or by you after a review),
+ * then paid.
  *
  * Partners owed money in the period but with no usable bank account are listed first, because
  * they are left out of the run silently otherwise.
@@ -27,8 +28,8 @@ export function NewPayoutRun({ onProposed }: { onProposed: (batchId: string) => 
     <Card className="p-5">
       <h2 className="text-base font-bold text-text">New payout run</h2>
       <p className="mt-1 text-sm text-text-secondary">
-        Collects every partner earning settled in the period. Someone other than you approves it,
-        then it is paid.
+        Collects every partner earning that cleared in the period. Then approve it (a colleague,
+        or you after reviewing it) and pay it.
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <Field label="Name" required description="e.g. 2026-10 week 2">

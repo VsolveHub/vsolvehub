@@ -1,6 +1,6 @@
 # API Contract Changelog
 
-## 1.112.0 - Pick up & Drop V1
+## 1.119.0 - Pick up & Drop V1
 
 Additive. Parcels on the Rides engine (`docs/parcel/README.md` §4.2, ADR-0015).
 
@@ -68,7 +68,7 @@ Operations:
   is now per area, vehicle and kind.
 - **Changed** the Operations ride cancel: also works on `IN_TRIP` and `RETURNING` parcels.
 
-## 1.111.0 - Rides V1
+## 1.118.0 - Rides V1
 
 Additive. The first part of VSolve Rides (`docs/rapido/README.md`); later Rides endpoints are
 added to this entry.
@@ -250,6 +250,109 @@ added to this entry.
   a paid pass is queued. `POST /partner/rides/location/` accepts pings off duty while the captain
   has an open ride. A rider's SOS without a place uses the captain's last ping.
 - Removed: none. Renamed: none.
+
+## 1.117.0 - Firebase sign-in removed
+
+Breaking, with no live caller. Sign-in and the Operations step-up use the MSG91 codes Django sends
+(`/auth/otp/*`, `/auth/mobile/otp/verify/`, `/auth/finance/step-up/*`). Production switched every
+client over on 23 November 2026: the three websites build with the OTP flow, the Partner app's
+minimum version is 1.2.0 (the first OTP build), the Customer app never shipped with Firebase, and
+`FIREBASE_AUTH_ENABLED` was already off, so these paths answered `404` before this release.
+
+- **Removed** `POST /auth/firebase/precheck/` (`FirebasePrecheckRequest`).
+- **Removed** `POST /auth/firebase/verify/` (`FirebaseVerifyRequest`).
+- **Removed** `POST /auth/firebase/step-up/` (`FirebaseStepUpRequest`). The step-up is
+  `POST /auth/finance/step-up/code/` then `POST /auth/finance/step-up/`.
+- **Removed** `POST /auth/mobile/firebase/verify/` (`MobileFirebaseVerifyRequest`).
+- Migration: none. Settings `FIREBASE_AUTH_ENABLED`, `FIREBASE_PROJECT_ID`,
+  `FIREBASE_CREDENTIALS_JSON` and `FIREBASE_TOKEN_MAX_AGE_SECONDS` are no longer read and can be
+  deleted from the server's `.env`. Audit rows already written as `identity.firebase_login` and
+  `identity.firebase_step_up` stay as history.
+
+## 1.116.0 - Tax categories for the commercial policy form
+
+Additive.
+
+- **Added** `GET /operations/commercial-policies/tax-categories/` (`TaxCategoryUsage[]`): every
+  tax category active services use, with `service_count`, `crew_and_project_service_count`
+  (the A3/A5 services the commercial policy prices) and up to four `example_services`, so the
+  policy form offers categories instead of asking Operations to type their codes.
+
+## 1.115.0 - Who started a refund, and what it was for
+
+Additive.
+
+- **Added** `started_by` (`StartedByEnum`: `AUTOMATIC`, `CUSTOMER`, `OPERATIONS`) on
+  `Refund`: whether the system asked for it (a cancellation, money that arrived after one), the
+  customer's own action, or staff from the console.
+- **Added** `paid_for` (`PaidForEnum`, nullable) on `Refund`: the purpose of the payment being
+  refunded, so a refund reads as a rental, a home visit, a stay or a project stage.
+
+## 1.114.0 - Step-up confirms the signed-in person's own number
+
+- **Added** `POST /auth/finance/step-up/code/` (`StepUpCodeIssued`): sends a step-up code to the
+  signed-in person's own number, taking no number from the request; returns the `OtpIssued` fields
+  plus `phone_number_masked`.
+- **Changed** `POST /auth/finance/step-up/` takes `StepUpVerify`: `challenge_id` and `code`.
+  `phone_number` is optional and deprecated; a number other than the signed-in person's answers
+  `403 step_up_identity_mismatch`. The code is checked against the signed-in person's own number,
+  and verifying a step-up no longer creates an account for the number it was sent to.
+- **Behaviour** `POST /auth/firebase/step-up/` answers a token for another number with
+  `403 step_up_identity_mismatch` instead of a generic `403`.
+
+## 1.113.0 - Bank accounts checked with the bank (Cashfree)
+
+Additive.
+
+- **Behaviour** `POST /partner/payout-account/` checks the account with the bank (Cashfree Bank
+  Account Verification, a penny-drop) before registering it, when `PAYOUT_PROVIDER` is `cashfree`
+  (and with a deterministic fake in development). RazorpayX deployments are not checked.
+- **Added** `400 payout_account_not_valid_at_bank` on that endpoint: the bank says the account
+  cannot receive money; `details.bank_status` is `INVALID_ACCOUNT_FAIL`, `ACCOUNT_BLOCKED`,
+  `INVALID_IFSC_FAIL`, `NRE_ACCOUNT_FAIL` or `FRAUD_ACCOUNT`. Nothing is saved.
+- **Added** `503 payout_account_bank_check_unavailable` (retryable): the check did not finish.
+  Nothing is saved.
+- **Added** `409 payout_account_in_use` on that endpoint: another partner's live account is the
+  same bank account. Nothing is saved. On Cashfree, a bank account already registered as a
+  beneficiary that no partner here holds is reused instead of refused.
+- **Added** on `OperationsPayoutAccount`: `bank_check_provider`, `bank_checked_at`,
+  `name_at_bank` (the holder name as the bank holds it), `name_match_result` (`DIRECT_MATCH`,
+  `GOOD_PARTIAL_MATCH`, `MODERATE_PARTIAL_MATCH`, `POOR_PARTIAL_MATCH`, `NO_MATCH`, or empty),
+  `name_match_score`, and `is_missing_required_bank_check`.
+- **Behaviour** `POST /operations/payout-accounts/{account_id}/verify/` answers
+  `409 payout_account_review_invalid` for an account that was never checked with the bank on a
+  Cashfree deployment.
+
+## 1.112.0 - What each Partner ledger line was for
+
+Additive.
+
+- **Added** `origin` (`PartnerLedgerSource`) on `PartnerLedgerEntry` (`GET /partner/ledger/` and
+  the ledger adjustment response): the source of the line, so a statement reads as bookings.
+  `type` (`PartnerLedgerSourceTypeEnum`: `HOME_VISIT`, `RENTAL`, `PROJECT_STAGE`,
+  `PROJECT_RETENTION`, `BOOKING_FEE`, `SITE_VISIT`, `ADJUSTMENT`, `WITHDRAWAL_FEE`,
+  `WITHDRAWAL_FEE_REFUND`, `OTHER`), `title` (the service or item name, untranslated),
+  `stage_position` and `stage_label` for a project stage, `starts_on`/`ends_on`, and the id the
+  Partner app opens: `booking_id`, `rental_booking_id` or `engagement_id`. A refund reversal
+  carries its booking's origin; `kind: REVERSAL` says it was taken back.
+
+## 1.111.0 - Payouts: one-person approval, review before acting, audit history
+
+- **Added** `GET /operations/payout-batches/{batch_id}/preview/` (`PayoutBatchPreview`): what
+  Approve or Pay would do now. Each reserved transfer with partner, amount, bank last four and
+  IFSC, and `skip_reason` when the last-moment checks would skip it (`payouts_paused`,
+  `partner_suspended`, `account_not_payable`, `earning_on_hold`, …); totals to send and to skip;
+  `includes_actor` when it would pay the caller's own Partner account. Read-only, no step-up.
+- **Added** `history` (`PayoutAuditEvent[]`) on `PayoutBatch` and `OperationsWithdrawal`: an
+  append-only log of who proposed, approved, started payment, cancelled, requested, declined, and
+  every Partner skipped with the reason. Names are resolved when read and are empty for a deleted
+  account.
+- **Added** `SELF` to `PayoutBatchApprovalBasisEnum`: the proposer approved their own run.
+- **Behaviour** `POST /operations/payout-batches/{batch_id}/approve/` no longer answers
+  `403 self_approval_denied` to the proposer; it approves with `approval_basis: SELF`.
+- **Behaviour** approve, pay and withdrawal approve answer `403 self_payment_denied` when the
+  payout includes the caller's own Partner account.
+
 ## 1.110.0 - Cashfree Payouts webhook
 
 Additive.

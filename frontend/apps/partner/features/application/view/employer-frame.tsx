@@ -31,6 +31,27 @@ export function useSignUpName(): string {
   return (profile.data?.full_name ?? "").trim();
 }
 
+/** A titled group of fields. One look for every employer screen: a quiet heading, then the fields. */
+export function FormSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-sm font-semibold text-text">{title}</h2>
+        {hint ? <p className="text-xs leading-relaxed text-text-muted">{hint}</p> : null}
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </section>
+  );
+}
+
 /** Where Back and Continue lead from the screen being shown, for this employer. */
 export function useEmployerNav(application: Application) {
   const router = useRouter();
@@ -87,7 +108,7 @@ export function EmployerFrame({
             {t("apply.editor.readOnlyNotice")}
           </p>
         )}
-        <fieldset disabled={!editable || saving} className="flex min-w-0 flex-col gap-5 border-0 p-0">
+        <fieldset disabled={!editable || saving} className="flex min-w-0 flex-col gap-8 border-0 p-0">
           {children}
         </fieldset>
       </StepFrame>

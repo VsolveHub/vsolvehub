@@ -11,6 +11,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest
 from django.utils import timezone
 
@@ -83,13 +84,52 @@ def _increment_rate_counter(key: str, limit: int) -> None:
         raise OtpRateLimitError(window_seconds)
 
 
+#: Audit action written each time the store-review number is given its fixed code.
+REVIEW_SIGN_IN_CODE_ACTION = "identity.review_sign_in_code_issued"
+
+
+def _review_code_for(canonical_phone: str) -> str | None:
+    """The fixed store-review code when `canonical_phone` is the review number, else None.
+
+    A Play or App Store reviewer cannot receive our SMS, so `OTP_REVIEW_PHONE_NUMBER` signs in
+    with `OTP_REVIEW_CODE` instead. The code is written into the store's review notes and is not
+    a secret, so it never applies to a staff or Operations account: such a number is sent a real
+    code like anyone else.
+    """
+
+    review_phone = settings.OTP_REVIEW_PHONE_NUMBER
+    review_code = settings.OTP_REVIEW_CODE
+    if not review_phone or not review_code or canonical_phone != review_phone:
+        return None
+    if (
+        User.objects.filter(phone_number=canonical_phone)
+        .filter(Q(is_staff=True) | Q(is_superuser=True))
+        .exists()
+    ):
+        return None
+    if UserRole.objects.filter(
+        user__phone_number=canonical_phone,
+        role__code="operations",
+        revoked_at__isnull=True,
+    ).exists():
+        return None
+    return str(review_code)
+
+
 def issue_login_otp(
     *,
     phone_number: str,
     request_ip: str,
     device_identifier: str = "",
     intended_role: str = "",
+    allow_review_code: bool = False,
 ) -> IssuedOtp:
+    """Issue a sign-in code for `phone_number` and send it by SMS.
+
+    With `allow_review_code` (the sign-in screen only), the store-review number gets its fixed
+    code and no SMS. Every other rule still applies to it: the rate limits, the resend cooldown,
+    the role gate, the expiry and the wrong-attempt lock.
+    """
     canonical_phone = normalize_phone_number(phone_number)
     phone_hash = keyed_hash(canonical_phone)
     ip_hash = keyed_hash(request_ip)
@@ -128,8 +168,12 @@ def issue_login_otp(
     if not cooldown_acquired:
         raise OtpRateLimitError(settings.OTP_RESEND_COOLDOWN_SECONDS)
 
-    maximum_code = 10**settings.OTP_CODE_LENGTH
-    code = f"{secrets.randbelow(maximum_code):0{settings.OTP_CODE_LENGTH}d}"
+    review_code = _review_code_for(canonical_phone) if allow_review_code else None
+    if review_code is not None:
+        code = review_code
+    else:
+        maximum_code = 10**settings.OTP_CODE_LENGTH
+        code = f"{secrets.randbelow(maximum_code):0{settings.OTP_CODE_LENGTH}d}"
     now = timezone.now()
     challenge = OtpChallenge.objects.create(
         phone_number=canonical_phone,
@@ -140,11 +184,22 @@ def issue_login_otp(
         expires_at=now + timedelta(seconds=settings.OTP_TTL_SECONDS),
     )
 
-    try:
-        get_otp_sender().send(canonical_phone, code, OtpChallenge.Purpose.LOGIN)
-    except OtpDeliveryError as exc:
-        mark_delivery_failed(challenge, exc.__class__.__name__)
-        raise
+    if review_code is not None:
+        # Nothing is sent: the reviewer reads the code from the store's review notes. The row
+        # is the record that this number was let in that way, and when.
+        record_access_event(
+            actor=None,
+            subject_user=User.objects.filter(phone_number=canonical_phone).first(),
+            action=REVIEW_SIGN_IN_CODE_ACTION,
+            object_type="otp_challenge",
+            object_id=challenge.id,
+        )
+    else:
+        try:
+            get_otp_sender().send(canonical_phone, code, OtpChallenge.Purpose.LOGIN)
+        except OtpDeliveryError as exc:
+            mark_delivery_failed(challenge, exc.__class__.__name__)
+            raise
 
     challenge.delivery_status = OtpChallenge.DeliveryStatus.SENT
     challenge.delivered_at = now
@@ -152,6 +207,70 @@ def issue_login_otp(
 
     development_code = code if settings.OTP_DEVELOPMENT_CODE_ENABLED else None
     return IssuedOtp(challenge=challenge, development_code=development_code)
+
+
+def _consume_login_challenge(*, challenge_id: uuid.UUID, canonical_phone: str, code: str) -> bool:
+    """Consume the challenge if `code` is right for it. Call inside a transaction.
+
+    A wrong code counts against the challenge; an unknown, unsent, used, expired or locked one
+    is simply not accepted. The two are not told apart to the caller.
+    """
+
+    challenge = (
+        OtpChallenge.objects.select_for_update()
+        .filter(
+            id=challenge_id,
+            phone_number=canonical_phone,
+            purpose=OtpChallenge.Purpose.LOGIN,
+        )
+        .first()
+    )
+    if (
+        challenge is None
+        or challenge.delivery_status != OtpChallenge.DeliveryStatus.SENT
+        or challenge.is_consumed
+        or challenge.is_expired
+        or challenge.is_locked
+    ):
+        return False
+    if not check_password(code, challenge.code_hash):
+        challenge.failed_attempts += 1
+        challenge.save(update_fields=("failed_attempts",))
+        return False
+    challenge.consumed_at = timezone.now()
+    challenge.save(update_fields=("consumed_at",))
+    return True
+
+
+def issue_step_up_otp(*, user: User, request_ip: str) -> IssuedOtp:
+    """A code for the signed-in person's own number, and no other.
+
+    The number is never taken from the request: a step-up re-proves the person already signed
+    in, so a code sent anywhere else proves nothing about them.
+    """
+
+    if not user.phone_number:
+        raise OtpDeliveryError("The signed-in account has no phone number.")
+    return issue_login_otp(phone_number=user.phone_number, request_ip=request_ip)
+
+
+def verify_step_up_otp(*, user: User, challenge_id: uuid.UUID, code: str) -> None:
+    """Check a step-up code against the signed-in person's own number.
+
+    Unlike `verify_login_otp` it never provisions an account: a step-up is about a user who
+    already exists, and a code for any other number must not create one as a side effect.
+    """
+
+    with transaction.atomic():
+        accepted = _consume_login_challenge(
+            challenge_id=challenge_id,
+            canonical_phone=normalize_phone_number(user.phone_number),
+            code=code,
+        )
+    if not accepted:
+        raise OtpVerificationError("The code is invalid or expired.")
+    if not user.is_active:
+        raise AccountBlockedError("This account is blocked. Contact Vsolve support.")
 
 
 def verify_login_otp(
@@ -165,32 +284,11 @@ def verify_login_otp(
     verification_failed = False
 
     with transaction.atomic():
-        challenge = (
-            OtpChallenge.objects.select_for_update()
-            .filter(
-                id=challenge_id,
-                phone_number=canonical_phone,
-                purpose=OtpChallenge.Purpose.LOGIN,
-            )
-            .first()
-        )
-
-        if (
-            challenge is None
-            or challenge.delivery_status != OtpChallenge.DeliveryStatus.SENT
-            or challenge.is_consumed
-            or challenge.is_expired
-            or challenge.is_locked
+        if not _consume_login_challenge(
+            challenge_id=challenge_id, canonical_phone=canonical_phone, code=code
         ):
             verification_failed = True
-        elif not check_password(code, challenge.code_hash):
-            challenge.failed_attempts += 1
-            challenge.save(update_fields=("failed_attempts",))
-            verification_failed = True
         else:
-            challenge.consumed_at = timezone.now()
-            challenge.save(update_fields=("consumed_at",))
-
             blocked = User.objects.filter(phone_number=canonical_phone, is_active=False).exists()
             if blocked:
                 raise AccountBlockedError("This account is blocked. Contact Vsolve support.")
@@ -475,69 +573,6 @@ def record_access_event(
         decision=decision,
         request_id=request_id,
         metadata=metadata or {},
-    )
-
-
-#: Roles a Firebase sign-in may ask for. Operations is included (contract 1.77.0): a Firebase
-#: phone verification proves possession of the number exactly as an MSG91 code does, and the
-#: role gate admits only numbers that already hold an active grant, so nobody becomes
-#: Operations by signing in. Grants are still made on the server, never requested here.
-FIREBASE_INTENDED_ROLES = ("customer", "partner", "operations")
-
-
-def check_firebase_precheck(
-    *,
-    phone_number: str,
-    request_ip: str,
-    intended_role: str = "",
-) -> None:
-    """Pre-check rate limits and intended role gate before client requests Firebase SMS.
-
-    Note that this is a UX/rate-limit aid; verify_firebase_login is the real gate.
-    """
-    canonical_phone = normalize_phone_number(phone_number)
-    phone_hash = keyed_hash(canonical_phone)
-    ip_hash = keyed_hash(request_ip)
-
-    _increment_rate_counter(
-        f"otp:phone:{phone_hash}",
-        settings.OTP_PHONE_RATE_LIMIT,
-    )
-    _increment_rate_counter(
-        f"otp:ip:{ip_hash}",
-        settings.OTP_IP_RATE_LIMIT,
-    )
-
-    if intended_role and intended_role not in FIREBASE_INTENDED_ROLES:
-        raise OtpVerificationError("Invalid intended role for Firebase auth.")
-
-    if intended_role and not (
-        UserRole.objects.filter(
-            user__phone_number=canonical_phone,
-            role__code=intended_role,
-            revoked_at__isnull=True,
-        ).exists()
-    ):
-        raise NoAccountForRoleError(intended_role)
-
-
-def verify_firebase_login(
-    *,
-    id_token: str,
-    intended_role: str = "",
-    referral_code: str = "",
-    request_ip: str = "",
-    request_id: str = "",
-) -> User:
-    """Verify a Firebase ID token, delegate to firebase_auth service."""
-    import apps.identity.firebase_auth as _firebase_auth  # noqa: PLC0415
-
-    return _firebase_auth.verify_firebase_login(
-        id_token=id_token,
-        intended_role=intended_role,
-        referral_code=referral_code,
-        request_ip=request_ip,
-        request_id=request_id,
     )
 
 

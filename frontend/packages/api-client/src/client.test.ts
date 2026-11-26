@@ -731,7 +731,7 @@ describe("bearer mode", () => {
       api.POST("/api/v1/auth/otp/request/", { body: { phone_number: "9876543210" } as never }),
     );
     await request(() =>
-      api.POST("/api/v1/auth/firebase/precheck/", { body: { phone_number: "+919876543210" } as never }),
+      api.POST("/api/v1/auth/mobile/otp/verify/", { body: { phone_number: "9876543210" } as never }),
     );
 
     const signIn = calls.filter((call) => !call.url.includes("/auth/csrf/"));

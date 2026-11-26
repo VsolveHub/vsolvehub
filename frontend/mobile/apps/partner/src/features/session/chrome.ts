@@ -10,7 +10,6 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/work/all" ||
     pathname === "/money" ||
     pathname === "/me" ||
-    pathname.startsWith("/me/") ||
     pathname === "/rentals" ||
     pathname === "/rentals/bookings" ||
     pathname === "/stays" ||
@@ -51,6 +50,13 @@ export function focusedHeaderTitle(pathname: string, titleOverride: string | nul
   else if (pathname.endsWith("/arrival")) title = "Arrival code";
   else if (pathname.startsWith("/work/enquiries")) title = "Enquiry";
   else if (pathname.startsWith("/work/jobs")) title = "Job Details";
+  else if (pathname === "/me/profile") title = "Profile";
+  else if (pathname === "/me/language") title = "App Language";
+  else if (pathname === "/me/notifications") title = "Notifications";
+  else if (pathname === "/me/documents") title = "Registration Documents";
+  else if (pathname === "/me/crew") title = "Contractor Crew";
+  else if (pathname === "/me/rate-card") title = "Rate Card";
+  else if (pathname === "/me/delete-account") title = "Delete Account";
   else if (pathname.startsWith("/account") || pathname.startsWith("/me")) title = "Account";
   else if (pathname.startsWith("/rentals/bookings")) title = "Rental Bookings";
   else if (pathname.startsWith("/rentals")) title = "Rental Management";

@@ -111,21 +111,6 @@ export {
 } from "./otp-flow";
 export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase, SignInRole } from "./otp-flow";
 
-export {
-  useFirebasePhoneFlow,
-  useVerifyFirebase,
-  getFirebaseAuth,
-  getFirebaseApp,
-  startFirebasePhoneVerification,
-} from "./firebase-phone";
-export { mapFirebaseError, formatToE164 } from "./firebase-errors";
-export type { FirebaseVerifyInput } from "./firebase-phone";
-
-export {
-  usePhoneAuthFlow,
-  isFirebasePhoneAuth,
-} from "./phone-auth-flow";
-
 export { AppErrorBoundary } from "./error-boundary";
 export type { AppErrorBoundaryProps } from "./error-boundary";
 

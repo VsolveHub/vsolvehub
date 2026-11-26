@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
   Field,
   Select,
   Textarea,
@@ -15,6 +16,7 @@ import { useState } from "react";
 
 import {
   isSelfApproval,
+  isSelfPayment,
   isStepUpRequired,
   useApproveWithdrawal,
   useDeclineWithdrawal,
@@ -22,6 +24,7 @@ import {
   type OperationsWithdrawal,
   type WithdrawalQueueStatus,
 } from "../queries";
+import { AuditHistory } from "./payout-review";
 
 /**
  * Partner withdrawals the rules did not send on their own.
@@ -48,14 +51,16 @@ const STATUS_LABEL: Record<WithdrawalQueueStatus, string> = {
   CANCELLED: "Declined",
 };
 
-const STATUS_TONE: Record<WithdrawalQueueStatus, "warning" | "info" | "success" | "danger" | "neutral"> =
-  {
-    PENDING_APPROVAL: "warning",
-    PAYING: "info",
-    PAID: "success",
-    FAILED: "danger",
-    CANCELLED: "neutral",
-  };
+const STATUS_TONE: Record<
+  WithdrawalQueueStatus,
+  "warning" | "info" | "success" | "danger" | "neutral"
+> = {
+  PENDING_APPROVAL: "warning",
+  PAYING: "info",
+  PAID: "success",
+  FAILED: "danger",
+  CANCELLED: "neutral",
+};
 
 function WithdrawalRow({
   withdrawal,
@@ -67,6 +72,7 @@ function WithdrawalRow({
   const approve = useApproveWithdrawal();
   const decline = useDeclineWithdrawal();
   const [declining, setDeclining] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [reason, setReason] = useState("");
   const transfer = withdrawal.transfer;
   const status = withdrawal.status as WithdrawalQueueStatus;
@@ -76,7 +82,9 @@ function WithdrawalRow({
 
   function onError(failure: unknown) {
     if (isStepUpRequired(failure)) {
-      onStepUpRequired("Your confirmation lapsed. The withdrawal was not approved.");
+      onStepUpRequired(
+        "Your confirmation lapsed. The withdrawal was not approved.",
+      );
     }
   }
 
@@ -94,7 +102,9 @@ function WithdrawalRow({
           ) : null}
         </div>
         <div className="text-right">
-          <Badge tone={STATUS_TONE[status] ?? "neutral"}>{STATUS_LABEL[status] ?? status}</Badge>
+          <Badge tone={STATUS_TONE[status] ?? "neutral"}>
+            {STATUS_LABEL[status] ?? status}
+          </Badge>
           {transfer ? (
             <p data-numeric className="mt-1 text-lg font-bold text-text">
               {formatMoney(transfer.amount_paise)}
@@ -116,8 +126,12 @@ function WithdrawalRow({
       {transfer ? (
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-xs text-text-muted">Name on the bank account</dt>
-            <dd className="font-medium text-text">{transfer.account_holder_name}</dd>
+            <dt className="text-xs text-text-muted">
+              Name on the bank account
+            </dt>
+            <dd className="font-medium text-text">
+              {transfer.account_holder_name}
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-text-muted">Account</dt>
@@ -127,17 +141,23 @@ function WithdrawalRow({
           </div>
           <div>
             <dt className="text-xs text-text-muted">Account added</dt>
-            <dd className="text-text">{formatDateTime(transfer.account_added_at)}</dd>
+            <dd className="text-text">
+              {formatDateTime(transfer.account_added_at)}
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-text-muted">Requested</dt>
-            <dd className="text-text">{formatDateTime(withdrawal.created_at)}</dd>
+            <dd className="text-text">
+              {formatDateTime(withdrawal.created_at)}
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-text-muted">Balance taken</dt>
             <dd data-numeric className="text-text">
               {formatMoney(transfer.balance_paise)}
-              {transfer.fee_paise > 0 ? ` (fee ${formatMoney(transfer.fee_paise)})` : ""}
+              {transfer.fee_paise > 0
+                ? ` (fee ${formatMoney(transfer.fee_paise)})`
+                : ""}
             </dd>
           </div>
           {transfer.utr ? (
@@ -152,10 +172,14 @@ function WithdrawalRow({
       ) : null}
 
       {withdrawal.review_note ? (
-        <p className="text-sm text-text-secondary">Declined: {withdrawal.review_note}</p>
+        <p className="text-sm text-text-secondary">
+          Declined: {withdrawal.review_note}
+        </p>
       ) : null}
       {transfer?.failure_code && status !== "CANCELLED" ? (
-        <p className="text-xs text-danger-text">Failure: {transfer.failure_code}</p>
+        <p className="text-xs text-danger-text">
+          Failure: {transfer.failure_code}
+        </p>
       ) : null}
 
       {waiting ? (
@@ -188,7 +212,12 @@ function WithdrawalRow({
                 >
                   Decline withdrawal
                 </Button>
-                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setDeclining(false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setDeclining(false)}
+                >
                   Cancel
                 </Button>
               </>
@@ -196,18 +225,20 @@ function WithdrawalRow({
               <>
                 <Button
                   size="sm"
-                  loading={approve.isPending}
-                  disabled={busy}
-                  onClick={() =>
-                    approve.mutate(
-                      { batchId: withdrawal.id, expectedVersion: withdrawal.version },
-                      { onError },
-                    )
-                  }
+                  disabled={busy || !transfer}
+                  onClick={() => {
+                    approve.reset();
+                    setReviewing(true);
+                  }}
                 >
-                  Approve and send
+                  Review and send…
                 </Button>
-                <Button variant="outline" size="sm" disabled={busy} onClick={() => setDeclining(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setDeclining(true)}
+                >
                   Decline…
                 </Button>
               </>
@@ -220,15 +251,116 @@ function WithdrawalRow({
         <p role="alert" className="text-sm text-danger-text">
           {isSelfApproval(error)
             ? "You requested this withdrawal yourself, so a colleague has to approve it."
-            : friendlyErrorMessage(error)}
+            : isSelfPayment(error)
+              ? "This is your own partner account, so another Operations user must approve it."
+              : friendlyErrorMessage(error)}
         </p>
+      ) : null}
+
+      <AuditHistory events={withdrawal.history} />
+
+      {reviewing && transfer ? (
+        <Dialog
+          open
+          onOpenChange={(next) => {
+            if (!next && !approve.isPending) setReviewing(false);
+          }}
+          title="Send this withdrawal?"
+          description="The money leaves by IMPS as soon as you confirm and cannot be called back."
+          footer={
+            <>
+              <Button
+                variant="outline"
+                disabled={approve.isPending}
+                onClick={() => setReviewing(false)}
+              >
+                Back
+              </Button>
+              <Button
+                loading={approve.isPending}
+                loadingLabel="Sending"
+                onClick={() =>
+                  approve.mutate(
+                    {
+                      batchId: withdrawal.id,
+                      expectedVersion: withdrawal.version,
+                    },
+                    {
+                      onSuccess: () => setReviewing(false),
+                      onError: (failure) => {
+                        setReviewing(false);
+                        onError(failure);
+                      },
+                    },
+                  )
+                }
+              >
+                Send {formatMoney(transfer.amount_paise)}
+              </Button>
+            </>
+          }
+        >
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-text-muted">Partner</dt>
+              <dd className="font-medium text-text">
+                {transfer.partner_display_name}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-muted">Bank account</dt>
+              <dd data-numeric className="font-medium text-text">
+                {transfer.account_holder_name} · ••••{transfer.account_last4} ·{" "}
+                {transfer.account_ifsc}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-muted">Balance taken</dt>
+              <dd data-numeric className="text-text">
+                {formatMoney(transfer.balance_paise)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-text-muted">Fee</dt>
+              <dd data-numeric className="text-text">
+                {transfer.fee_paise > 0
+                  ? formatMoney(transfer.fee_paise)
+                  : "None"}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-text-muted">
+                Reaches the bank account
+              </dt>
+              <dd data-numeric className="text-lg font-bold text-text">
+                {formatMoney(transfer.amount_paise)}
+              </dd>
+            </div>
+          </dl>
+          {withdrawal.review_reasons.includes("first_payout_to_account") ? (
+            <p className="mt-3 rounded-control bg-warning-surface p-3 text-sm text-warning-text">
+              First payout to this bank account. Check the name matches the
+              partner before sending.
+            </p>
+          ) : null}
+          <p className="mt-3 text-xs text-text-secondary">
+            It is checked again at the moment of sending: a dispute or
+            suspension in the meantime stops it and the money stays in the
+            partner&apos;s balance.
+          </p>
+        </Dialog>
       ) : null}
     </li>
   );
 }
 
-export function WithdrawalQueue({ onStepUpRequired }: { onStepUpRequired: (reason: string) => void }) {
-  const [status, setStatus] = useState<WithdrawalQueueStatus>("PENDING_APPROVAL");
+export function WithdrawalQueue({
+  onStepUpRequired,
+}: {
+  onStepUpRequired: (reason: string) => void;
+}) {
+  const [status, setStatus] =
+    useState<WithdrawalQueueStatus>("PENDING_APPROVAL");
   const withdrawals = useWithdrawals(status);
   const rows = withdrawals.data?.pages.flatMap((page) => page.results) ?? [];
 
@@ -238,15 +370,18 @@ export function WithdrawalQueue({ onStepUpRequired }: { onStepUpRequired: (reaso
         <div>
           <h2 className="text-base font-bold text-text">Partner withdrawals</h2>
           <p className="mt-1 max-w-prose text-sm text-text-secondary">
-            Withdrawals land here when the rules need a person: the first payout to a bank
-            account, or a balance above the maximum. Check the name and account against the
-            partner, then approve to send. The rest are sent automatically.
+            Withdrawals land here when the rules need a person: the first payout
+            to a bank account, or a balance above the maximum. Check the name
+            and account against the partner, then approve to send. The rest are
+            sent automatically.
           </p>
         </div>
         <Field label="Show">
           <Select
             value={status}
-            onChange={(event) => setStatus(event.target.value as WithdrawalQueueStatus)}
+            onChange={(event) =>
+              setStatus(event.target.value as WithdrawalQueueStatus)
+            }
           >
             <option value="PENDING_APPROVAL">Waiting for review</option>
             <option value="PAYING">Sending</option>
@@ -265,7 +400,9 @@ export function WithdrawalQueue({ onStepUpRequired }: { onStepUpRequired: (reaso
         </p>
       ) : rows.length === 0 ? (
         <p className="mt-4 text-sm text-text-secondary">
-          {status === "PENDING_APPROVAL" ? "No withdrawals are waiting for review." : "Nothing to show."}
+          {status === "PENDING_APPROVAL"
+            ? "No withdrawals are waiting for review."
+            : "Nothing to show."}
         </p>
       ) : (
         <ul className="mt-4 list-none divide-y divide-line overflow-hidden rounded-card border border-line">

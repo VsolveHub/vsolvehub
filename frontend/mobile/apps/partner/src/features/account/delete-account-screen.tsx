@@ -3,7 +3,7 @@ import { Text } from "@vsolve/mobile-ui";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { useRouter } from "expo-router";
 import { Check, Trash2 } from "lucide-react-native";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandHeader } from "@/features/onboarding/components/brand-header";
+import { setFocusedBackHandler } from "@/features/session/focused-back";
 import { useCreatePrivacyRequest } from "./privacy-queries";
 
 export type DeleteStep = "STEP_1_WARN" | "STEP_2_CONFIRM" | "STEP_3_DONE";
@@ -37,9 +38,13 @@ function deletionDate(value: string): string {
  * later unless the person signs in again, open jobs refuse the request, money owed is paid first,
  * and payout and tax records are kept. Filing it is a request with a date, so the last step says
  * "closed" and gives the date, never "deleted" — nothing has been erased yet.
+ *
+ * `showHeader` is false under `/me`, where the tabs shell already draws the back bar; the
+ * `/delete-account` route outside `(app)` has no shell, so it keeps this screen's own header.
+ * Every back (that bar, this header, Android's back button) steps back through the steps first.
  */
 
-export function DeleteAccountScreen() {
+export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolean } = {}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -56,13 +61,43 @@ export function DeleteAccountScreen() {
 
   const isConfirmed = confirmInput.trim() === "DELETE";
 
-  const handleBack = () => {
+  const handleDone = useCallback(async () => {
+    await signOut();
+    router.replace("/login" as any);
+  }, [signOut, router]);
+
+  /**
+   * True when back was handled inside the flow; false means "leave this screen". The account is
+   * already closed on the last step, so back there finishes like Done rather than returning to
+   * the app, and nothing moves while the request is in flight.
+   */
+  const stepBack = useCallback((): boolean => {
+    if (isDeleting) return true;
     if (step === "STEP_2_CONFIRM") {
       setStep("STEP_1_WARN");
-    } else if (step === "STEP_1_WARN") {
-      router.back();
+      return true;
     }
+    if (step === "STEP_3_DONE") {
+      void handleDone();
+      return true;
+    }
+    return false;
+  }, [isDeleting, step, handleDone]);
+
+  const handleBack = () => {
+    if (!stepBack()) router.back();
   };
+
+  useEffect(() => {
+    if (showHeader) return undefined;
+    setFocusedBackHandler(stepBack);
+    return () => setFocusedBackHandler(null);
+  }, [showHeader, stepBack]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", stepBack);
+    return () => subscription.remove();
+  }, [stepBack]);
 
   const handleDeleteSubmit = () => {
     if (!isConfirmed || isDeleting) return;
@@ -79,19 +114,15 @@ export function DeleteAccountScreen() {
     });
   };
 
-  const handleDone = async () => {
-    await signOut();
-    router.replace("/login" as any);
-  };
-
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <BrandHeader
-        showBack={step !== "STEP_3_DONE"}
-        onBack={handleBack}
-        showAvatar={false}
-      />
+      {showHeader ? (
+        <BrandHeader
+          showBack={step !== "STEP_3_DONE"}
+          onBack={handleBack}
+          showAvatar={false}
+        />
+      ) : null}
 
       <ScrollView
         style={styles.scrollView}

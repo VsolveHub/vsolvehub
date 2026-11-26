@@ -43,7 +43,7 @@ Rides engine you already built, with parcel details, a delivery PIN and return-t
 3. **No new native modules, no app version changes, no `eas build`, no `eas update`.** Everything
    here works with what the apps already have: `react-native-maps`, `expo-location`, `Linking` for
    calls and React Native `Share` for sharing codes.
-4. **Contract version `1.112.0`. ADR `0015`.** Rides is `1.111.0` and ADR `0014` after the merge
+4. **Contract version `1.119.0`. ADR `0015`.** Rides is `1.118.0` and ADR `0014` after the merge
    of `main`. There is no separate contract proposal for Pick up & Drop: §4.2 is the API.
 5. **The screens follow Uber Parcel's layout** (the owner's screenshots are described in §5.1), and
    the start of the flow follows Rapido: the destination is asked first.
@@ -168,7 +168,7 @@ All of it lives in `backend/apps/rides/` and `backend/tests/rides/`. One new mig
 - Settings, inside the one `RIDES_*` block: `RIDES_PARCEL_VALUE_CAP_PAISE = 500000` and
   `RIDES_PARCEL_PROHIBITED_ITEMS` (the D23 list, as labels).
 
-### 4.2 API (contract `1.112.0`)
+### 4.2 API (contract `1.119.0`)
 
 Customer:
 
@@ -229,7 +229,7 @@ Captain cancels and Operations cancels reuse the Rides codes.
 
 - `docs/adr/0015-pickup-drop-v1.md`, short: status, two lines of context, "Decision: see
   `docs/parcel/README.md` §2 (D1–D24)", and the consequences.
-- One `contracts/openapi/CHANGELOG.md` entry, `## 1.112.0 - Pick up & Drop V1`, listing every
+- One `contracts/openapi/CHANGELOG.md` entry, `## 1.119.0 - Pick up & Drop V1`, listing every
   endpoint change in §4.2 with its error codes.
 
 ---
@@ -338,10 +338,10 @@ Registration points, these exact changes only:
 
 | File | Allowed change |
 |---|---|
-| `backend/config/settings/base.py` | the two `RIDES_PARCEL_*` settings inside the `RIDES_*` block; `SPECTACULAR_SETTINGS["VERSION"]` to `1.112.0` |
+| `backend/config/settings/base.py` | the two `RIDES_PARCEL_*` settings inside the `RIDES_*` block; `SPECTACULAR_SETTINGS["VERSION"]` to `1.119.0` |
 | `backend/apps/notifications/templates_registry.py` | the nine `parcel_*` templates |
 | `contracts/openapi/v1.yaml`, `frontend/packages/api-client/src/generated/schema.d.ts` | regenerate only |
-| `contracts/openapi/CHANGELOG.md` | one `1.112.0` entry |
+| `contracts/openapi/CHANGELOG.md` | one `1.119.0` entry |
 | `frontend/mobile/apps/customer/src/features/catalog/view/home-screen.tsx` | one import and one `<PickupDropEntry />` line |
 | `frontend/apps/customer/app/terms/page.tsx` | one "Pick up & Drop" section (D22, D23) |
 
@@ -383,7 +383,7 @@ cannot go on duty in Expo Go.
 - The whole backend (§4): the migration, availability and quotes, booking, the dispatch filter and
   `parcel-preference`, pickup, arrived at drop, deliver with and without the PIN, receiver not
   available with the return price, returned, payment received and not received, `ITEM_NOT_ALLOWED`,
-  the cancel rule, notifications, Operations APIs, the seed. Contract `1.112.0` and its changelog
+  the cancel rule, notifications, Operations APIs, the seed. Contract `1.119.0` and its changelog
   entry.
 - The backend tests in §11.1, written and green.
 
@@ -473,7 +473,7 @@ fare, anything odd), and known issues left open.
 ## 12. Definition of done
 
 - [ ] Everything in §1 works on the phones; every decision in §2 is followed exactly.
-- [ ] ADR 0015 and the `1.112.0` changelog entry are written and current.
+- [ ] ADR 0015 and the `1.119.0` changelog entry are written and current.
 - [ ] Contract regenerated, `pnpm contract:check` green.
 - [ ] All tests in §11.1 written and green; coverage output pasted.
 - [ ] Device checklist ticked; two road deliveries done; test report in the PR.

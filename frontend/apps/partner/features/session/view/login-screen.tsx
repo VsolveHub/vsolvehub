@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
+import { useAuthGuard, useOtpFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated, useT } from "@vsolve/ui";
 import { CheckCircle2, HelpCircle } from "lucide-react";
 import Image from "next/image";
@@ -100,7 +100,7 @@ export function LoginScreen() {
   // Only once there is a session. Asking Django for an application while nobody
   // is signed in spends a guaranteed refusal on every visit to this screen.
   const application = usePartnerApplication({ enabled: isAuthenticated });
-  const flow = usePhoneAuthFlow(getApiClient());
+  const flow = useOtpFlow(getApiClient());
   const flowWithAudio = {
     ...flow,
     phoneError: readableFieldError(t, flow.phoneError),

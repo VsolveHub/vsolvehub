@@ -19,6 +19,19 @@ export function useCommercialPolicies() {
   });
 }
 
+/** The tax categories services use, with the services under each, for the rate table. */
+export function useTaxCategories() {
+  return useQuery({
+    queryKey: [...KEY, "tax-categories"],
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/operations/commercial-policies/tax-categories/"),
+      );
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
 export function useActivateCommercialPolicy() {
   const queryClient = useQueryClient();
   return useMutation({

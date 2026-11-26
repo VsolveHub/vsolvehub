@@ -111,18 +111,18 @@ export function JobMatches({
 
       {/* Subscription Lock Notice */}
       {locked ? (
-        <Card className="gap-3 border-amber-300 bg-amber-50/70 p-4">
+        <Card className="gap-3 border-warning-line bg-warning-surface/70 p-4">
           <View className="flex-row items-start gap-2.5">
             <View className="mt-0.5 size-7 items-center justify-center rounded-full bg-amber-200">
               <Lock size={14} color={THEME_COLORS.warning} />
             </View>
             <View className="flex-1">
-              <Text className="text-xs font-bold text-amber-950">
+              <Text className="text-xs font-bold text-warning-text">
                 {hiddenMatchCount > 0
                   ? `${hiddenMatchCount} matching ${hiddenMatchCount === 1 ? "candidate" : "candidates"} available`
                   : "Discover matching candidates before they apply"}
               </Text>
-              <Text className="mt-1 text-[11px] leading-relaxed text-amber-800">
+              <Text className="mt-1 text-[11px] leading-relaxed text-warning-text">
                 Upgrade your hiring plan to reveal and directly invite qualified candidates in your city.
               </Text>
             </View>
@@ -194,7 +194,7 @@ export function JobMatches({
                   className="gap-1.5"
                 >
                   <View className="flex-row items-center justify-between">
-                    <Text className="text-base font-extrabold text-navy-900">
+                    <Text className="text-base font-bold text-navy-900">
                       {row.display_name}
                     </Text>
                     <View className="flex-row items-center gap-1.5">
@@ -219,7 +219,7 @@ export function JobMatches({
 
                   {row.area || row.city ? (
                     <View className="flex-row items-center gap-1">
-                      <MapPin size={12} color="#64748b" />
+                      <MapPin size={12} color="#756c5e" />
                       <Text className="text-[11px] text-text-muted">
                         {[row.area, row.city].filter(Boolean).join(", ")}
                       </Text>
@@ -230,13 +230,13 @@ export function JobMatches({
                   <View className="mt-1 gap-1">
                     {row.match.matched.slice(0, 3).map((m: string) => (
                       <View key={m} className="flex-row items-center gap-1.5">
-                        <Check size={12} color="#16a34a" />
-                        <Text className="text-xs text-emerald-800 font-medium">{m}</Text>
+                        <Check size={12} color="#0e7c3a" />
+                        <Text className="text-xs text-success-text font-medium">{m}</Text>
                       </View>
                     ))}
                     {row.match.missing.slice(0, 2).map((m: string) => (
                       <View key={m} className="flex-row items-center gap-1.5">
-                        <Text className="text-[11px] text-amber-600 font-bold">△</Text>
+                        <Text className="text-[11px] text-warning-text font-bold">△</Text>
                         <Text className="text-xs text-text-muted">{m}</Text>
                       </View>
                     ))}
@@ -303,7 +303,7 @@ export function JobMatches({
           <View className="max-h-[85%] rounded-t-3xl bg-surface p-5 gap-4">
             <View className="flex-row items-center justify-between border-b border-line pb-3">
               <View className="flex-1">
-                <Text className="text-lg font-extrabold text-navy-900">
+                <Text className="text-lg font-bold text-navy-900">
                   {selectedCandidate?.display_name}
                 </Text>
                 <Text className="text-xs text-text-muted">
@@ -330,7 +330,7 @@ export function JobMatches({
                 </View>
 
                 <View className="gap-1 mt-1">
-                  <Text className="text-[11px] font-bold text-emerald-800">Matching Skills:</Text>
+                  <Text className="text-[11px] font-bold text-success-text">Matching Skills:</Text>
                   <View className="flex-row flex-wrap gap-1.5">
                     {selectedCandidate?.match.matched.map((skill: string) => (
                       <Badge key={skill} tone="success">{skill}</Badge>
@@ -339,7 +339,7 @@ export function JobMatches({
 
                   {selectedCandidate?.match.missing.length ? (
                     <>
-                      <Text className="text-[11px] font-bold text-amber-800 mt-2">Missing Skills:</Text>
+                      <Text className="text-[11px] font-bold text-warning-text mt-2">Missing Skills:</Text>
                       <View className="flex-row flex-wrap gap-1.5">
                         {selectedCandidate?.match.missing.map((skill: string) => (
                           <Badge key={skill} tone="warning">{skill}</Badge>
@@ -355,7 +355,7 @@ export function JobMatches({
                 <Text className="text-xs font-bold text-text-muted uppercase">Background</Text>
 
                 <View className="flex-row items-center gap-2">
-                  <Briefcase size={14} color="#64748b" />
+                  <Briefcase size={14} color="#756c5e" />
                   <Text className="text-xs text-text">
                     Experience: {optionLabel(options.data?.experience_bands, selectedCandidate?.experience_band) || "Not specified"}
                   </Text>
@@ -363,7 +363,7 @@ export function JobMatches({
 
                 {selectedCandidate?.qualification ? (
                   <View className="flex-row items-center gap-2">
-                    <GraduationCap size={14} color="#64748b" />
+                    <GraduationCap size={14} color="#756c5e" />
                     <Text className="text-xs text-text">
                       Qualification: {optionLabel(options.data?.qualifications, selectedCandidate.qualification) || selectedCandidate.qualification}
                     </Text>
@@ -372,7 +372,7 @@ export function JobMatches({
 
                 {selectedCandidate?.languages?.length ? (
                   <View className="flex-row items-center gap-2">
-                    <Languages size={14} color="#64748b" />
+                    <Languages size={14} color="#756c5e" />
                     <Text className="text-xs text-text">
                       Languages: {selectedCandidate.languages.join(", ")}
                     </Text>
@@ -381,7 +381,7 @@ export function JobMatches({
 
                 {selectedCandidate?.area || selectedCandidate?.city ? (
                   <View className="flex-row items-center gap-2">
-                    <MapPin size={14} color="#64748b" />
+                    <MapPin size={14} color="#756c5e" />
                     <Text className="text-xs text-text">
                       Location: {[selectedCandidate.area, selectedCandidate.city].filter(Boolean).join(", ")}
                     </Text>

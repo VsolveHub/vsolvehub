@@ -220,10 +220,10 @@ export function MeHome() {
             setSigningOut(true);
             void logout().finally(() => setSigningOut(false));
           }}
-          className="h-12 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50/60 active:bg-red-100/60"
+          className="h-12 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-danger-line bg-danger-surface active:opacity-80"
         >
           <Power size={18} color="#DC2626" strokeWidth={2.4} />
-          <Text className="text-sm font-bold text-red-700">
+          <Text className="text-sm font-bold text-danger-text">
             {signingOut ? "Signing out…" : "Sign Out"}
           </Text>
         </Pressable>
@@ -244,20 +244,20 @@ function IdentityCard() {
   const initial = displayName.charAt(0).toUpperCase() || "P";
 
   return (
-    <View className="mx-4 mt-3 rounded-2xl border border-line bg-surface p-4 shadow-xs">
+    <View className="mx-4 mt-3 rounded-2xl border border-line bg-surface p-4">
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1 flex-row items-center gap-3.5">
           {/* Subtle clean avatar with online emerald dot */}
           <View className="relative shrink-0">
-            <View className="size-12 items-center justify-center rounded-full bg-navy-900 shadow-xs">
+            <View className="size-12 items-center justify-center rounded-full bg-navy-900">
               <Text className="text-base font-bold text-white">{initial}</Text>
             </View>
-            <View className="absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-surface bg-emerald-500" />
+            <View className="absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-surface bg-success" />
           </View>
 
           {/* Name & Details */}
           <View className="min-w-0 flex-1">
-            <Text numberOfLines={1} className="text-base font-bold text-navy-900">
+            <Text numberOfLines={1} className="text-base font-bold text-text">
               {displayName}
             </Text>
             <Text numberOfLines={1} className="mt-0.5 text-xs text-text-secondary">
@@ -273,9 +273,9 @@ function IdentityCard() {
 
         {/* Verified Status Pill */}
         <View className="shrink-0 self-start">
-          <View className="flex-row items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1">
+          <View className="flex-row items-center gap-1 rounded-full border border-success-line bg-success-surface px-2.5 py-1">
             <ShieldCheck size={12} color="#059669" />
-            <Text className="text-[11px] font-bold text-emerald-700">Verified</Text>
+            <Text className="text-[11px] font-bold text-success-text">Verified</Text>
           </View>
         </View>
       </View>
@@ -322,7 +322,7 @@ function SettingsRow({
           <Icon size={20} color={iconColor} strokeWidth={2.2} />
         </View>
         <View className="min-w-0 flex-1">
-          <Text numberOfLines={1} className="text-sm font-bold text-navy-900 leading-tight">
+          <Text numberOfLines={1} className="text-sm font-bold text-text leading-tight">
             {title}
           </Text>
           <Text numberOfLines={1} className="mt-0.5 text-xs text-text-secondary">
@@ -330,7 +330,7 @@ function SettingsRow({
           </Text>
         </View>
       </View>
-      <ChevronRight size={18} color="#94A3B8" className="shrink-0" />
+      <ChevronRight size={18} color="#a89f90" className="shrink-0" />
     </Pressable>
   );
 }

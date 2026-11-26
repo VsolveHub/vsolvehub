@@ -6,7 +6,7 @@ import {
   request,
   type Schemas,
 } from "@vsolve/api-client";
-import { EXPIRING_STATE, cursorFromNextUrl, useRequestOtp } from "@vsolve/query";
+import { EXPIRING_STATE, cursorFromNextUrl } from "@vsolve/query";
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -62,13 +62,21 @@ export type StepUpSession = Schemas["StepUpSession"];
  * only stamps `UserSession.stepped_up_at`, which is the field
  * `HasRecentOperationsStepUp` reads.
  */
+/**
+ * Sends a step-up code to the signed-in operator's own number. It takes no number: Django
+ * reads it from the account, so a code can never go to somebody else (contract 1.114.0).
+ */
 export function useRequestStepUpCode() {
-  return useRequestOtp(getApiClient());
+  return useMutation({
+    mutationFn: () =>
+      request(() => getApiClient().POST("/api/v1/auth/finance/step-up/code/")),
+    // Never retried: every send is an SMS, and the resend cooldown refuses a quick second one.
+    retry: false,
+  });
 }
 
 export interface StepUpInput {
   challengeId: string;
-  phoneNumber: string;
   code: string;
 }
 
@@ -77,11 +85,7 @@ export function useConfirmStepUp() {
     mutationFn: (input: StepUpInput): Promise<StepUpSession> =>
       request(() =>
         getApiClient().POST("/api/v1/auth/finance/step-up/", {
-          body: {
-            challenge_id: input.challengeId,
-            phone_number: input.phoneNumber,
-            code: input.code,
-          },
+          body: { challenge_id: input.challengeId, code: input.code },
         }),
       ),
     // Never retried. The code is single-use, and a retry spends it against a
@@ -90,22 +94,9 @@ export function useConfirmStepUp() {
   });
 }
 
-/**
- * The Firebase counterpart of `useConfirmStepUp` (contract 1.77.0), for deployments whose
- * codes Firebase sends. Exchanges a fresh ID token — from a verification just completed for
- * the operator's own number — for the same session stamp.
- */
-export function useConfirmFirebaseStepUp() {
-  return useMutation({
-    mutationFn: (idToken: string): Promise<StepUpSession> =>
-      request(() =>
-        getApiClient().POST("/api/v1/auth/firebase/step-up/", {
-          body: { id_token: idToken },
-        }),
-      ),
-    // Never retried. The ID token is single-use.
-    retry: false,
-  });
+/** The confirmation was for a number other than the signed-in operator's own. */
+export function isStepUpIdentityMismatch(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "step_up_identity_mismatch";
 }
 
 /** The step-up did not match this session, or the code was wrong. */

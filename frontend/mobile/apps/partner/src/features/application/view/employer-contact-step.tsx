@@ -1,6 +1,7 @@
 // Ported from frontend/apps/partner/features/application/view/employer-contact-step.tsx
 import type { Schemas } from "@vsolve/api-client";
 import { Field, Input, Select, Text, useT } from "@vsolve/mobile-ui";
+import { Building2, FileText, ShieldCheck } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
@@ -15,7 +16,7 @@ import {
   type ContactDraft,
 } from "../model/employer-form";
 import { useUpdateEmployerDetails } from "../queries";
-import { EmployerFrame, useEmployerNav, useSignUpName } from "./employer-frame";
+import { EmployerFrame, FormSection, useEmployerNav, useSignUpName } from "./employer-frame";
 import { EmployerGuard } from "./employer-guard";
 
 type Application = Schemas["PartnerApplication"];
@@ -62,6 +63,11 @@ function ContactForm({ application }: { application: Application }) {
     save.mutate(contactPatch(draft), { onSuccess: goNext });
   }
 
+  const companyName =
+    application.employer?.business?.trade_name ||
+    application.employer?.business?.legal_name ||
+    "";
+
   return (
     <EmployerFrame
       application={application}
@@ -72,63 +78,93 @@ function ContactForm({ application }: { application: Application }) {
       error={save.error}
       onContinue={onContinue}
     >
-      <Field
-        required
-        label={t("apply.employer.field.name.label")}
-        error={problems.invalid.has("displayName") ? t("apply.employer.field.name.error") : undefined}
-      >
-        <Input
-          autoComplete="name"
-          maxLength={120}
-          value={draft.displayName}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ displayName: value })}
-        />
-      </Field>
-
-      <Field required label={t("apply.employer.contact.role.label")}>
-        <Select
-          placeholder={t("apply.employer.contact.role.placeholder")}
-          value={draft.role}
-          options={ROLES.map((code) => ({
-            value: code,
-            label: t(`apply.employer.contact.role.${code}`),
-          }))}
-          onChange={(event) => change({ role: event.target.value })}
-        />
-      </Field>
-      {draft.role !== "" && draft.role !== "OWNER" ? (
-        <View accessibilityRole="summary" className="rounded-control bg-surface-sunken p-3">
-          <Text className="text-sm text-text">{t("apply.employer.contact.letterNote")}</Text>
+      {companyName ? (
+        <View className="flex-row items-center gap-2.5 rounded-control bg-surface-sunken px-4 py-3">
+          <Building2 size={16} color="#0055ff" />
+          <Text className="text-sm text-text-secondary">
+            Hiring representative for <Text className="font-bold text-text">{companyName}</Text>
+          </Text>
         </View>
       ) : null}
 
-      <Field
-        label={t("apply.employer.field.email.label")}
-        error={problems.invalid.has("email") ? t("apply.employer.field.email.error") : undefined}
-      >
-        <Input
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          maxLength={254}
-          value={draft.email}
-          onFocus={scrollFieldIntoView}
-          onChangeText={(value) => change({ email: value })}
-        />
-      </Field>
+      <FormSection title="Your details">
+        <Field
+          required
+          label={t("apply.employer.field.name.label")}
+          error={problems.invalid.has("displayName") ? t("apply.employer.field.name.error") : undefined}
+        >
+          <Input
+            autoComplete="name"
+            maxLength={120}
+            placeholder="e.g. Rahul Verma"
+            value={draft.displayName}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ displayName: value })}
+          />
+        </Field>
 
-      <Field required label={t("apply.employer.field.idType.label")}>
-        <Select
-          placeholder={t("apply.employer.field.idType.placeholder")}
-          value={draft.idType}
-          options={ID_TYPES.map((code) => ({
-            value: code,
-            label: t(`apply.employer.field.idType.${code}`),
-          }))}
-          onChange={(event) => change({ idType: event.target.value })}
-        />
-      </Field>
+        <Field required label={t("apply.employer.contact.role.label")}>
+          <Select
+            placeholder={t("apply.employer.contact.role.placeholder")}
+            value={draft.role}
+            options={ROLES.map((code) => ({
+              value: code,
+              label: t(`apply.employer.contact.role.${code}`),
+            }))}
+            onChange={(event) => change({ role: event.target.value })}
+          />
+        </Field>
+
+        {draft.role !== "" && draft.role !== "OWNER" ? (
+          <View accessibilityRole="summary" className="flex-row items-start gap-3 rounded-control border border-warning-line bg-warning-surface p-3.5">
+            <FileText size={18} color="#f59e0b" className="mt-0.5 shrink-0" />
+            <View className="flex-1 gap-1">
+              <Text className="font-bold text-xs text-text">Authorization letter required</Text>
+              <Text className="text-xs text-text-secondary leading-5">{t("apply.employer.contact.letterNote")}</Text>
+            </View>
+          </View>
+        ) : null}
+      </FormSection>
+
+      <FormSection title="Verification and contact">
+        <Field
+          label={t("apply.employer.field.email.label")}
+          error={problems.invalid.has("email") ? t("apply.employer.field.email.error") : undefined}
+        >
+          <Input
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            maxLength={254}
+            placeholder="e.g. rahul@company.com"
+            value={draft.email}
+            onFocus={scrollFieldIntoView}
+            onChangeText={(value) => change({ email: value })}
+          />
+        </Field>
+
+        <Field required label={t("apply.employer.field.idType.label")}>
+          <Select
+            placeholder={t("apply.employer.field.idType.placeholder")}
+            value={draft.idType}
+            options={ID_TYPES.map((code) => ({
+              value: code,
+              label: t(`apply.employer.field.idType.${code}`),
+            }))}
+            onChange={(event) => change({ idType: event.target.value })}
+          />
+        </Field>
+
+        <View className="flex-row items-start gap-3 rounded-control bg-surface-sunken p-4">
+          <ShieldCheck size={16} color="#16a34a" className="mt-0.5 shrink-0" />
+          <View className="flex-1 gap-0.5">
+            <Text className="font-semibold text-xs text-text">Your ID stays private</Text>
+            <Text className="text-xs text-text-secondary leading-5">
+              Your personal identity document is used exclusively by Operations to confirm your authority to hire for this business, and is never shown to applicants.
+            </Text>
+          </View>
+        </View>
+      </FormSection>
     </EmployerFrame>
   );
 }

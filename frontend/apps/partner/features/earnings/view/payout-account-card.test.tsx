@@ -1,3 +1,4 @@
+import { ApiRequestError } from "@vsolve/api-client";
 import { I18nProvider } from "@vsolve/ui";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -88,6 +89,49 @@ describe("PayoutAccountCard", () => {
     renderCard();
 
     expect(screen.getByText(/₹268.96 is ready for you/)).toBeInTheDocument();
+  });
+
+  function withSubmitError(status: number, code: string, details: unknown) {
+    vi.mocked(useSubmitPayoutAccount).mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: true,
+      error: new ApiRequestError(status, {
+        code,
+        message: "Refused by the server.",
+        details,
+        retryable: false,
+        request_id: "req-1",
+      } as never),
+    } as never);
+  }
+
+  it.each([
+    ["a provider refusal", 400, "payout_account_rejected", { message: "x", code: "payout_account_rejected" }],
+    ["the bank's refusal", 400, "payout_account_not_valid_at_bank", { bank_status: "ACCOUNT_BLOCKED" }],
+    ["another partner's account", 409, "payout_account_in_use", { message: "x", code: "payout_account_in_use" }],
+  ])("shows %s rather than hiding it as if it were a field error", (_, status, code, details) => {
+    withAccount(null);
+    withSubmitError(status, code, details);
+    renderCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add bank account" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/\S/);
+  });
+
+  it("leaves a field error under its field without repeating it below the form", () => {
+    withAccount(null);
+    withSubmitError(400, "validation_error", {
+      ifsc: [{ message: "Enter the 11-character IFSC.", code: "invalid" }],
+    });
+    renderCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add bank account" }));
+
+    // One alert: the field's own. The form-level line would repeat it.
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter the 11-character IFSC.");
   });
 
   it("opens the form from the button, sends the IFSC in capitals, and can be cancelled", () => {

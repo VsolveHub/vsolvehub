@@ -61,7 +61,7 @@ export function ReportApplicantDialog({
               <Text className="text-base font-bold text-text">Report Candidate</Text>
             </View>
             <Pressable hitSlop={12} accessibilityRole="button" accessibilityLabel="Close report dialog" onPress={onClose} className="p-1">
-              <X size={18} color="#6B6560" />
+              <X size={18} color="#756c5e" />
             </Pressable>
           </View>
 
