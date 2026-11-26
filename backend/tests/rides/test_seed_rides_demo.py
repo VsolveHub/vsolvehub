@@ -161,8 +161,16 @@ def test_creates_a_free_and_a_paid_pass_plan(settings: SettingsWrapper, area: Se
     del area
     settings.DEBUG = True
     seed()
-    prices = dict(CaptainPassPlan.objects.values_list("code", "price_paise"))
-    assert prices == {"launch-pass": 0, "day-pass": 4900}
+    plans = {
+        plan.code: (plan.price_paise, plan.duration_hours, plan.max_trips, plan.vehicle_type)
+        for plan in CaptainPassPlan.objects.all()
+    }
+    assert plans == {
+        "launch-pass": (0, 720, 100, None),
+        "day-pass-bike": (1900, 24, None, "BIKE"),
+        "day-pass-auto": (2900, 24, None, "AUTO"),
+        "day-pass-cab": (4900, 24, None, "CAB"),
+    }
 
 
 def test_an_edited_pass_plan_is_never_overwritten(
@@ -171,10 +179,10 @@ def test_an_edited_pass_plan_is_never_overwritten(
     del area
     settings.DEBUG = True
     CaptainPassPlan.objects.create(
-        code="day-pass", name="Day pass", price_paise=5900, duration_hours=24
+        code="day-pass-cab", name="Day pass", price_paise=5900, duration_hours=24
     )
     seed()
-    assert CaptainPassPlan.objects.get(code="day-pass").price_paise == 5900
+    assert CaptainPassPlan.objects.get(code="day-pass-cab").price_paise == 5900
 
 
 def test_three_approved_test_captains_ready_for_duty(

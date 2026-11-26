@@ -11,8 +11,9 @@ through `operations/rides/rate-cards/`. They are not anyone's decision.
 An area and vehicle type that already has an active card is left alone, so running this again,
 or after Operations has set a price, never overwrites a real one.
 
-It also writes two PLACEHOLDER pass plans (a ₹0 launch pass and a ₹49 day pass), and three
-approved test captains (bike, auto, cab) with an active launch pass on +91 90000 777 01-03.
+It also writes four PLACEHOLDER pass plans (a ₹0 launch offer for 30 days or 100 trips on any
+vehicle, and a day pass each for bike ₹19, auto ₹29 and cab ₹49), and three approved test
+captains (bike, auto, cab) with an active launch pass on +91 90000 777 01-03.
 """
 
 from datetime import timedelta
@@ -50,10 +51,31 @@ TEST_VEHICLE_MODELS: dict[str, str] = {
     VehicleType.CAB: "Maruti Dzire",
 }
 
-#: PLACEHOLDER pass plans: the brief's "two pass plans (one ₹0)". Operations sets real ones.
+#: PLACEHOLDER pass plans (Taxi brief A4): a launch offer for every vehicle and a day pass per
+#: vehicle. Operations sets real ones.
 PLACEHOLDER_PASS_PLANS: tuple[dict[str, object], ...] = (
-    {"code": "launch-pass", "name": "Launch pass", "price_paise": 0, "duration_hours": 24},
-    {"code": "day-pass", "name": "Day pass", "price_paise": 4900, "duration_hours": 24},
+    {
+        "code": "launch-pass",
+        "name": "Launch offer",
+        "price_paise": 0,
+        "duration_hours": 720,
+        "max_trips": 100,
+        "vehicle_type": None,
+    },
+    *(
+        {
+            "code": f"day-pass-{vehicle_type.lower()}",
+            "name": "Day pass",
+            "price_paise": price_paise,
+            "duration_hours": 24,
+            "vehicle_type": vehicle_type,
+        }
+        for vehicle_type, price_paise in (
+            (VehicleType.BIKE, 1900),
+            (VehicleType.AUTO, 2900),
+            (VehicleType.CAB, 4900),
+        )
+    ),
 )
 
 #: PLACEHOLDER rates in paise. Base, included metres, per km, per minute, minimum,
