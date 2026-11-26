@@ -60,7 +60,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // `appVersion` runtime policy this keeps its JS off 1.0.0 binaries, which would crash on it.
   // 1.2.0: sign-in moves from Firebase to MSG91 (`otp`). A new version, not an OTA update, so
   // the server's MOBILE_PARTNER_MIN_VERSION can retire the Firebase 1.1.0 builds.
-  version: "1.2.0",
+  // 1.3.0: Rides, Pick up & Drop and Taxi, with the on-duty location foreground service.
+  version: "1.3.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",

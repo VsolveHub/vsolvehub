@@ -47,7 +47,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "vsolve-customer",
   owner: "webaura7000s",
   scheme: "vsolvehub",
-  version: "1.0.0",
+  // 1.1.0: Rides, Pick up & Drop and Taxi, which need the maps native module.
+  version: "1.1.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
