@@ -102,7 +102,7 @@ export default function TabsLayout() {
 
   const tabs: TabItem[] = [
     { name: "Home", href: "/", icon: "home" },
-    { name: "Search", href: "/catalog", icon: "services" },
+    { name: "Services", href: "/catalog", icon: "services" },
     ...(ASSISTANT_ENABLED ? [{ name: "Ask AI", href: "/ai-chat", icon: "aichat" } as TabItem] : []),
     { name: "Bookings", href: "/activity", icon: "bookings" },
     status === "signedIn"
@@ -347,21 +347,6 @@ export default function TabsLayout() {
             </Text>
           </Pressable>
           <View className="flex-row items-center gap-1.5 shrink-0">
-            <Pressable
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Search services"
-              onPress={() => {
-                DeviceEventEmitter.emit("open-catalog-search");
-                router.push({ pathname: "/catalog", params: { search: "1", t: Date.now().toString() } } as never);
-              }}
-              className="h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100"
-            >
-              <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#6B6560" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-                <Circle cx={11} cy={11} r={7} />
-                <Path d="m20 20-3.5-3.5" />
-              </Svg>
-            </Pressable>
             <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-8 w-8 items-center justify-center">
               <Svg viewBox="0 0 24 24" width={19} height={19} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                 <Circle cx={8} cy={21} r={1} />

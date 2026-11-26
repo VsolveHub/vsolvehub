@@ -2,14 +2,15 @@
 // Supports 100% faithful desktop layout matching the web customer portal when on desktop,
 // while leaving the mobile version 100% unchanged.
 import { EmptyState, Text } from "@vsolve/mobile-ui";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "expo-router";
-import { Pressable, RefreshControl, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, TextInput, View, useWindowDimensions } from "react-native";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { CategoryArtwork } from "@/features/catalog/category-artwork";
 import { useCategories, usePromoBanners, type Category } from "@/features/catalog/client-queries";
 import { groupHomeRepairs, type HomeItem } from "@/features/catalog/home-category-groups";
+import { useVoiceSearch } from "@/features/catalog/use-voice-search";
 import {
   GroupedDesktopTile,
   GroupedMobileTile,
@@ -276,6 +277,7 @@ function DesktopHomeScreen() {
 function MobileHomeScreen() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const categories = useCategories();
   const promoBannersQuery = usePromoBanners();
   const [refreshing, setRefreshing] = useState(false);
@@ -289,6 +291,24 @@ function MobileHomeScreen() {
   const navigateToCategory = (category: Category) => {
     router.push(categoryDestination(category.slug) as never);
   };
+
+  const submitSearch = (text: string) => {
+    const q = text.trim();
+    router.push((q ? { pathname: "/catalog", params: { q } } : "/catalog") as never);
+  };
+
+  const voice = useVoiceSearch({
+    onPartial: setQuery,
+    onFinal: (text) => {
+      setQuery(text);
+      submitSearch(text);
+    },
+    // Builds without the speech module: open the keyboard so its own dictation mic can be used.
+    onUnavailable: () => {
+      searchInputRef.current?.focus();
+      Alert.alert("Use keyboard dictation", "Tap the microphone on your keyboard to speak your search.");
+    },
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -310,19 +330,31 @@ function MobileHomeScreen() {
           <Path d="m20 20-4.5-4.5" strokeLinecap="round" />
         </Svg>
         <TextInput
+          ref={searchInputRef}
           value={query}
           onChangeText={setQuery}
           // Same as the web: submitting opens the catalogue's `?q=` search.
-          onSubmitEditing={() => {
-            const q = query.trim();
-            router.push((q ? { pathname: "/catalog", params: { q } } : "/catalog") as never);
-          }}
+          onSubmitEditing={() => submitSearch(query)}
           returnKeyType="search"
           accessibilityLabel="Search for a service"
-          placeholder="Search for a service..."
+          placeholder={voice.listening ? "Listening..." : "Search for a service..."}
           placeholderTextColor="rgba(107,101,96,0.7)"
           className="ml-3 h-12 flex-1 text-sm font-medium text-[#00112e]"
         />
+        <Pressable
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={voice.listening ? "Stop voice search" : "Search by voice"}
+          accessibilityState={{ selected: voice.listening }}
+          onPress={voice.toggle}
+          className={`ml-2 h-9 w-9 items-center justify-center rounded-full ${voice.listening ? "bg-[#EA580C]" : "active:bg-[#e9e4dc]"}`}
+        >
+          <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke={voice.listening ? "#FFFFFF" : "#6B6560"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <Rect x={9} y={2} width={6} height={12} rx={3} />
+            <Path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+            <Path d="M12 18v4" />
+          </Svg>
+        </Pressable>
       </View>
 
       <HeroBannerCarousel />

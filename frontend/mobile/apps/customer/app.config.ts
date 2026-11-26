@@ -121,6 +121,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-image",
     "expo-web-browser",
     [
+      "expo-speech-recognition",
+      {
+        microphonePermission: "V Solve Hub uses the microphone so you can search for services by voice.",
+        speechRecognitionPermission: "V Solve Hub turns your voice into text to search for services.",
+      },
+    ],
+    [
       "expo-splash-screen",
       {
         image: "./assets/splash.png",
