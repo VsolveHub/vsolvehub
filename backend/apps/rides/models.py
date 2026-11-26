@@ -278,6 +278,12 @@ class CaptainPassPlan(models.Model):
     name = models.CharField(max_length=120)
     price_paise = models.PositiveBigIntegerField()
     duration_hours = models.PositiveSmallIntegerField()
+    #: Empty means every vehicle type (Taxi brief A4).
+    vehicle_type = models.CharField(
+        max_length=8, choices=VehicleType.choices, null=True, blank=True
+    )
+    #: Empty means no trip limit. A pass on this plan ends after the trip that reaches it.
+    max_trips = models.PositiveSmallIntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -287,6 +293,10 @@ class CaptainPassPlan(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=Q(duration_hours__gte=1), name="rides_pass_plan_lasts_an_hour_or_more"
+            ),
+            models.CheckConstraint(
+                condition=Q(max_trips__isnull=True) | Q(max_trips__gte=1),
+                name="rides_pass_plan_max_trips_one_or_more",
             ),
         ]
 
