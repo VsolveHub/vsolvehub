@@ -1,31 +1,11 @@
-import { useState, useEffect, useRef } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { RentalPhotos } from "./rental-photos";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { Text, TouchDatePicker } from "@vsolve/mobile-ui";
-import {
-  AlertCircle,
-  ArrowLeft,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Info,
-  MapPin,
-  ShieldCheck,
-  Truck,
-  Wrench,
-} from "lucide-react-native";
+import { AlertCircle, ArrowLeft, Calendar, CheckCircle2, Clock, Info, MapPin, ShieldCheck, Wrench } from "lucide-react-native";
 
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
@@ -47,7 +27,7 @@ function formatDmy(iso: string): string {
 function checkDateOverlap(
   start: string,
   end: string,
-  reservedRanges?: Array<{ start_date: string; end_date: string }>,
+  reservedRanges?: { start_date: string; end_date: string }[],
 ): { start_date: string; end_date: string } | null {
   if (!reservedRanges || reservedRanges.length === 0) return null;
   for (const range of reservedRanges) {

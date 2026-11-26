@@ -2,7 +2,7 @@
 // 100% accurate layout, styling, track selection, typography, and responsiveness.
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
+import { Button, ErrorState, Skeleton, Text, useT, type Translator } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -16,24 +16,25 @@ import {
   Wrench,
 } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, Pressable, useWindowDimensions, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
 import { documentLabel } from "../model/status";
-import { firstStepHref, isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import { firstStepHref, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { ApplicationStatusTracker } from "./status-banner";
 
 type Application = Schemas["PartnerApplication"];
 
 export function ApplicationOverview() {
+  const t = useT();
   const query = usePartnerApplication();
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
     return (
-      <View accessibilityLabel="Loading your application" style={{ rowGap: 16, padding: 16 }}>
+      <View accessibilityLabel={t("apply.editor.loadingAriaLabel")} style={{ rowGap: 16, padding: 16 }}>
         <Skeleton className="h-32 w-full rounded-3xl" />
         <Skeleton className="h-14 w-full rounded-2xl" />
         <Skeleton className="h-40 w-full rounded-3xl" />
@@ -44,9 +45,9 @@ export function ApplicationOverview() {
   if (query.isError && !isMissing) {
     return (
       <ErrorState
-        title="We could not load your application"
-        message="Nothing you have saved is lost. Check your connection and try again."
-        actionLabel="Try again"
+        title={t("apply.editor.loadError.title")}
+        message={t("apply.editor.loadError.message")}
+        actionLabel={t("common.tryAgain")}
         onAction={() => void query.refetch()}
       />
     );
@@ -65,6 +66,7 @@ export function ApplicationOverview() {
  * NotStarted — Shown when the user hasn't started their application yet or wants to pick their track.
  */
 function NotStarted() {
+  const t = useT();
   const router = useRouter();
   const start = useUpdateApplication();
   const [chosen, setChosen] = useState<StartTrack | null>(null);
@@ -115,7 +117,7 @@ function NotStarted() {
               letterSpacing: -0.4,
             }}
           >
-            Start your application
+            {t("apply.overview.notStarted.title")}
           </Text>
 
           <Text
@@ -128,7 +130,7 @@ function NotStarted() {
               maxWidth: 380,
             }}
           >
-            About five minutes. You can stop and come back — nothing is sent for review until you choose to send it.
+            {t("apply.overview.notStarted.subtitle")}
           </Text>
         </LinearGradient>
       </View>
@@ -136,21 +138,25 @@ function NotStarted() {
       {/* Track Prompt Heading */}
       <View style={{ rowGap: 2, marginTop: 4 }}>
         <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>
-          What will you do on VSolve?
+          {t("apply.overview.notStarted.whatWillYouDo")}
         </Text>
         <Text style={{ fontSize: 14, color: "#453f37" }}>
-          Pick one to see what happens next.
+          {t("apply.overview.notStarted.tapToStart")}
         </Text>
       </View>
 
       {/* Track options */}
-      <View accessibilityRole="radiogroup" style={{ gap: 12, width: "100%" }}>
-        {TRACK_CHOICES.map(({ track, title, description, icon: Icon }) => (
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={t("apply.overview.notStarted.whatWillYouDo")}
+        style={{ gap: 12, width: "100%" }}
+      >
+        {TRACK_CHOICES.map(({ track, titleKey, descriptionKey, icon: Icon }) => (
           <TrackCard
             key={track}
             icon={<Icon size={22} color="#ea580c" />}
-            title={title}
-            description={description}
+            title={t(titleKey)}
+            description={t(descriptionKey)}
             selected={chosen === track}
             onPress={() => setChosen(track)}
           />
@@ -169,8 +175,8 @@ function NotStarted() {
         />
       ) : (
         <View style={{ rowGap: 8, marginTop: 4 }}>
-          <PromiseItem text="Nothing is sent for review until you choose to send it" />
-          <PromiseItem text="Nothing is shared with customers until you are approved" />
+          <PromiseItem text={t("apply.overview.promise.notSentUntilYouSend")} />
+          <PromiseItem text={t("apply.overview.promise.notSharedUntilApproved")} />
         </View>
       )}
     </View>
@@ -180,26 +186,26 @@ function NotStarted() {
 const TRACK_CHOICES = [
   {
     track: "SERVICES",
-    title: "I do work at customers' homes",
-    description: "Electrician, plumber, cleaning, beauty, AC, pets, construction, events and more.",
+    titleKey: "apply.overview.track.services.title",
+    descriptionKey: "apply.overview.track.services.description",
     icon: Wrench,
   },
   {
     track: "STAY_HOST",
-    title: "I have rooms to rent",
-    description: "PG, hostel, hotel or rooms.",
+    titleKey: "apply.overview.track.stays.title",
+    descriptionKey: "apply.overview.track.stays.description",
     icon: BedDouble,
   },
   {
     track: "RENTAL_OWNER",
-    title: "I rent out tools or equipment",
-    description: "Tools, machinery, event or home items.",
+    titleKey: "apply.overview.track.rentals.title",
+    descriptionKey: "apply.overview.track.rentals.description",
     icon: Package,
   },
   {
     track: "EMPLOYER",
-    title: "I want to hire staff",
-    description: "A shop, clinic, office or business looking for people to work for you.",
+    titleKey: "apply.overview.track.employer.title",
+    descriptionKey: "apply.overview.track.employer.description",
     icon: Briefcase,
   },
 ] as const;
@@ -217,6 +223,7 @@ function TrackPreview({
   onStart: () => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const preview = trackPreview(track);
   return (
     <View
@@ -230,7 +237,7 @@ function TrackPreview({
       }}
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
-        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>What happens next</Text>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e" }}>{t("apply.overview.preview.title")}</Text>
         <Text style={{ fontSize: 13, color: "#453f37" }}>{preview.time}</Text>
       </View>
       <View style={{ rowGap: 8 }}>
@@ -252,18 +259,18 @@ function TrackPreview({
           </View>
         ))}
       </View>
-      <Text style={{ fontSize: 14, color: "#453f37" }}>You will need a government photo ID.</Text>
+      <Text style={{ fontSize: 14, color: "#453f37" }}>{t("apply.overview.preview.need")}</Text>
       <View style={{ borderRadius: 10, backgroundColor: "#f4f1ec", padding: 12 }}>
         <Text style={{ fontSize: 14, lineHeight: 20, color: "#00112e" }}>{preview.after}</Text>
       </View>
       {failed ? (
-        <Text style={{ fontSize: 14, color: "#be123c" }}>We could not start that. Please try again.</Text>
+        <Text style={{ fontSize: 14, color: "#be123c" }}>{t("apply.overview.startFailed")}</Text>
       ) : null}
       <Button size="lg" onPress={onStart} loading={pending}>
-        Start
+        {t("apply.overview.preview.start")}
       </Button>
       <Button variant="ghost" onPress={onBack} disabled={pending}>
-        Choose something else
+        {t("apply.overview.preview.back")}
       </Button>
     </View>
   );
@@ -410,17 +417,17 @@ function StepMark({ state }: { state: StepProgress["state"] }) {
   );
 }
 
-function describeStep(step: StepProgress): string {
-  if (step.state === "done") return "Done";
-  if (step.state === "optional") return "Optional — you can set this later";
-  if (step.outstanding === 1) return "1 thing needed";
-  return `${step.outstanding} things needed`;
+function describeStep(step: StepProgress, t: Translator["t"]): string {
+  if (step.state === "done") return t("common.done");
+  if (step.state === "optional") return t("apply.shell.describe.optional");
+  return t("apply.shell.describe.outstanding", { count: step.outstanding });
 }
 
 /**
  * Standing — Exact 1:1 replica of Web Partner Portal /apply Standing view.
  */
 function Standing({ application }: { application: Application }) {
+  const t = useT();
   const router = useRouter();
   const availability = usePartnerAvailability();
   const steps = stepProgress(application, availability.data).filter((step) => step.state !== "waypoint");
@@ -438,7 +445,7 @@ function Standing({ application }: { application: Application }) {
         <Pressable
           cssInterop={false}
           accessibilityRole="button"
-          accessibilityLabel="View your application"
+          accessibilityLabel={t("apply.overview.viewApplication")}
           onPress={() => router.push("/apply/profile" as never)}
           style={({ pressed }) => ({
             flexDirection: "row",
@@ -453,7 +460,7 @@ function Standing({ application }: { application: Application }) {
           })}
         >
           <FileText size={18} color="#00112e" strokeWidth={2} />
-          <Text style={{ flex: 1, fontSize: 15, fontWeight: "700", color: "#00112e" }}>View your application</Text>
+          <Text style={{ flex: 1, fontSize: 15, fontWeight: "700", color: "#00112e" }}>{t("apply.overview.viewApplication")}</Text>
           <ChevronRight size={18} color="#94a3b8" />
         </Pressable>
       )}
@@ -471,12 +478,13 @@ function Standing({ application }: { application: Application }) {
           }}
         >
           <Text style={{ fontSize: 15, fontWeight: "700", color: "#9f1239" }}>
-            Action Required: Documents need replacing
+            {t("apply.overview.rejected.heading", { count: replaceable.length })}
           </Text>
           <Text style={{ fontSize: 13, color: "#be123c", lineHeight: 18 }}>
-            A reviewer has rejected one or more verification files. Please upload clear replacement files.
+            {t("apply.overview.rejected.body")}
           </Text>
           <Pressable
+            accessibilityRole="button"
             onPress={() => router.push("/apply/documents" as never)}
             style={{
               alignSelf: "flex-start",
@@ -488,7 +496,7 @@ function Standing({ application }: { application: Application }) {
             }}
           >
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#ffffff" }}>
-              Upload Replacement Documents
+              {t("apply.overview.rejected.upload")}
             </Text>
           </Pressable>
         </View>
@@ -530,7 +538,7 @@ function Standing({ application }: { application: Application }) {
                       {step.label}
                     </Text>
                     <Text style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
-                      {describeStep(step)}
+                      {describeStep(step, t)}
                     </Text>
                   </View>
                 </View>
@@ -555,8 +563,8 @@ function Standing({ application }: { application: Application }) {
           >
             <Text style={{ fontSize: 15, fontWeight: "700", color: "#ffffff" }}>
               {summary.nextIncomplete
-                ? `Continue: ${summary.nextIncomplete.label}`
-                : "Review and send"}
+                ? t("apply.overview.cta.continue", { step: summary.nextIncomplete.label })
+                : t("apply.overview.cta.send")}
             </Text>
           </Pressable>
         </View>
@@ -576,6 +584,7 @@ function Standing({ application }: { application: Application }) {
  * Matches web 1:1 with icons.
  */
 function SwitchTrack({ current }: { current: string }) {
+  const t = useT();
   const router = useRouter();
   const update = useUpdateApplication();
   const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
@@ -592,13 +601,13 @@ function SwitchTrack({ current }: { current: string }) {
       }}
     >
       <Text style={{ fontSize: 16, fontWeight: "700", color: "#00112e", letterSpacing: -0.3 }}>
-        Signed up for the wrong thing?
+        {t("apply.overview.switch.title")}
       </Text>
       <Text style={{ fontSize: 13, lineHeight: 19, color: "#453f37" }}>
-        You can switch until you send your application. Nothing you have filled in is lost.
+        {t("apply.overview.switch.hint")}
       </Text>
       <View style={{ rowGap: 8, marginTop: 2 }}>
-        {others.map(({ track, title, icon: Icon }) => (
+        {others.map(({ track, titleKey, icon: Icon }) => (
           <Pressable cssInterop={false}
             key={track}
             accessibilityRole="button"
@@ -618,12 +627,12 @@ function SwitchTrack({ current }: { current: string }) {
             })}
           >
             <Icon size={16} color="#00112e" strokeWidth={2} />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#00112e" }}>{title}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#00112e" }}>{t(titleKey)}</Text>
           </Pressable>
         ))}
       </View>
       {update.isError ? (
-        <Text style={{ fontSize: 13, color: "#be123c" }}>We could not start that. Please try again.</Text>
+        <Text style={{ fontSize: 13, color: "#be123c" }}>{t("apply.overview.startFailed")}</Text>
       ) : null}
     </View>
   );
@@ -636,22 +645,23 @@ interface HistoryEntry {
   detail: string;
 }
 
-const ARRIVED_LABELS: Record<string, string> = {
-  DRAFT: "You started your application",
-  SUBMITTED: "You sent it for review",
-  UNDER_REVIEW: "A reviewer started checking it",
-  CHANGES_REQUIRED: "We asked you to correct something",
-  APPROVED: "You were approved",
-  SUSPENDED: "Your account was suspended",
-  OFFBOARDED: "Your account was closed",
-  DECLINED: "Your application was not approved",
+const ARRIVED_KEY: Record<string, string> = {
+  DRAFT: "apply.overview.history.arrived.DRAFT",
+  SUBMITTED: "apply.overview.history.arrived.SUBMITTED",
+  UNDER_REVIEW: "apply.overview.history.arrived.UNDER_REVIEW",
+  CHANGES_REQUIRED: "apply.overview.history.arrived.CHANGES_REQUIRED",
+  APPROVED: "apply.overview.history.arrived.APPROVED",
+  SUSPENDED: "apply.overview.history.arrived.SUSPENDED",
+  OFFBOARDED: "apply.overview.history.arrived.OFFBOARDED",
+  DECLINED: "apply.overview.history.arrived.DECLINED",
 };
 
-function describeTransition(fromStatus: string, toStatus: string): string {
+function describeTransition(fromStatus: string, toStatus: string, t: Translator["t"]): string {
   if (fromStatus === "SUSPENDED" && toStatus === "APPROVED") {
-    return "Your account was reinstated";
+    return t("apply.overview.history.reinstated");
   }
-  return ARRIVED_LABELS[toStatus] ?? `${fromStatus} → ${toStatus}`;
+  const key = ARRIVED_KEY[toStatus];
+  return key ? t(key) : `${fromStatus} → ${toStatus}`;
 }
 
 function formatHistoryDate(dateStr: string): string {
@@ -678,13 +688,14 @@ function formatHistoryDate(dateStr: string): string {
  * 100% replica of Web History section.
  */
 function History({ application }: { application: Application }) {
+  const t = useT();
   const transitionEntries: HistoryEntry[] = (application.transitions ?? []).map((transition) => ({
     id: transition.id,
     at: transition.occurred_at,
     title:
       transition.reason_code === "application_resubmitted"
-        ? "You sent it again"
-        : describeTransition(transition.from_status, transition.to_status),
+        ? t("apply.overview.history.resubmitted")
+        : describeTransition(transition.from_status, transition.to_status, t),
     detail: transition.reason ?? "",
   }));
 
@@ -693,7 +704,7 @@ function History({ application }: { application: Application }) {
     transitionEntries.push({
       id: "initial-creation",
       at: application.created_at,
-      title: "You started your application",
+      title: t("apply.overview.history.arrived.DRAFT"),
       detail: "",
     });
   }
@@ -705,7 +716,7 @@ function History({ application }: { application: Application }) {
       events.push({
         id: `${document.id}:uploaded`,
         at: document.uploaded_at,
-        title: `You uploaded a new ${label}`,
+        title: t("apply.overview.history.documentReplaced", { document: label }),
         detail: "",
       });
     }
@@ -713,7 +724,7 @@ function History({ application }: { application: Application }) {
       events.push({
         id: `${document.id}:rejected`,
         at: document.reviewed_at,
-        title: `${label}: needs replacing`,
+        title: t("apply.overview.history.documentRejected", { document: label }),
         detail: document.review_reason ?? "",
       });
     }
@@ -729,7 +740,7 @@ function History({ application }: { application: Application }) {
   return (
     <View style={{ marginTop: 4, rowGap: 10 }}>
       <Text style={{ fontSize: 15, fontWeight: "700", color: "#00112e", paddingHorizontal: 2 }}>
-        What has happened
+        {t("apply.overview.history.heading")}
       </Text>
 
       <View

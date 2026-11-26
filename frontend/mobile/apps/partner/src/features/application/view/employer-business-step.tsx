@@ -4,14 +4,7 @@ import { getCurrentPosition, PlaceSearch, useReverseGeocode, type ResolvedLocati
 import { Badge, Button, ChoiceChips, Field, Input, Select, Text, useT } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import * as ImagePicker from "expo-image-picker";
-import {
-  Building2,
-  CheckCircle2,
-  ImagePlus,
-  MapPin,
-  ShieldCheck,
-  Trash2,
-} from "lucide-react-native";
+import { Building2, ImagePlus, MapPin, ShieldCheck, Trash2 } from "lucide-react-native";
 import { useState } from "react";
 import { Alert, Image, Linking, View } from "react-native";
 
@@ -361,7 +354,7 @@ function FindOnMap({
     );
   }
 
-  async function useMyLocation() {
+  async function locateMe() {
     if (locating) return;
     setLocating(true);
     setMoved(null);
@@ -392,7 +385,7 @@ function FindOnMap({
         variant="outline"
         icon={<MapPin size={16} color="#00112e" />}
         loading={locating || reverseGeocode.isPending}
-        onClick={() => void useMyLocation()}
+        onClick={() => void locateMe()}
       >
         {pinned
           ? t("apply.employer.business.mapPin.moveToMyLocation")

@@ -1,18 +1,9 @@
 import { describeError } from "@vsolve/query/native";
-import { Button, Input, Spinner, Text } from "@vsolve/mobile-ui";
+import { Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  AlertCircle,
-  Camera,
-  CheckCircle2,
-  ChevronLeft,
-  Circle,
-  Clock,
-  MapPin,
-  X,
-} from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Camera, CheckCircle2, ChevronLeft, Circle, Clock, X } from "lucide-react-native";
+import { useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -417,11 +408,10 @@ function QuestionRequest({
   const [refreshing, setRefreshing] = useState(false);
 
   // Auto-select first address when loaded
-  useEffect(() => {
-    if (!addressId && (addresses.data ?? []).length > 0) {
-      setAddressId(addresses.data![0].id);
-    }
-  }, [addressId, addresses.data]);
+  const firstAddressId = addresses.data?.[0]?.id ?? null;
+  if (!addressId && firstAddressId) {
+    setAddressId(firstAddressId);
+  }
 
   // Construct ISO datetime string: e.g. 2026-10-28T09:00:00+05:30
   const effectiveWhen = useMemo(() => {

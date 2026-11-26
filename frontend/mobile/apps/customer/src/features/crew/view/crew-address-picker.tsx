@@ -2,7 +2,7 @@
 import { describeError } from "@vsolve/query/native";
 import type { Schemas } from "@vsolve/api-client";
 import { Button, Input, Sheet, Text } from "@vsolve/mobile-ui";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import {
@@ -41,9 +41,11 @@ export function CrewAddressPicker({
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
 
-  useEffect(() => {
+  const [prevSignal, setPrevSignal] = useState(0);
+  if (openSignal !== prevSignal) {
+    setPrevSignal(openSignal);
     if (openSignal > 0) setOpen(true);
-  }, [openSignal]);
+  }
 
   /** Put the pin here and describe it with Django's reverse geocode, as the web does. */
   async function placePin(lat: string, lng: string) {

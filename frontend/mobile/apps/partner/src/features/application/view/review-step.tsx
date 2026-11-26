@@ -3,7 +3,7 @@ import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { AlertCircle, Bell, Check, X } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import {
   Modal,
   Platform,
@@ -127,9 +127,11 @@ export function ReviewStep() {
   }, [appStatus, isSubmitted, router]);
 
   const submitMutateRef = useRef(submit.mutate);
-  submitMutateRef.current = submit.mutate;
   const refetchRef = useRef(query.refetch);
-  refetchRef.current = query.refetch;
+  useLayoutEffect(() => {
+    submitMutateRef.current = submit.mutate;
+    refetchRef.current = query.refetch;
+  });
 
   const isSaving = submit.isPending || updateApp.isPending;
 
@@ -513,7 +515,7 @@ export function ReviewStep() {
                   onPress={() => setDeclared(!declared)}
                 >
                   <Text style={styles.agreementText}>
-                    The details and documents I've given are true.
+                    The details and documents I&apos;ve given are true.
                   </Text>
                 </Pressable>
               </View>
@@ -530,7 +532,7 @@ export function ReviewStep() {
             <View style={styles.notificationTextContainer}>
               <Text style={styles.notificationTitle}>Get notified about your application</Text>
               <Text style={styles.notificationSubtitle}>
-                We'll tell you when it's reviewed, approved or needs a change.
+                We&apos;ll tell you when it&apos;s reviewed, approved or needs a change.
               </Text>
             </View>
           </View>
@@ -574,7 +576,7 @@ export function ReviewStep() {
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
               <Text style={styles.docBodyText}>
-                By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub's partner terms, service quality standards, and platform policies.
+                By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub&apos;s partner terms, service quality standards, and platform policies.
                 {"\n\n"}
                 Document URL: {selectedConsentDoc?.document_url || "https://vsolvehub.com/terms"}
               </Text>

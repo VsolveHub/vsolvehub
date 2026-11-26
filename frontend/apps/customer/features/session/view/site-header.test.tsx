@@ -61,6 +61,11 @@ vi.mock("@/features/notifications/view/notification-bell", () => ({
   NotificationBell: () => <div data-testid="notification-bell" />,
 }));
 
+import {
+  subscribeOpenAssistant,
+  updateAssistantLauncherState,
+} from "@/features/assistant/launcher-bridge";
+
 const { BottomNav, SiteHeader } = await import("./site-header");
 
 let queryClient: QueryClient;
@@ -86,6 +91,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
+  updateAssistantLauncherState({ open: false, unreadCount: 0 });
   vi.clearAllMocks();
   queryClient.clear();
 });
@@ -277,5 +284,39 @@ describe("BottomNav", () => {
     for (const destination of destinations) {
       expect(destination).toHaveClass("min-w-0", "flex-1");
     }
+  });
+
+  it("places the Ask AI elevated orb in the center slot instead of Cart when assistant is enabled", () => {
+    vi.stubEnv("NEXT_PUBLIC_ASSISTANT_ENABLED", "true");
+    route.pathname = "/";
+    const onOpen = vi.fn();
+    const unsubscribe = subscribeOpenAssistant(onOpen);
+
+    render(<BottomNav />, { wrapper });
+
+    const navigation = screen.getByRole("navigation", { name: "Main" });
+    const destinations = [
+      ...navigation.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>("a, button"),
+    ];
+    expect(destinations).toHaveLength(5);
+    for (const destination of destinations) {
+      expect(destination).toHaveClass("min-w-0", "flex-1");
+    }
+    expect(screen.queryByRole("link", { name: "Cart" })).toBeNull();
+    const askAi = screen.getByRole("button", { name: "Ask AI" });
+    expect(askAi.querySelector("svg")).not.toBeNull();
+    fireEvent.click(askAi);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("keeps Cart in BottomNav on hidden assistant routes like /bookings/123", () => {
+    vi.stubEnv("NEXT_PUBLIC_ASSISTANT_ENABLED", "true");
+    route.pathname = "/bookings/123";
+
+    render(<BottomNav />, { wrapper });
+
+    expect(screen.getByRole("link", { name: "Cart" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask AI" })).toBeNull();
   });
 });

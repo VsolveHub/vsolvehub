@@ -1,4 +1,4 @@
-﻿import { Text } from "@vsolve/mobile-ui";
+import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,

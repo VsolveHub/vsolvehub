@@ -3,19 +3,7 @@ import { Text, useT } from "@vsolve/mobile-ui";
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { Redirect, Slot, usePathname, useRouter } from "expo-router";
-import {
-  ArrowLeft,
-  Bell,
-  BellOff,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Headphones,
-  ListChecks,
-  Send,
-  User,
-  X,
-} from "lucide-react-native";
+import { ArrowLeft, Bell, BellOff, Check, ChevronLeft, ListChecks, User, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
 import {
   ActivityIndicator,
@@ -38,7 +26,6 @@ import { ApplyDockContext, type DockConfig } from "@/features/application/model/
 import { previousStep, stepProgress } from "@/features/application/model/progress";
 import { applicationSteps, nextStep } from "@/features/application/model/steps";
 import { usePartnerApplication, usePartnerAvailability } from "@/features/application/queries";
-import { OnboardingStepper } from "@/features/onboarding/components/onboarding-stepper";
 import { isRequestOpen, usePrivacyRequests } from "@/features/account/privacy-queries";
 import { DeleteAccountDialog } from "@/features/application/view/delete-account-dialog";
 import { HelpSheet } from "@/features/application/view/help-sheet";
@@ -387,10 +374,8 @@ export default function ApplyLayout() {
               {/* Conflict / Error alerts if any */}
               {dockConfig?.conflict ? (
                 <View style={styles.conflictBanner}>
-                  <Text style={styles.conflictTitle}>Someone else changed this application</Text>
-                  <Text style={styles.conflictSubtitle}>
-                    We reloaded the latest version so you can review before continuing.
-                  </Text>
+                  <Text style={styles.conflictTitle}>{t("apply.editor.conflict.title")}</Text>
+                  <Text style={styles.conflictSubtitle}>{t("apply.editor.conflict.message")}</Text>
                 </View>
               ) : null}
 
@@ -403,10 +388,8 @@ export default function ApplyLayout() {
 
               {dockConfig?.failed ? (
                 <View style={styles.failedBanner}>
-                  <Text style={styles.failedTitle}>We could not save this</Text>
-                  <Text style={styles.failedSubtitle}>
-                    Check your internet connection and try again.
-                  </Text>
+                  <Text style={styles.failedTitle}>{t("apply.editor.saveFailed.title")}</Text>
+                  <Text style={styles.failedSubtitle}>{t("apply.editor.saveFailed.message")}</Text>
                 </View>
               ) : null}
 
@@ -425,7 +408,7 @@ export default function ApplyLayout() {
                     pressed ? { opacity: 0.7 } : null,
                   ]}
                 >
-                  <Text style={styles.dockBackButtonText}>Back</Text>
+                  <Text style={styles.dockBackButtonText}>{t("common.back")}</Text>
                 </Pressable>
 
                 {/* Right: Save and Continue */}
@@ -501,7 +484,7 @@ export default function ApplyLayout() {
             >
               {/* Header: "Your steps" + Outlined Square Close Button */}
               <View style={styles.sheetModalHeader}>
-                <Text style={styles.sheetModalTitle}>Your steps</Text>
+                <Text style={styles.sheetModalTitle}>{t("apply.steps.heading")}</Text>
                 <Pressable
                   cssInterop={false}
                   accessibilityRole="button"
@@ -590,7 +573,7 @@ export default function ApplyLayout() {
             >
               {/* Header: "Notifications" + X Close Icon */}
               <View style={styles.sheetModalHeaderNotifications}>
-                <Text style={styles.sheetModalTitle}>Notifications</Text>
+                <Text style={styles.sheetModalTitle}>{t("notifications.panel.title")}</Text>
                 <Pressable
                   cssInterop={false}
                   accessibilityRole="button"
@@ -629,7 +612,7 @@ export default function ApplyLayout() {
                     textAlign: "center",
                   }}
                 >
-                  Nothing to read yet
+                  {t("notifications.panel.empty.title")}
                 </Text>
                 <Text
                   style={{
@@ -641,7 +624,7 @@ export default function ApplyLayout() {
                     maxWidth: 320,
                   }}
                 >
-                  Vsolve tells you here when a job is confirmed, when a customer answers, and when money moves. There is nothing you need to do.
+                  {t("notifications.panel.empty.description")}
                 </Text>
               </View>
             </View>

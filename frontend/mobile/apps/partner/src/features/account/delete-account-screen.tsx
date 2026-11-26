@@ -1,5 +1,5 @@
 import { ApiRequestError } from "@vsolve/api-client";
-import { Text } from "@vsolve/mobile-ui";
+import { Text, useT } from "@vsolve/mobile-ui";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { useRouter } from "expo-router";
 import { Check, Trash2 } from "lucide-react-native";
@@ -60,6 +60,7 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
   const [deletesOn, setDeletesOn] = useState<string | null>(null);
 
   const isConfirmed = confirmInput.trim() === "DELETE";
+  const t = useT();
 
   const handleDone = useCallback(async () => {
     await signOut();
@@ -145,9 +146,9 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
             </View>
 
             {/* Title & Description */}
-            <Text style={styles.title}>Delete your account?</Text>
+            <Text style={styles.title}>{t("apply.account.delete.title")}</Text>
             <Text style={styles.subtitle}>
-              Your account closes now and is deleted after 30 days.
+              {t("apply.account.delete.subtitle")}
             </Text>
 
             {/* 3 Red Bullet Points matching Screen 15 */}
@@ -155,23 +156,21 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
               <View style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
                 <Text style={styles.bulletText}>
-                  You are signed out everywhere and stop getting job offers.
+                  {t("apply.account.delete.bullet.signOut")}
                 </Text>
               </View>
 
               <View style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
                 <Text style={styles.bulletText}>
-                  After 30 days we delete your profile, photo, documents and bank details. Sign in
-                  again before then to keep your account.
+                  {t("apply.account.delete.bullet.data")}
                 </Text>
               </View>
 
               <View style={styles.bulletItem}>
                 <View style={styles.bulletDot} />
                 <Text style={styles.bulletText}>
-                  Finish any open jobs first. Earnings we owe you are paid before deletion, and we
-                  keep job and payout records without your name, as tax law requires.
+                  {t("apply.account.delete.bullet.openWork")}
                 </Text>
               </View>
             </View>
@@ -183,8 +182,8 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
           <Text accessibilityRole="alert" style={{ color: "#b91c1c", fontWeight: "600", marginBottom: 12 }}>
             {createRequest.error instanceof ApiRequestError &&
             createRequest.error.code === "account_deletion_open_work"
-              ? "You have jobs that are still open. Finish them, or call support to pass them to another partner, then delete your account."
-              : "We could not send your request. Nothing has changed. Check your connection and try again."}
+              ? t("apply.account.delete.error.openWork")
+              : t("apply.account.delete.error.generic")}
           </Text>
         ) : null}
         {step === "STEP_2_CONFIRM" ? (
@@ -195,9 +194,9 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
             </View>
 
             {/* Title & Description */}
-            <Text style={styles.title}>Type DELETE to confirm</Text>
+            <Text style={styles.title}>{t("apply.account.delete.typeTitle")}</Text>
             <Text style={styles.subtitle}>
-              This closes your account now. To continue, type DELETE in the box below.
+              {t("apply.account.delete.typeBody")}
             </Text>
 
             {/* Type DELETE Input Box */}
@@ -234,11 +233,11 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
               </View>
             </View>
 
-            <Text style={styles.title}>Your account is closed</Text>
+            <Text style={styles.title}>{t("apply.account.delete.closed.title")}</Text>
             <Text style={styles.subtitle}>
               {deletesOn
-                ? `We'll delete it on ${deletionDate(deletesOn)}. Changed your mind? Sign in again before then and your account stays.`
-                : "We'll delete it in 30 days. Changed your mind? Sign in again before then and your account stays."}
+                ? t("apply.account.delete.closed.body", { date: deletionDate(deletesOn) })
+                : t("apply.account.delete.closed.bodyNoDate")}
             </Text>
           </View>
         ) : null}
@@ -258,7 +257,7 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
                   pressed ? { opacity: 0.9 } : null,
                 ]}
               >
-                <Text style={styles.solidRedButtonText}>Delete my account</Text>
+                <Text style={styles.solidRedButtonText}>{t("apply.account.delete.confirm")}</Text>
               </Pressable>
 
               <Pressable cssInterop={false}
@@ -270,7 +269,7 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
                   pressed ? { backgroundColor: "#f8fafc" } : null,
                 ]}
               >
-                <Text style={styles.outlineButtonText}>Keep my account</Text>
+                <Text style={styles.outlineButtonText}>{t("apply.account.delete.keep")}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -290,7 +289,7 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
               {isDeleting ? (
                 <ActivityIndicator color="#ffffff" size="small" />
               ) : (
-                <Text style={styles.solidRedButtonText}>Delete my account</Text>
+                <Text style={styles.solidRedButtonText}>{t("apply.account.delete.confirm")}</Text>
               )}
             </Pressable>
           ) : null}
@@ -305,7 +304,7 @@ export function DeleteAccountScreen({ showHeader = true }: { showHeader?: boolea
                 pressed ? { opacity: 0.9 } : null,
               ]}
             >
-              <Text style={styles.solidOrangeButtonText}>Done</Text>
+              <Text style={styles.solidOrangeButtonText}>{t("common.done")}</Text>
             </Pressable>
           ) : null}
         </View>

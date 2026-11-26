@@ -76,13 +76,16 @@ export function SafetyStoryViewer({
     },
   );
 
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     if (isOpen) {
       const validIndex = Math.min(Math.max(0, initialIndex), Math.max(0, stories.length - 1));
       setCurrentIndex(validIndex);
-      currentIndexRef.current = validIndex;
       setProgress(0);
       setIsPaused(false);
     }
@@ -314,7 +317,7 @@ export function SafetyStoryViewer({
               </Text>
             ) : null}
             <Text className="text-[11px] font-semibold text-white/70">
-              Verified Trust &amp; Safety Protocol Â· V Solve
+              Verified Trust &amp; Safety Protocol · V Solve
             </Text>
           </View>
         </SafeAreaView>

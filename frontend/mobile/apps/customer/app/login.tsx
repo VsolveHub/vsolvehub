@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { safeNextPath } from "@vsolve/query/native";
 import { useAuthStore, useMobileOtpFlow } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
@@ -7,7 +7,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  RefreshControl,
   ScrollView,
   View,
 } from "react-native";
@@ -32,13 +31,6 @@ export default function LoginScreen() {
   const status = useAuthStore((state) => state.status);
   const flow = useMobileOtpFlow({ getReferralCode: readPendingReferral });
   const next = safeNextPath(typeof params.next === "string" ? params.next : null);
-  const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setRefreshing(false);
-  };
-
   useEffect(() => {
     if (status !== "signedIn") return;
     router.replace((next ?? "/") as never);
@@ -87,17 +79,9 @@ export default function LoginScreen() {
       >
         <ScrollView
           className="flex-1"
-          contentContainerClassName="px-4 py-6 items-center"
+          contentContainerClassName="px-4 pt-6 pb-48 items-center"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={["#EA580C"]}
-              tintColor="#EA580C"
-            />
-          }
         >
           <CustomerLoginExperience
             flow={flow}

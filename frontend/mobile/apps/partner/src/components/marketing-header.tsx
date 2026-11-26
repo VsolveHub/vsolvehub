@@ -5,7 +5,7 @@
 import { Logo, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { ArrowRight, Menu, Phone, X, Zap } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Modal,
   Platform,
@@ -37,11 +37,9 @@ export function MarketingHeader({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Close drawer if screen resizes to desktop
-  useEffect(() => {
-    if (isDesktop && drawerOpen) {
-      setDrawerOpen(false);
-    }
-  }, [isDesktop, drawerOpen]);
+  if (isDesktop && drawerOpen) {
+    setDrawerOpen(false);
+  }
 
   return (
     <>

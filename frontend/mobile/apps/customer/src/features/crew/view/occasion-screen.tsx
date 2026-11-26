@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Info } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import { Pressable, TextInput, View } from "react-native";
 
 import { Text } from "@vsolve/mobile-ui";

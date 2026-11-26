@@ -1,20 +1,5 @@
 import { Text } from "@vsolve/mobile-ui";
-import {
-  ArrowRight,
-  Briefcase,
-  CheckCircle2,
-  Download,
-  IndianRupee,
-  MapPin,
-  PauseCircle,
-  Pencil,
-  Play,
-  RotateCcw,
-  Sparkles,
-  UserPlus,
-  Users,
-  Zap,
-} from "lucide-react-native";
+import { Briefcase, Download, IndianRupee, MapPin, PauseCircle, Pencil, Play, RotateCcw, UserPlus, Zap } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 
 import type { PartnerListing } from "../model";

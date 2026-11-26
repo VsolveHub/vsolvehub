@@ -221,6 +221,7 @@ export function StayDetailDrawer({ property, onClose }: StayDetailDrawerProps) {
                 <>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Previous photo"
                     onPress={() =>
                       setPhotoIdx((prev) => (prev - 1 + photos.length) % photos.length)
                     }
@@ -230,6 +231,7 @@ export function StayDetailDrawer({ property, onClose }: StayDetailDrawerProps) {
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Next photo"
                     onPress={() =>
                       setPhotoIdx((prev) => (prev + 1) % photos.length)
                     }

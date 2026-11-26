@@ -9,7 +9,7 @@ import { Platform, useWindowDimensions } from "react-native";
 import { usePartnerApplication } from "@/features/application/queries";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
 import { PartnerPresenceProvider } from "@/features/presence/view/partner-presence-provider";
-import { PARTNER_ROLE, getPartnerChromeMode, routeRequiresPartnerRole } from "@/features/session/chrome";
+import { PARTNER_ROLE, routeRequiresPartnerRole } from "@/features/session/chrome";
 import { homeForApplication } from "@/features/session/model/redirect";
 import { PartnerGuardView, type GuardBranch } from "@/features/session/partner-guard";
 import { DesktopMobileHandoff } from "@/features/session/view/desktop-mobile-handoff";

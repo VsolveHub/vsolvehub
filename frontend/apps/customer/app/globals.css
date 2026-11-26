@@ -67,8 +67,117 @@ body {
   animation: crew-option-enter 320ms var(--ease-out) backwards;
 }
 
-/* The booking assistant's welcome eases in once, as on the phone app. */
+/* The booking assistant's welcome, launcher, typing, and reply motion. */
 @keyframes assistant-welcome-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes assistant-bot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes assistant-bot-blink {
+  0%,
+  44%,
+  48%,
+  92%,
+  96%,
+  100% {
+    transform: scaleY(1);
+  }
+  46%,
+  94% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes assistant-antenna-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes assistant-ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+}
+
+@keyframes assistant-dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes assistant-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes assistant-peek-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes assistant-peek-enter-desktop {
+  from {
+    opacity: 0;
+    transform: translateX(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes assistant-panel-enter {
   from {
     opacity: 0;
     transform: translateY(14px) scale(0.94);
@@ -83,13 +192,78 @@ body {
   animation: assistant-welcome-enter 520ms var(--ease-out) backwards;
 }
 
+.assistant-bot-float {
+  animation: assistant-bot-float 3.6s ease-in-out infinite;
+}
+
+.assistant-bot-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: assistant-bot-blink 5.2s ease-in-out infinite;
+}
+
+.assistant-antenna-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: assistant-antenna-pulse 2.2s ease-in-out infinite;
+}
+
+.assistant-ring-pulse {
+  animation: assistant-ring-pulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.assistant-dot-1 {
+  animation: assistant-dot-bounce 1.2s ease-in-out infinite 0ms;
+}
+
+.assistant-dot-2 {
+  animation: assistant-dot-bounce 1.2s ease-in-out infinite 160ms;
+}
+
+.assistant-dot-3 {
+  animation: assistant-dot-bounce 1.2s ease-in-out infinite 320ms;
+}
+
+.assistant-msg-enter {
+  animation: assistant-msg-enter 220ms var(--ease-out) backwards;
+}
+
+.assistant-peek-enter {
+  animation: assistant-peek-enter 240ms var(--ease-out) backwards;
+}
+
+.assistant-panel-enter {
+  transform-origin: bottom center;
+  animation: assistant-panel-enter 220ms var(--ease-out) backwards;
+}
+
+@media (min-width: 768px) {
+  .assistant-peek-enter {
+    animation-name: assistant-peek-enter-desktop;
+  }
+
+  .assistant-panel-enter {
+    transform-origin: bottom right;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .crew-stage-enter,
   .crew-option-enter {
     animation-delay: 0ms !important;
   }
 
-  .assistant-welcome-enter {
+  .assistant-welcome-enter,
+  .assistant-bot-float,
+  .assistant-bot-eyes,
+  .assistant-antenna-pulse,
+  .assistant-ring-pulse,
+  .assistant-dot-1,
+  .assistant-dot-2,
+  .assistant-dot-3,
+  .assistant-msg-enter,
+  .assistant-peek-enter,
+  .assistant-panel-enter {
     animation: none;
   }
 }

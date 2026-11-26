@@ -2,7 +2,7 @@
 // Exact match with Image 4 (Signed-in devices tab)
 import { describeError, useRevokeSession, useSessionDevices, type UserSession } from "@vsolve/query/native";
 import { getApiClient, useMobileLogout } from "@vsolve/mobile-core";
-import { Badge, Button, ConfirmAction, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { ConfirmAction, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 

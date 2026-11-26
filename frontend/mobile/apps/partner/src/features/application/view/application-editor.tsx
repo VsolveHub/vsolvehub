@@ -2,16 +2,7 @@
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Skeleton, Text, useT } from "@vsolve/mobile-ui";
 import { usePathname, useRouter } from "expo-router";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, useLayoutEffect } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
@@ -145,6 +136,7 @@ function Editor({
       const details = save.error.details as { unavailable_service_area_ids?: string[] } | undefined;
       const unavailable = details?.unavailable_service_area_ids;
       if (Array.isArray(unavailable) && unavailable.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- reacts to a failed save from the server
         setRemovedAreaNames(
           reference.serviceAreas.filter((area) => unavailable.includes(area.id)).map((area) => area.name),
         );
@@ -209,7 +201,9 @@ function Editor({
   }, [dirty, following, router, save, draft, application, currentVersion]);
 
   const commitRef = useRef(commit);
-  commitRef.current = commit;
+  useLayoutEffect(() => {
+    commitRef.current = commit;
+  });
   const stableOnCommit = useCallback(() => {
     commitRef.current();
   }, []);

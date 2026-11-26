@@ -66,21 +66,37 @@ function useStarterCategories(): string[] {
 }
 
 /** The V Solve Hub helper: a friendly navy bot with the brand's orange. Decorative only. */
-function HelperBot() {
+export function HelperBot({
+  size = 72,
+  className,
+  animated = true,
+}: {
+  size?: number;
+  className?: string;
+  animated?: boolean;
+}) {
   return (
-    <svg width={72} height={72} viewBox="0 0 120 120" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 120 120" className={className} aria-hidden>
       <line x1={60} y1={24} x2={60} y2={12} stroke="#0B1B3D" strokeWidth={4} strokeLinecap="round" />
-      <circle cx={60} cy={10} r={6} fill="#EA580C" />
+      <circle
+        cx={60}
+        cy={10}
+        r={6}
+        fill="#EA580C"
+        className={animated ? "assistant-antenna-pulse" : undefined}
+      />
       <rect x={10} y={50} width={11} height={24} rx={5.5} fill="#EA580C" />
       <rect x={99} y={50} width={11} height={24} rx={5.5} fill="#EA580C" />
       <rect x={34} y={94} width={52} height={22} rx={11} fill="#0B1B3D" />
       <circle cx={60} cy={105} r={4} fill="#EA580C" />
       <rect x={18} y={24} width={84} height={68} rx={26} fill="#0B1B3D" />
       <rect x={27} y={34} width={66} height={46} rx={20} fill="#FFFFFF" />
-      <circle cx={47} cy={55} r={6} fill="#0B1B3D" />
-      <circle cx={73} cy={55} r={6} fill="#0B1B3D" />
-      <circle cx={49} cy={53} r={2} fill="#FFFFFF" />
-      <circle cx={75} cy={53} r={2} fill="#FFFFFF" />
+      <g className={animated ? "assistant-bot-eyes" : undefined}>
+        <circle cx={47} cy={55} r={6} fill="#0B1B3D" />
+        <circle cx={73} cy={55} r={6} fill="#0B1B3D" />
+        <circle cx={49} cy={53} r={2} fill="#FFFFFF" />
+        <circle cx={75} cy={53} r={2} fill="#FFFFFF" />
+      </g>
       <circle cx={38} cy={65} r={4} fill="#EA580C" opacity={0.25} />
       <circle cx={82} cy={65} r={4} fill="#EA580C" opacity={0.25} />
       <path d="M51 66 Q60 74 69 66" stroke="#0B1B3D" strokeWidth={3.5} strokeLinecap="round" fill="none" />

@@ -1,4 +1,4 @@
-﻿// Ported faithfully from frontend/apps/partner/features/session/view/login-screen.tsx
+// Ported faithfully from frontend/apps/partner/features/session/view/login-screen.tsx
 // 100% identical navbar, responsive layout, structure, tokens, and same-tab navigation.
 
 import { ApiRequestError } from "@vsolve/api-client";

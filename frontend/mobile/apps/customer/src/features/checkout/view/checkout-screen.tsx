@@ -4,10 +4,10 @@ import { describeError } from "@vsolve/query/native";
 import { useAuthStore } from "@vsolve/mobile-core";
 import { Button, COLOR_TOKENS, Spinner, Text, cn, formatMoney } from "@vsolve/mobile-ui";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle, Path, Rect } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 
 import { useAddresses } from "@/features/addresses/queries";
 import { useCustomerProfile } from "@/features/account/queries";
@@ -116,16 +116,20 @@ export function CheckoutScreen() {
   });
   const [bookingMode, setBookingMode] = useState<BookingMode>("SCHEDULED");
 
-  useEffect(() => {
+  const [prevSlotsParam, setPrevSlotsParam] = useState<string | undefined | null>(null);
+  if (params.slots !== prevSlotsParam) {
+    setPrevSlotsParam(params.slots);
     if (params.slots) {
       try {
         const parsed = JSON.parse(params.slots);
         if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
           setStarts(parsed);
         }
-      } catch {}
+      } catch {
+        // A malformed deep-link parameter is ignored; the customer picks slots in the sheet.
+      }
     }
-  }, [params.slots]);
+  }
 
   const [planSetId, setPlanSetId] = useState<string | null>(null);
   const [quoteId, setQuoteId] = useState<string | null>(null);
@@ -169,11 +173,9 @@ export function CheckoutScreen() {
   );
   const instant = windowsQuery.data?.instant;
 
-  useEffect(() => {
-    if (bookingMode === "INSTANT" && windowsQuery.data && !instant?.isAvailable) {
-      setBookingMode("SCHEDULED");
-    }
-  }, [bookingMode, windowsQuery.data, instant?.isAvailable]);
+  if (bookingMode === "INSTANT" && windowsQuery.data && !instant?.isAvailable) {
+    setBookingMode("SCHEDULED");
+  }
 
   const createPlanSet = useCreatePlanSet();
   const createQuote = useCreatePlanQuote();

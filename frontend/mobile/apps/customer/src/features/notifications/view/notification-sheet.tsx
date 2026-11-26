@@ -3,7 +3,7 @@ import { useAuthStore } from "@vsolve/mobile-core";
 import { BlurBackdrop, Button, cn, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { Bell, CheckCheck, X } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -37,12 +37,14 @@ export function NotificationSheet({ open, onOpenChange, onRequireLogin }: Notifi
   const [dismissedAll, setDismissedAll] = useState(false);
 
   // Reset local dismissals when sheet is closed
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) {
       setDismissedIds(new Set());
       setDismissedAll(false);
     }
-  }, [open]);
+  }
 
   const rawRows = (feed.data?.pages ?? []).flatMap((page) => page.results);
   const rows = dismissedAll ? [] : rawRows.filter((item) => !dismissedIds.has(item.id));

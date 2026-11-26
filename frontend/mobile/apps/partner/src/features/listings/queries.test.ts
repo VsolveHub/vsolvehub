@@ -1,7 +1,7 @@
+import { fetchListingApplications } from "./queries";
+
 const mockGet = jest.fn();
 jest.mock("@vsolve/mobile-core", () => ({ getApiClient: () => ({ GET: mockGet }) }));
-
-import { fetchListingApplications } from "./queries";
 
 function page(results: { id: string }[], next: string | null) {
   return { data: { results, next, previous: null }, response: new Response(null, { status: 200 }) };

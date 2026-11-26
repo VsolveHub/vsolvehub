@@ -2,7 +2,7 @@ import { Badge, Button, COLOR_TOKENS, MONO_FONT_FAMILY, Text } from "@vsolve/mob
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, MapPin, Navigation, ShieldCheck, Truck } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, Linking, Platform, Pressable, View } from "react-native";
+import { Alert, Linking, Pressable, View } from "react-native";
 
 import {
   canCancelRentalBooking,

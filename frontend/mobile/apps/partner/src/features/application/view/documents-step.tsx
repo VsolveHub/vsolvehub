@@ -3,16 +3,9 @@ import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Spinner, Text, useT } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  CreditCard,
-  FileText,
-  RotateCw,
-} from "lucide-react-native";
+import { AlertCircle, CreditCard, FileText, RotateCw } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
 import { offeredDocumentKinds, requiredDocumentKinds } from "../model/readiness";

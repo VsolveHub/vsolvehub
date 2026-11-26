@@ -5,12 +5,12 @@ import type { LinearGradientProps } from "expo-linear-gradient";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View } from "react-native";
 
-// Type adapter for React 19 / JSX compatibility
-const ExpoLinearGradient = LinearGradient as unknown as (props: LinearGradientProps) => React.JSX.Element;
-
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import type { ServiceDetail } from "@/features/catalog/client-queries";
 import { useIsDesktop } from "@/lib/responsive";
+
+// Type adapter for React 19 / JSX compatibility
+const ExpoLinearGradient = LinearGradient as unknown as (props: LinearGradientProps) => React.JSX.Element;
 
 function cleanStep(title: string, text: string) {
   const cleanTitle = title.replace(/Service guarantee activation/i, "Service completion sign-off");

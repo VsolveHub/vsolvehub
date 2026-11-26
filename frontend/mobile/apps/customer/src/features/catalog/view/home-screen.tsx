@@ -9,6 +9,12 @@ import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { CategoryArtwork } from "@/features/catalog/category-artwork";
 import { useCategories, usePromoBanners, type Category } from "@/features/catalog/client-queries";
+import { groupHomeRepairs, type HomeItem } from "@/features/catalog/home-category-groups";
+import {
+  GroupedDesktopTile,
+  GroupedMobileTile,
+  RepairsTradesModal,
+} from "@/features/catalog/view/grouped-category-modal";
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
 import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
@@ -24,6 +30,13 @@ export function HomeScreen() {
   return <MobileHomeScreen />;
 }
 
+function categoryDestination(slug: string): string {
+  if (slug === "rental-services") return "/rentals";
+  if (slug === "rooms-pg-hostel-hotels") return "/stays";
+  if (slug === "career-jobs") return "/listings";
+  return `/catalog/${slug}`;
+}
+
 /**
  * 100% faithful desktop layout matching Image 1 (frontend/apps/customer/app/page.tsx)
  */
@@ -34,17 +47,28 @@ function DesktopHomeScreen() {
   const promoBannersQuery = usePromoBanners();
   const [refreshing, setRefreshing] = useState(false);
 
+  const categoryList = categories.data ?? [];
+  const homeItems = groupHomeRepairs(categoryList);
+  const groupedMembers =
+    homeItems.find((item): item is Extract<HomeItem, { kind: "group" }> => item.kind === "group")
+      ?.members ?? [];
+  const [repairsModalOpen, setRepairsModalOpen] = useState(false);
+
   // Responsive column count matching Web:
-  // md (768px - 1023px): 4 columns (balanced 4x3 grid for 12 categories)
-  // lg (>= 1024px): 6 columns (balanced 6x2 grid for 12 categories)
-  const numCols = windowWidth >= 1024 ? 6 : 4;
-  const gapClass = numCols === 6 ? "gap-7" : "gap-5";
+  // md (768px - 1023px): 4 columns
+  // lg (>= 1024px): 5 columns when 10 items (5x2), 6 otherwise
+  const numCols =
+    windowWidth >= 1024
+      ? homeItems.length > 0 && homeItems.length % 5 === 0 && homeItems.length % 6 !== 0
+        ? 5
+        : 6
+      : 4;
+  const gapClass = numCols >= 5 ? "gap-7" : "gap-5";
   const iconSize = numCols === 4 ? 64 : 52;
 
-  const categoryList = categories.data ?? [];
-  const rows = [];
-  for (let i = 0; i < categoryList.length; i += numCols) {
-    rows.push(categoryList.slice(i, i + numCols));
+  const rows: HomeItem[][] = [];
+  for (let i = 0; i < homeItems.length; i += numCols) {
+    rows.push(homeItems.slice(i, i + numCols));
   }
 
   const onRefresh = async () => {
@@ -54,15 +78,7 @@ function DesktopHomeScreen() {
   };
 
   const handleCategoryPress = (category: Category) => {
-    if (category.slug === "rental-services") {
-      router.push("/rentals" as never);
-    } else if (category.slug === "rooms-pg-hostel-hotels") {
-      router.push("/stays" as never);
-    } else if (category.slug === "career-jobs") {
-      router.push("/listings" as never);
-    } else {
-      router.push(`/catalog/${category.slug}` as never);
-    }
+    router.push(categoryDestination(category.slug) as never);
   };
 
   return (
@@ -129,25 +145,33 @@ function DesktopHomeScreen() {
             <EmptyState title="No services are published yet" description="Our catalogue is being set up. Please check back shortly." />
           ) : null}
 
-          {!categories.isPending && !categories.isError && categoryList.length > 0 ? (
+          {!categories.isPending && !categories.isError && homeItems.length > 0 ? (
             <View className={gapClass}>
               {rows.map((row, rowIndex) => (
                 <View key={`cat-row-${rowIndex}`} className={`flex-row ${gapClass}`}>
-                  {row.map((category) => (
-                    <Pressable
-                      key={category.id}
-                      accessibilityRole="link"
-                      onPress={() => handleCategoryPress(category)}
-                      className="flex-1 items-center gap-2.5 group hover:scale-105"
-                    >
-                      <View className="aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-[#e7e2da] overflow-hidden items-center justify-center shadow-xs">
-                        <CategoryArtwork category={category} iconSize={iconSize} />
-                      </View>
-                      <Text numberOfLines={2} className="w-full text-center text-sm lg:text-[15px] font-bold leading-tight text-navy-900 px-1">
-                        {category.name}
-                      </Text>
-                    </Pressable>
-                  ))}
+                  {row.map((item) =>
+                    item.kind === "group" ? (
+                      <GroupedDesktopTile
+                        key="repairs-maintenance"
+                        members={item.members}
+                        onPress={() => setRepairsModalOpen(true)}
+                      />
+                    ) : (
+                      <Pressable
+                        key={item.category.id}
+                        accessibilityRole="link"
+                        onPress={() => handleCategoryPress(item.category)}
+                        className="flex-1 items-center gap-2.5 group hover:scale-105"
+                      >
+                        <View className="aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-[#e7e2da] overflow-hidden items-center justify-center shadow-xs">
+                          <CategoryArtwork category={item.category} iconSize={iconSize} />
+                        </View>
+                        <Text numberOfLines={2} className="w-full text-center text-sm lg:text-[15px] font-bold leading-tight text-navy-900 px-1">
+                          {item.category.name}
+                        </Text>
+                      </Pressable>
+                    ),
+                  )}
                   {row.length < numCols &&
                     Array.from({ length: numCols - row.length }).map((_, i) => (
                       <View key={`pad-${i}`} className="flex-1" />
@@ -156,6 +180,17 @@ function DesktopHomeScreen() {
               ))}
             </View>
           ) : null}
+
+          <RepairsTradesModal
+            visible={repairsModalOpen}
+            members={groupedMembers}
+            isDesktop
+            onSelectCategory={(category) => {
+              setRepairsModalOpen(false);
+              handleCategoryPress(category);
+            }}
+            onClose={() => setRepairsModalOpen(false)}
+          />
         </View>
 
         {/* 3. Rich Client Sections (Best Sellers, Electrical Safety Carousel, Electrician, Guides, Plumbing, Carpenter, Testimonials) */}
@@ -240,9 +275,20 @@ function DesktopHomeScreen() {
  */
 function MobileHomeScreen() {
   const router = useRouter();
+  const [query, setQuery] = useState("");
   const categories = useCategories();
   const promoBannersQuery = usePromoBanners();
   const [refreshing, setRefreshing] = useState(false);
+  const [repairsModalOpen, setRepairsModalOpen] = useState(false);
+
+  const mobileItems = groupHomeRepairs(categories.data ?? []);
+  const groupedMembers =
+    mobileItems.find((item): item is Extract<HomeItem, { kind: "group" }> => item.kind === "group")
+      ?.members ?? [];
+
+  const navigateToCategory = (category: Category) => {
+    router.push(categoryDestination(category.slug) as never);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -264,6 +310,15 @@ function MobileHomeScreen() {
           <Path d="m20 20-4.5-4.5" strokeLinecap="round" />
         </Svg>
         <TextInput
+          value={query}
+          onChangeText={setQuery}
+          // Same as the web: submitting opens the catalogue's `?q=` search.
+          onSubmitEditing={() => {
+            const q = query.trim();
+            router.push((q ? { pathname: "/catalog", params: { q } } : "/catalog") as never);
+          }}
+          returnKeyType="search"
+          accessibilityLabel="Search for a service"
           placeholder="Search for a service..."
           placeholderTextColor="rgba(107,101,96,0.7)"
           className="ml-3 h-12 flex-1 text-sm font-medium text-[#00112e]"
@@ -299,11 +354,7 @@ function MobileHomeScreen() {
         {categories.isError ? (
           <EmptyState
             title="We could not load services"
-            description={
-              categories.error
-                ? `${(categories.error as any).name ?? "Error"}: ${(categories.error as any).message ?? String(categories.error)}${(categories.error as any).cause ? ` (${String((categories.error as any).cause?.message || (categories.error as any).cause)})` : ""}`
-                : "Check your connection and try again."
-            }
+            description="Check your connection and try again."
             action={
               <Pressable accessibilityRole="button" onPress={() => void categories.refetch()} className="rounded-control bg-action px-4 py-2">
                 <Text className="text-sm font-semibold text-action-text">Try again</Text>
@@ -317,29 +368,28 @@ function MobileHomeScreen() {
         {!categories.isPending && !categories.isError ? (
           <View className="gap-3">
             {Array.from(
-              { length: Math.ceil((categories.data ?? []).length / 3) },
+              { length: Math.ceil(mobileItems.length / 3) },
               (_, rowIndex) => {
-                const rowItems = (categories.data ?? []).slice(rowIndex * 3, rowIndex * 3 + 3);
+                const rowItems = mobileItems.slice(rowIndex * 3, rowIndex * 3 + 3);
                 return (
                   <View key={`cat-row-${rowIndex}`} className="flex-row gap-3">
-                    {rowItems.map((category) => (
-                      <View key={category.id} className="flex-1">
-                        <CategoryTile
-                          category={category}
-                          onPress={() => {
-                            if (category.slug === "rental-services") {
-                              router.push("/rentals" as never);
-                            } else if (category.slug === "rooms-pg-hostel-hotels") {
-                              router.push("/stays" as never);
-                            } else if (category.slug === "career-jobs") {
-                              router.push("/listings" as never);
-                            } else {
-                              router.push(`/catalog/${category.slug}` as never);
-                            }
-                          }}
-                        />
-                      </View>
-                    ))}
+                    {rowItems.map((item) =>
+                      item.kind === "group" ? (
+                        <View key="repairs-maintenance" className="flex-1">
+                          <GroupedMobileTile
+                            members={item.members}
+                            onPress={() => setRepairsModalOpen(true)}
+                          />
+                        </View>
+                      ) : (
+                        <View key={item.category.id} className="flex-1">
+                          <CategoryTile
+                            category={item.category}
+                            onPress={() => navigateToCategory(item.category)}
+                          />
+                        </View>
+                      ),
+                    )}
                     {rowItems.length < 3 &&
                       Array.from({ length: 3 - rowItems.length }).map((_, fillerIndex) => (
                         <View key={`filler-${fillerIndex}`} className="flex-1" />
@@ -350,6 +400,17 @@ function MobileHomeScreen() {
             )}
           </View>
         ) : null}
+
+        <RepairsTradesModal
+          visible={repairsModalOpen}
+          members={groupedMembers}
+          isDesktop={false}
+          onSelectCategory={(category) => {
+            setRepairsModalOpen(false);
+            navigateToCategory(category);
+          }}
+          onClose={() => setRepairsModalOpen(false)}
+        />
       </View>
 
       <HomepageClientSections />

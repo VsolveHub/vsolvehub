@@ -18,6 +18,8 @@ import { SafetyStoriesTray } from "@/features/stories/view/safety-stories-tray";
 import { getActiveHeroSlides } from "@/features/home/hero-slides";
 import { HeroCarousel } from "@/features/home/hero-carousel";
 import { catalogCategoryHref } from "@/lib/routes";
+import { GroupedCategoryTile } from "@/features/catalog/components/grouped-category-tile";
+import { groupHomeRepairs } from "@/features/catalog/home-category-groups";
 import { DEFAULT_DESCRIPTION, HOME_TITLE } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -101,11 +103,19 @@ async function CategoryGrid() {
     );
   }
 
+  const homeItems = groupHomeRepairs(categories);
+  const desktopColumnsClass =
+    homeItems.length % 5 === 0 && homeItems.length % 6 !== 0
+      ? "lg:grid-cols-5"
+      : "lg:grid-cols-6";
+
   return (
     <>
-      {/* Desktop: clean responsive grid showing all published categories (6 columns on lg, 4 on md) */}
-      <div className="hidden md:grid grid-cols-4 lg:grid-cols-6 gap-5 lg:gap-7">
-        {categories.map((category) => (
+      {/* Desktop: clean responsive grid showing all published categories (5 columns when 10 items, 6 otherwise) */}
+      <div className={`hidden md:grid grid-cols-4 ${desktopColumnsClass} gap-5 lg:gap-7`}>
+        {homeItems.map((item) => item.kind === "group" ? (
+          <GroupedCategoryTile key="repairs-maintenance" members={item.members} variant="desktop" />
+        ) : (() => { const category = item.category; return (
           <IntentLink
             key={category.id}
             href={catalogCategoryHref(category.slug)}
@@ -151,12 +161,16 @@ async function CategoryGrid() {
               </h3>
             </div>
           </IntentLink>
-        ))}
+        ); })())}
       </div>
 
       {/* Mobile: the whole catalogue as photo tiles, three across. */}
       <ul className="grid md:hidden list-none grid-cols-3 gap-3 p-0">
-        {categories.map((category) => (
+        {homeItems.map((item) => item.kind === "group" ? (
+          <li key="repairs-maintenance" className="min-w-0">
+            <GroupedCategoryTile members={item.members} variant="mobile" />
+          </li>
+        ) : (() => { const category = item.category; return (
           <li key={category.id} className="min-w-0">
             <IntentLink
               href={catalogCategoryHref(category.slug)}
@@ -193,7 +207,7 @@ async function CategoryGrid() {
               </span>
             </IntentLink>
           </li>
-        ))}
+        ); })())}
       </ul>
     </>
   );
@@ -208,6 +222,7 @@ export default async function HomePage() {
     getCategories(),
     getActiveSafetyStories(),
   ]);
+  const homeItems = groupHomeRepairs(categories);
   const heroSlides = getActiveHeroSlides();
 
   return (
@@ -326,7 +341,11 @@ export default async function HomePage() {
               </Link>
             </div>
             <ul className="grid list-none grid-cols-3 gap-3 sm:gap-4 p-0">
-              {categories.map((category, index) => (
+              {homeItems.map((item, index) => item.kind === "group" ? (
+                <li key="repairs-maintenance" className="min-w-0">
+                  <GroupedCategoryTile members={item.members} variant="mobile" />
+                </li>
+              ) : (() => { const category = item.category; return (
                 <li key={category.id} className="min-w-0">
                   <IntentLink
                     href={catalogCategoryHref(category.slug)}
@@ -369,7 +388,7 @@ export default async function HomePage() {
                     </span>
                   </IntentLink>
                 </li>
-              ))}
+              ); })())}
             </ul>
           </div>
 

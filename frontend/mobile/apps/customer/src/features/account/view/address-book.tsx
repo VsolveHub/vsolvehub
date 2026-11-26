@@ -1,7 +1,7 @@
 // Ported from frontend/apps/customer/features/addresses/view/address-book.tsx
 // Exact match with Image 2 (Saved addresses tab)
 import { describeError } from "@vsolve/query/native";
-import { Badge, Button, ConfirmAction, Dialog, ErrorState, Field, Input, Spinner, Text } from "@vsolve/mobile-ui";
+import { Button, ConfirmAction, Dialog, ErrorState, Field, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as Location from "expo-location";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";

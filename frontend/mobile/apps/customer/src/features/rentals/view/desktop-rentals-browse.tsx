@@ -1,22 +1,11 @@
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useQuery } from "@tanstack/react-query";
-import { Skeleton, Text } from "@vsolve/mobile-ui";
+import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  ArrowLeft,
-  ArrowRight,
-  FileCheck2,
-  Heart,
-  IndianRupee,
-  Layers,
-  MapPin,
-  Search,
-  Wrench,
-  X,
-} from "lucide-react-native";
-import { useCallback, useId, useState } from "react";
-import { Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { ArrowLeft, ArrowRight, FileCheck2, Heart, IndianRupee, Layers, MapPin, Search, Wrench } from "lucide-react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { PlaceFilter } from "@/features/browse/place-filter";
@@ -28,30 +17,26 @@ import {
   type PlaceFilterValue,
 } from "@/features/browse/nearby";
 
-import {
-  formatPaise,
-  type RentalAsset,
-  type RentalTaxonomySubcategory,
-} from "../model";
+import { formatPaise, type RentalAsset } from "../model";
 import { fetchRentals, fetchRentalTaxonomy } from "../queries";
 import { useSavedItems } from "../use-saved-items";
 
 const SLIDER_MIN_PAISE = 0;
-const SLIDER_MAX_PAISE = 500_000; // â‚¹5,000 / day
-const SLIDER_STEP_PAISE = 5_000; // â‚¹50 step
+const SLIDER_MAX_PAISE = 500_000; // ₹5,000 / day
+const SLIDER_STEP_PAISE = 5_000; // ₹50 step
 
 function paiseToDisplay(paise: number): string {
   const rupees = Math.round(paise / 100);
-  if (rupees >= 1000) return `â‚¹${(rupees / 1000).toFixed(rupees % 1000 === 0 ? 0 : 1)}k`;
-  return `â‚¹${rupees}`;
+  if (rupees >= 1000) return `₹${(rupees / 1000).toFixed(rupees % 1000 === 0 ? 0 : 1)}k`;
+  return `₹${rupees}`;
 }
 
 const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
   { label: "All Rates", min: undefined, max: undefined },
-  { label: "Under â‚¹500", min: undefined, max: 50_000 },
-  { label: "â‚¹500 â€“ â‚¹1.5k", min: 50_000, max: 150_000 },
-  { label: "â‚¹1.5k â€“ â‚¹3k", min: 150_000, max: 300_000 },
-  { label: "â‚¹3k+", min: 300_000, max: undefined },
+  { label: "Under ₹500", min: undefined, max: 50_000 },
+  { label: "₹500 – ₹1.5k", min: 50_000, max: 150_000 },
+  { label: "₹1.5k – ₹3k", min: 150_000, max: 300_000 },
+  { label: "₹3k+", min: 300_000, max: undefined },
 ];
 
 export function DesktopRentalsBrowse() {
@@ -347,7 +332,7 @@ export function DesktopRentalsBrowse() {
                     hasPriceFilter || priceSliderOpen ? "text-white" : "text-[#475569]"
                   }`}
                 >
-                  {hasPriceFilter ? "Daily rate âœ•" : "Daily rate"}
+                  {hasPriceFilter ? "Daily rate ✕" : "Daily rate"}
                 </Text>
               </Pressable>
             </View>
@@ -359,7 +344,7 @@ export function DesktopRentalsBrowse() {
                   <View className="flex-row items-center gap-2">
                     <Text className="text-xs font-bold text-navy-900">Daily rate range</Text>
                     <Text className="text-xs font-extrabold text-[#EA580C] tabular-nums">
-                      {paiseToDisplay(minPrice ?? SLIDER_MIN_PAISE)} â€“{" "}
+                      {paiseToDisplay(minPrice ?? SLIDER_MIN_PAISE)} –{" "}
                       {(maxPrice ?? SLIDER_MAX_PAISE) >= SLIDER_MAX_PAISE
                         ? `${paiseToDisplay(SLIDER_MAX_PAISE)}+`
                         : paiseToDisplay(maxPrice ?? SLIDER_MAX_PAISE)}
@@ -445,7 +430,7 @@ export function DesktopRentalsBrowse() {
           {/* Summary Row matching Web customer portal */}
           <View className="flex-row items-center justify-between text-xs text-[#6B6560] font-medium px-1">
             {isLoading ? (
-              <Text className="text-xs font-medium text-[#6B6560]">Loading equipmentâ€¦</Text>
+              <Text className="text-xs font-medium text-[#6B6560]">Loading equipment…</Text>
             ) : (
               <Text className="text-xs font-medium text-[#6B6560]">
                 Showing <Text className="font-bold text-navy-900">{rentals.length}</Text> rental item
@@ -665,7 +650,7 @@ function DesktopRentalCard({ asset }: { asset: RentalAsset }) {
             </Text>
             {asset.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                Â· {asset.distance_km} km away
+                · {asset.distance_km} km away
               </Text>
             ) : null}
           </View>

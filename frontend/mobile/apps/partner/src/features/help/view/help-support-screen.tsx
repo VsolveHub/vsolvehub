@@ -10,13 +10,7 @@ import {
   Phone,
   Users,
 } from "lucide-react-native";
-import {
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 
 import { NavyHeaderLayout } from "@/features/onboarding/components/navy-header-layout";
 
@@ -123,7 +117,7 @@ export function HelpSupportScreen() {
             <Users size={22} color="#00112e" strokeWidth={2} />
           </View>
           <View style={styles.bottomInfoText}>
-            <Text style={styles.bottomTitle}>We're here to help</Text>
+            <Text style={styles.bottomTitle}>We&apos;re here to help</Text>
             <Text style={styles.bottomSubtitle}>Real people. Real support.</Text>
             <Text style={styles.bottomHours}>Monday – Friday, 9am – 6pm.</Text>
           </View>

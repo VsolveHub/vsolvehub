@@ -8,12 +8,7 @@ import {
   ListingCardSkeleton,
   Text,
 } from "@vsolve/mobile-ui";
-import {
-  Briefcase,
-  Crown,
-  Plus,
-  Sparkles,
-} from "lucide-react-native";
+import { Crown, Plus } from "lucide-react-native";
 
 import { type PartnerListing } from "../model";
 import {

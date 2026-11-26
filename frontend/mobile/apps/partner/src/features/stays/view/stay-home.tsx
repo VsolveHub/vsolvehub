@@ -23,12 +23,7 @@ import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";
 
 import { usePartnerPerformance } from "../../earnings/queries";
 
-import {
-  type PartnerStayVisit,
-  type StayEnquiry,
-  clockWindow,
-  dayLabel,
-} from "../model";
+import { clockWindow, dayLabel } from "../model";
 import {
   fetchPartnerStayEnquiries,
   fetchPartnerStayProperties,
@@ -131,7 +126,7 @@ export function StayHome() {
 
   // 4. Arriving today: check_in === today
   const arriving = useMemo(() => {
-    const list: Array<{ id: string; title: string; who: string; phone?: string }> = [];
+    const list: { id: string; title: string; who: string; phone?: string }[] = [];
     for (const e of enquiries) {
       if (e.status === "CONFIRMED" && dayOf(e.check_in) === today) {
         list.push({
@@ -157,7 +152,7 @@ export function StayHome() {
 
   // 5. Leaving today: check_out <= today
   const leaving = useMemo(() => {
-    const list: Array<{ id: string; title: string; who: string; phone?: string }> = [];
+    const list: { id: string; title: string; who: string; phone?: string }[] = [];
     for (const e of enquiries) {
       if (e.status === "CONFIRMED" && dayOf(e.check_out) === today) {
         list.push({

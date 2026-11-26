@@ -121,7 +121,7 @@ export function Dialog({
           accessibilityLabel="Close dialog backdrop"
         />
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
           className="flex-1 items-center justify-center px-4"
           pointerEvents="box-none"
@@ -185,7 +185,7 @@ export function Sheet(props: BaseProps) {
           />
         ) : null}
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="justify-end"
           pointerEvents="box-none"
         >

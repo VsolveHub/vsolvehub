@@ -3,23 +3,15 @@ import { Modal, Pressable, ScrollView, View } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { formatMoney, Text } from "@vsolve/mobile-ui";
-import {
-  BadgeCheck,
-  ChevronLeft,
-  ChevronRight,
-  Headphones,
-  ShieldCheck,
-  Tag,
-  X,
-} from "lucide-react-native";
+import { BadgeCheck, ChevronLeft, Headphones, ShieldCheck, Tag, X } from "lucide-react-native";
 
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import type { Category, ServiceCard } from "@/features/catalog/client-queries";
 import { serviceHref } from "@/features/catalog/service-href";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { categoryHeadline } from "@/features/catalog/tile-desktop-rating";
-import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import type { TileGroup } from "./category-screen";
+import { ServiceIcon } from "@/features/catalog/icon-catalogue/service-icon-view";
 
 const SIDEBAR_TILE_CAP = 6;
 
@@ -57,10 +49,9 @@ function TileItemGraphic({ tile, size = 48 }: { tile: TileGroup; size?: number }
       />
     );
   }
-  const Icon = iconForService(tile.iconKey);
   return (
     <View style={{ width: size, height: size }} className="items-center justify-center">
-      <Icon color="#453f37" size={Math.round(size * 0.6)} strokeWidth={1.6} />
+      <ServiceIcon iconKey={tile.iconKey} color="#453f37" size={Math.round(size * 0.6)} strokeWidth={1.6} />
     </View>
   );
 }
@@ -69,7 +60,6 @@ function ServiceItemPhoto({ uri, iconKey }: { uri: string; iconKey: string }) {
   const [loadError, setLoadError] = useState(false);
   const resolved = resolveImageUrl(uri);
   const cover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
-  const Icon = iconForService(iconKey);
 
   return (
     <View className="size-[5.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC]">
@@ -81,7 +71,7 @@ function ServiceItemPhoto({ uri, iconKey }: { uri: string; iconKey: string }) {
           onError={() => setLoadError(true)}
         />
       ) : (
-        <Icon color="#453f37" size={32} strokeWidth={1.6} />
+        <ServiceIcon iconKey={iconKey} color="#453f37" size={32} strokeWidth={1.6} />
       )}
     </View>
   );

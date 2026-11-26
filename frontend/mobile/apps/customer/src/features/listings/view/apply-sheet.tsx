@@ -13,15 +13,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Button, Text } from "@vsolve/mobile-ui";
-import {
-  AlertCircle,
-  ArrowLeft,
-  CheckCircle2,
-  FileCheck2,
-  FileText,
-  Upload,
-  X,
-} from "lucide-react-native";
+import { AlertCircle, ArrowLeft, FileText, Upload, X } from "lucide-react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
 

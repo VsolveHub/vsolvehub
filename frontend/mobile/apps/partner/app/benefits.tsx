@@ -1,4 +1,4 @@
-﻿import { Text } from "@vsolve/mobile-ui";
+import { Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
@@ -10,10 +10,10 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react-native";
-import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, useWindowDimensions, View , Platform, StatusBar } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Platform, StatusBar } from "react-native";
+
 import { MarketingHeader } from "../src/components/marketing-header";
 import { MarketingFooter } from "../src/components/marketing-footer";
 

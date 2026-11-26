@@ -140,7 +140,7 @@ export function StayReviewSheet({
       title="Review This Stay"
       description="Tell other guests how your stay went."
     >
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
         className="max-h-[80vh] gap-4 py-2"
         showsVerticalScrollIndicator={false}
       >

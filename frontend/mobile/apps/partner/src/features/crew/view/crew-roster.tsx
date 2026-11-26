@@ -2,7 +2,7 @@
 import { Badge, Button, Card, ConfirmAction, Disclosure, EmptyState, ErrorState, Text } from "@vsolve/mobile-ui";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { outstandingDocumentKinds, type CrewRow, type RosterView } from "../adapters/roster";
 import { crewGenderLabel } from "./crew-gender";

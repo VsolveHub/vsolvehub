@@ -1,5 +1,5 @@
 import { describeError } from "@vsolve/query/native";
-import { useMobileLogout, webBaseUrl } from "@vsolve/mobile-core";
+import { webBaseUrl } from "@vsolve/mobile-core";
 import { ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import * as WebBrowser from "expo-web-browser";

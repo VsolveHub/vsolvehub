@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import { Image } from "expo-image";
 
-import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import { useCatalogServiceIndex } from "@/features/catalog/client-queries";
 import { isServiceCoverUrl, type CatalogServiceHint } from "@/features/catalog/service-cover";
+import { ServiceIcon } from "@/features/catalog/icon-catalogue/service-icon-view";
 
 export function CatalogServiceThumb({
   hint,
@@ -33,12 +33,11 @@ export function CatalogServiceThumb({
     );
   }
 
-  const IconComponent = iconForService(iconKey);
   return (
     <View
       className={`h-[4.75rem] w-[7rem] shrink-0 items-center justify-center rounded-2xl border border-line bg-[#F4F1EC] ${className}`}
     >
-      <IconComponent size={28} color="#0B1B3D" strokeWidth={1.8} />
+      <ServiceIcon iconKey={iconKey} size={28} color="#0B1B3D" strokeWidth={1.8} />
     </View>
   );
 }

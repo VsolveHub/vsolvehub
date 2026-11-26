@@ -4,11 +4,10 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { BlurBackdrop, Button, ErrorState, Skeleton, Text, cn, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, ChevronLeft, ClipboardList, X } from "lucide-react-native";
+import { ArrowLeft, ClipboardList, X } from "lucide-react-native";
 
-import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Modal, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
@@ -17,6 +16,7 @@ import { serviceHref } from "@/features/catalog/service-href";
 import { AddToCartButton } from "@/features/catalog/view/add-to-cart-button";
 import { useIsDesktop } from "@/lib/responsive";
 import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
+import { ServiceIcon } from "@/features/catalog/icon-catalogue/service-icon-view";
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
@@ -118,10 +118,9 @@ function ListSkeleton() {
 }
 
 function TradeMark({ iconKey }: { iconKey: string }) {
-  const Icon = iconForService(iconKey);
   return (
     <View className="size-12 items-center justify-center">
-      <Icon color="#453f37" size={28} strokeWidth={1.6} />
+      <ServiceIcon iconKey={iconKey} color="#453f37" size={28} strokeWidth={1.6} />
     </View>
   );
 }
@@ -130,7 +129,6 @@ function Thumb({ uri, px, iconKey }: { uri: string; px: number; iconKey: string 
   const [loadError, setLoadError] = useState(false);
   const resolved = resolveImageUrl(uri);
   const cover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
-  const Icon = iconForService(iconKey);
   return (
     <View className="shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC]" style={{ width: px, height: px }}>
       {resolved && !loadError ? (
@@ -141,7 +139,7 @@ function Thumb({ uri, px, iconKey }: { uri: string; px: number; iconKey: string 
           onError={() => setLoadError(true)}
         />
       ) : (
-        <Icon color="#453f37" size={28} strokeWidth={1.6} />
+        <ServiceIcon iconKey={iconKey} color="#453f37" size={28} strokeWidth={1.6} />
       )}
     </View>
   );

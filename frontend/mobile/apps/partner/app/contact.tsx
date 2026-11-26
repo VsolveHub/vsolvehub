@@ -1,4 +1,4 @@
-﻿import { Text } from "@vsolve/mobile-ui";
+import { Text } from "@vsolve/mobile-ui";
 import * as WebBrowser from "expo-web-browser";
 import { Clock, Mail, MapPin, MessageCircle, Phone, ShieldCheck } from "lucide-react-native";
 import { Platform, Pressable, ScrollView, StatusBar, useWindowDimensions, View } from "react-native";

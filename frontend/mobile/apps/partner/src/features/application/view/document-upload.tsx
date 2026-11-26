@@ -2,16 +2,11 @@
 import { ErrorState, Sheet, Text, useT } from "@vsolve/mobile-ui";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { CloudUpload, Upload as UploadIcon } from "lucide-react-native";
+import { CloudUpload } from "lucide-react-native";
 import { useState } from "react";
-import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 
-import {
-  formatBytes,
-  isRetryableUploadFailure,
-  rejectFile,
-  type UploadProgress,
-} from "../model/upload";
+import { isRetryableUploadFailure, rejectFile, type UploadProgress } from "../model/upload";
 import {
   UploadFailure,
   useUploadDocument,

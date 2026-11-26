@@ -226,14 +226,16 @@ export function CustomerLoginForm({
 
       {flow.phase === "code" ? (
         <View className="gap-4">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-sm text-text-secondary">
-              Code sent to <Text className="font-bold text-navy-900">+91 {flow.phone}</Text>
-            </Text>
-            <Pressable onPress={flow.onChangeNumber} hitSlop={8}>
-              <Text className="text-sm font-semibold text-[#EA580C]">Change number</Text>
-            </Pressable>
-          </View>
+          {/* The heading above already names the number; this row only offers the change. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Change phone number"
+            onPress={flow.onChangeNumber}
+            hitSlop={8}
+            className="-mt-1 self-start py-1"
+          >
+            <Text className="text-sm font-semibold text-[#EA580C]">Wrong number? Change it</Text>
+          </Pressable>
 
           {flow.developmentCode ? (
             <Pressable

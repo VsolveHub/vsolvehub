@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, COLOR_TOKENS, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
+import { COLOR_TOKENS, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
   AlertCircle,

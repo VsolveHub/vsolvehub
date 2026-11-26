@@ -14,14 +14,7 @@ import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/proje
 import { toShiftDayView, type ShiftDayView } from "@/features/shift-day/adapters";
 import { useShiftDay } from "@/features/shift-day/queries";
 import { NotRightSheet } from "@/features/shift-day/view/not-right-sheet";
-import {
-  toAmendmentsView,
-  toEngagementEvents,
-  toEngagementView,
-  type AmendmentView,
-  type EngagementView,
-  type StageView,
-} from "@/features/engagement/adapters";
+import { toAmendmentsView, toEngagementEvents, toEngagementView, type EngagementView, type StageView } from "@/features/engagement/adapters";
 import { leadOnlyHubPhase } from "@/features/engagement/model/booking-record";
 import {
   useEngagement,

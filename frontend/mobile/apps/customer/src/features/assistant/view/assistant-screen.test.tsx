@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Linking } from "react-native";
 
-import { AssistantScreen } from "./assistant-screen";
+import { AssistantPopup, AssistantScreen } from "./assistant-screen";
 
 const mockClient = { GET: jest.fn(), POST: jest.fn() };
 
@@ -26,8 +27,11 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 // The screen counts as in view from the start, as it is when someone opens the tab.
+const mockPush = jest.fn();
+
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
+  usePathname: () => "/(tabs)/catalog",
   useFocusEffect: (effect: () => void | (() => void)) => {
     const { useEffect } = jest.requireActual<typeof import("react")>("react");
     useEffect(effect, [effect]);
@@ -279,6 +283,41 @@ describe("AssistantScreen", () => {
     });
   });
 
+  describe("action cards", () => {
+    async function renderWithActions(actions: unknown[]) {
+      mockKvGet.mockImplementation(async (key: string) => (key === "assistant.conversation" ? "token-1" : null));
+      mockClient.GET.mockImplementation(async (path: string) =>
+        path === "/api/v1/categories/"
+          ? reply(categories, 200)
+          : reply(
+              {
+                ...created.conversation,
+                messages: [{ sequence: 2, sender: "assistant", text: "Next step", actions, created_at: "" }],
+              },
+              200,
+            ),
+      );
+      return renderScreen();
+    }
+
+    it("sends the login card to sign-in and back to the page the customer was on", async () => {
+      mockPush.mockClear();
+      const screen = await renderWithActions([{ action_type: "LOGIN", label: "Log in to continue" }]);
+      fireEvent.press(await screen.findByText("Log in to continue"));
+      expect(mockPush).toHaveBeenCalledWith("/login?next=%2Fcatalog");
+    });
+
+    it("reaches support for the Contact us card, since the app has no Contact page", async () => {
+      mockPush.mockClear();
+      const open = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+      const screen = await renderWithActions([{ action_type: "OPEN_LINK", label: "Contact us", href: "/contact" }]);
+      fireEvent.press(await screen.findByText("Contact us"));
+      expect(open).toHaveBeenCalledWith(expect.stringMatching(/^(tel:|mailto:)/));
+      expect(mockPush).not.toHaveBeenCalled();
+      open.mockRestore();
+    });
+  });
+
   it("shows the server's error and starts again when the person taps Try again", async () => {
     mockClient.POST.mockResolvedValueOnce(failure(503)).mockResolvedValueOnce(reply(created));
     const screen = await renderScreen();
@@ -288,5 +327,67 @@ describe("AssistantScreen", () => {
     await waitFor(() => expect(mockClient.POST).toHaveBeenCalledTimes(2));
     await conversationReady();
     expect(screen.queryByText("Try again")).toBeNull();
+  });
+
+  it("shows the animated replying indicator while the assistant is answering", async () => {
+    const answeringConversation = {
+      ...created.conversation,
+      is_answering: true,
+    };
+    mockKvGet.mockImplementation(async (key: string) =>
+      key === "assistant.conversation" ? "token-1" : null,
+    );
+    mockClient.GET.mockImplementation(async (path: string) =>
+      path === "/api/v1/categories/" ? reply(categories, 200) : reply(answeringConversation, 200),
+    );
+    const screen = await renderScreen();
+
+    expect(await screen.findByLabelText("The assistant is replying")).toBeTruthy();
+  });
+
+  it("toggles reply alert mute state from the header and saves it", async () => {
+    mockClient.POST.mockResolvedValue(reply(created));
+    const screen = await renderScreen();
+
+    await conversationReady();
+    fireEvent.press(screen.getByLabelText("Mute reply alerts"));
+
+    expect(await screen.findByLabelText("Unmute reply alerts")).toBeTruthy();
+    expect(mockKvSet).toHaveBeenCalledWith("assistant.muted", "true");
+  });
+
+  it("renders AssistantPopup with the dark navy popup header and close button on desktop", async () => {
+    mockClient.POST.mockResolvedValue(reply(created));
+    const onClose = jest.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const screen = await render(
+      <QueryClientProvider client={queryClient}>
+        <AssistantPopup isDesktop onClose={onClose} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Booking assistant")).toBeTruthy();
+    expect(screen.getByText("Tell me what you need done at home")).toBeTruthy();
+    await conversationReady();
+
+    await fireEvent.press(screen.getByLabelText("Close the assistant"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders AssistantPopup as a bottom sheet on mobile and dismisses on backdrop tap", async () => {
+    mockClient.POST.mockResolvedValue(reply(created));
+    const onClose = jest.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const screen = await render(
+      <QueryClientProvider client={queryClient}>
+        <AssistantPopup isDesktop={false} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Booking assistant")).toBeTruthy();
+    await conversationReady();
+
+    await fireEvent.press(screen.getByLabelText("Dismiss booking assistant"));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

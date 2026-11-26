@@ -2,7 +2,7 @@
 import type { Schemas } from "@vsolve/api-client";
 import { Field, Input, Select, Text, useT } from "@vsolve/mobile-ui";
 import { ShieldCheck } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
@@ -41,11 +41,15 @@ function AboutForm({ application }: { application: Application }) {
   const saved = individualDraft(application.employer, application.display_name);
   const [draft, setDraft] = useState<IndividualDraft>(saved);
 
-  useEffect(() => {
-    if (application.can_edit && signUpName) {
-      setDraft((current) => (current.displayName.trim() ? current : { ...current, displayName: signUpName }));
+  // Offer the sign-up name once (and again only if it changes), never on every empty field.
+  const prefillKey = application.can_edit && signUpName ? signUpName : "";
+  const [prevPrefillKey, setPrevPrefillKey] = useState("");
+  if (prefillKey !== prevPrefillKey) {
+    setPrevPrefillKey(prefillKey);
+    if (prefillKey) {
+      setDraft((current) => (current.displayName.trim() ? current : { ...current, displayName: prefillKey }));
     }
-  }, [application.can_edit, signUpName]);
+  }
 
   const problems = individualProblems(draft);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);

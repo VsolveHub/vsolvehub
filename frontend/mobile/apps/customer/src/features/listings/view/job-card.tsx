@@ -17,6 +17,7 @@ import Svg, { Circle, Line, Path } from "react-native-svg";
 
 import { useSavedItems } from "../../stays/use-saved-items";
 import type { Listing } from "../queries";
+import { listingPayText } from "../pay";
 import { VerifiedBadge, employerDetailLine, employerName, listingEmployer } from "./employer-identity";
 
 function JewelleryIcon({ color = "#7C3AED" }: { color?: string }) {
@@ -140,18 +141,10 @@ export function JobCard({ listing }: { listing: Listing }) {
 
   const fields = listingFields(listing.structured_fields);
   const rawPay = fields.pay_range || fields.salary_range || fields.compensation;
-  const pay = rawPay
-    ? String(rawPay)
-    : listing.salary_display
-      ? listing.salary_display
-      : listing.salary_min_paise && listing.salary_max_paise
-        ? `Ã¢â€šÂ¹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")} Ã¢â‚¬â€œ Ã¢â€šÂ¹${Math.round(listing.salary_max_paise / 100).toLocaleString("en-IN")}/mo`
-        : listing.salary_min_paise
-          ? `From Ã¢â€šÂ¹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")}/mo`
-          : "Ã¢â€šÂ¹ 10,000 Ã¢â‚¬â€œ Ã¢â€šÂ¹15,000/mo";
+  const pay = listingPayText(listing, rawPay) ?? "Pay not disclosed";
 
   const rawExp = listing.experience_band || fields.experience_years || fields.experience;
-  const experience = rawExp ? String(rawExp) : "1-2 years";
+  const experience = rawExp ? String(rawExp) : null;
 
   const rawMode = listing.work_mode || fields.shift || fields.work_mode;
   const mode = rawMode
@@ -160,7 +153,7 @@ export function JobCard({ listing }: { listing: Listing }) {
       : String(rawMode).toLowerCase().includes("home")
         ? "Work from Home"
         : "Work from Office"
-    : "Work from Office";
+    : null;
 
   // Who is hiring comes from the server's employer object; "Verified" only when it says so.
   const employer = listingEmployer(listing);
@@ -228,8 +221,8 @@ export function JobCard({ listing }: { listing: Listing }) {
           </View>
         </Pressable>
 
-        {/* Right Side: Bookmark & View job button */}
-        <View className="items-end justify-between self-stretch shrink-0 pl-1">
+        {/* Right Side: Bookmark (the View job button sits in the footer so the title keeps its width) */}
+        <View className="shrink-0">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isHearted ? "Remove from saved" : "Save job"}
@@ -245,37 +238,47 @@ export function JobCard({ listing }: { listing: Listing }) {
             />
           </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="View job"
-            onPress={handleCardPress}
-            className="rounded-xl bg-[#EA580C] px-3.5 py-1.5 active:bg-[#C2410C]"
-          >
-            <Text className="text-xs font-bold text-white">View job</Text>
-          </Pressable>
         </View>
       </View>
 
-      {/* Middle Details Row: Experience Ã‚Â· Salary Ã‚Â· Work Mode */}
+      {/* Middle Details Row: Experience · Salary · Work Mode (only what the listing states) */}
       <View className="mt-0.5 flex-row items-center flex-wrap gap-x-2 gap-y-1">
-        <View className="flex-row items-center gap-1">
-          <Briefcase size={12} color="#64748B" />
-          <Text className="text-xs text-slate-600">{experience}</Text>
-        </View>
-        <Text className="text-xs text-slate-400">Ã‚Â·</Text>
+        {experience ? (
+          <>
+            <View className="flex-row items-center gap-1">
+              <Briefcase size={12} color="#64748B" />
+              <Text className="text-xs text-slate-600">{experience}</Text>
+            </View>
+            <Text className="text-xs text-slate-400">·</Text>
+          </>
+        ) : null}
         <Text className="text-xs font-bold text-slate-800">{pay}</Text>
-        <Text className="text-xs text-slate-400">Ã‚Â·</Text>
-        <View className="flex-row items-center gap-1">
-          <Building2 size={12} color="#64748B" />
-          <Text className="text-xs text-slate-600">{mode}</Text>
-        </View>
+        {mode ? (
+          <>
+            <Text className="text-xs text-slate-400">·</Text>
+            <View className="flex-row items-center gap-1">
+              <Building2 size={12} color="#64748B" />
+              <Text className="text-xs text-slate-600">{mode}</Text>
+            </View>
+          </>
+        ) : null}
       </View>
 
-      {/* Bottom Category Tag Pill */}
-      <View className="self-start rounded-lg bg-slate-100 px-2.5 py-1">
-        <Text className="text-[11px] font-semibold text-slate-700">
-          {categoryTag}
-        </Text>
+      {/* Footer: category tag + View job */}
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="min-w-0 shrink rounded-lg bg-slate-100 px-2.5 py-1">
+          <Text numberOfLines={1} className="text-[11px] font-semibold text-slate-700">
+            {categoryTag}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="View job"
+          onPress={handleCardPress}
+          className="min-h-9 shrink-0 justify-center rounded-xl bg-[#EA580C] px-4 active:bg-[#C2410C]"
+        >
+          <Text className="text-xs font-bold text-white">View job</Text>
+        </Pressable>
       </View>
     </View>
   );

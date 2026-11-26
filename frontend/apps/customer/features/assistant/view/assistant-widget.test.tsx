@@ -6,10 +6,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * hidden, and edit / delete on the customer's latest message (same as the phone app).
  */
 
+const DEFAULT_MESSAGES = [
+  { sequence: 1, sender: "assistant", text: "Hello from the server", actions: [] },
+  { sequence: 2, sender: "customer", text: "My AC is not cooling", actions: [] },
+  { sequence: 3, sender: "assistant", text: "When should we come?", actions: [] },
+  { sequence: 4, sender: "customer", text: "Tomorrow evening", actions: [] },
+];
+
 const hooks = vi.hoisted(() => ({
   hideMessages: vi.fn(),
   send: vi.fn(),
   hidden: [] as number[],
+  isAnswering: false,
+  messages: [
+    { sequence: 1, sender: "assistant", text: "Hello from the server", actions: [] },
+    { sequence: 2, sender: "customer", text: "My AC is not cooling", actions: [] },
+    { sequence: 3, sender: "assistant", text: "When should we come?", actions: [] },
+    { sequence: 4, sender: "customer", text: "Tomorrow evening", actions: [] },
+  ],
 }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
@@ -27,13 +41,8 @@ vi.mock("../queries", () => ({
   useStartConversation: () => ({ mutate: vi.fn(), isPending: false, isError: false, error: null }),
   useConversation: () => ({
     data: {
-      is_answering: false,
-      messages: [
-        { sequence: 1, sender: "assistant", text: "Hello from the server", actions: [] },
-        { sequence: 2, sender: "customer", text: "My AC is not cooling", actions: [] },
-        { sequence: 3, sender: "assistant", text: "When should we come?", actions: [] },
-        { sequence: 4, sender: "customer", text: "Tomorrow evening", actions: [] },
-      ],
+      is_answering: hooks.isAnswering,
+      messages: hooks.messages,
     },
     error: null,
   }),
@@ -53,7 +62,55 @@ function openChat() {
 describe("AssistantWidget", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     hooks.hidden = [];
+    hooks.isAnswering = false;
+    hooks.messages = [...DEFAULT_MESSAGES];
+  });
+
+  it("renders the helper bot icon launcher instead of Book by chat text", () => {
+    render(<AssistantWidget />);
+    const launcher = screen.getByRole("button", { name: "Open the booking assistant" });
+    expect(launcher.querySelector("svg")).not.toBeNull();
+    expect(launcher.querySelector(".assistant-bot-eyes")).not.toBeNull();
+    expect(launcher).not.toHaveClass("assistant-bot-float");
+    expect(screen.queryByText("Book by chat")).toBeNull();
+  });
+
+  it("shows the animated typing indicator while the assistant is answering", () => {
+    hooks.isAnswering = true;
+    openChat();
+    expect(screen.getByText("Assistant is typing")).toBeInTheDocument();
+  });
+
+  it("toggles sound alerts from the assistant header", () => {
+    openChat();
+    const muteButton = screen.getByRole("button", { name: "Mute reply alerts" });
+    fireEvent.click(muteButton);
+    expect(screen.getByRole("button", { name: "Unmute reply alerts" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("vsolve.assistant.muted")).toBe("true");
+  });
+
+  it("shows an unread badge and peek preview when a reply arrives while minimized", () => {
+    const { rerender } = render(<AssistantWidget />);
+    expect(screen.queryByText("Your AC quote is ₹499")).toBeNull();
+
+    hooks.messages = [
+      ...DEFAULT_MESSAGES,
+      { sequence: 5, sender: "assistant", text: "Your AC quote is ₹499", actions: [] },
+    ];
+    rerender(<AssistantWidget />);
+
+    expect(
+      screen.getByRole("button", { name: "Open the booking assistant, 1 unread" }),
+    ).toBeInTheDocument();
+    const preview = screen.getByText("Your AC quote is ₹499");
+    expect(preview).toBeInTheDocument();
+
+    fireEvent.click(preview);
+    expect(screen.getByRole("dialog", { name: "Booking assistant" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /unread/ })).toBeNull();
   });
 
   it("shows the welcome with the server's categories as chips, and sends one when picked", () => {

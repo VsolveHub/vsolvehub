@@ -43,6 +43,7 @@ export function PushDiagnosticsModal({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads the push SDK's state when the modal opens
     if (open) void refreshState();
   }, [open]);
 

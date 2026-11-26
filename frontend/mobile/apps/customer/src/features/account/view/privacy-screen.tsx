@@ -4,7 +4,7 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import { describeError } from "@vsolve/query/native";
-import { Badge, Button, ConfirmAction, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { Badge, ConfirmAction, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 

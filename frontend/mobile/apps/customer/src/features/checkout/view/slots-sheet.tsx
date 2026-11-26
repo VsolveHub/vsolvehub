@@ -1,7 +1,7 @@
 // Ported from frontend/apps/customer/features/checkout/view/slots-modal.tsx
 // Accurately matches Image 2, Image 3, and Image 4 100%
 import { Dialog, Spinner, Text } from "@vsolve/mobile-ui";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 
 import { useCandidateStarts, type SchedulingGroup } from "../queries";
@@ -35,12 +35,16 @@ export function SlotsSheet({
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   // Synchronize when opened
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevInitial, setPrevInitial] = useState(initialStarts);
+  if (open !== prevOpen || initialStarts !== prevInitial) {
+    setPrevOpen(open);
+    setPrevInitial(initialStarts);
     if (open) {
       setChosen(initialStarts);
       setEditingKey(null);
     }
-  }, [open, initialStarts]);
+  }
 
   const editingGroup = useMemo(
     () => groups.find((g) => g.key === editingKey) ?? null,

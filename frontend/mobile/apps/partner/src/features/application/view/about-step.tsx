@@ -4,12 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { request } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
 import { useEffect } from "react";
-import {
-  Platform,
-  StyleSheet,
-  TextInput,
-  View,
-} from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
 import { isListingTrack } from "../model/steps";

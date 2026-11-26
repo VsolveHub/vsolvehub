@@ -31,12 +31,7 @@ import { EmployerMark, VerifiedBadge, employerDetailLine, employerName, listingE
 
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
-import {
-  fetchListing,
-  fetchMyApplications,
-  reportListing,
-  type ListingDetail,
-} from "../queries";
+import { fetchMyApplications, reportListing, type ListingDetail } from "../queries";
 import {
   fetchMyJobProfile,
   fetchMyMatch,

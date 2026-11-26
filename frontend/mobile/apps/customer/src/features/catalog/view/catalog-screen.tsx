@@ -10,13 +10,13 @@ import { DeviceEventEmitter, Pressable, RefreshControl, ScrollView, TextInput, V
 import Svg, { Circle, Path } from "react-native-svg";
 
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
-import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
 import { useCatalogIndex, useCategories, usePromoBanners, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { PromoBanners } from "@/features/catalog/view/promo-banners";
 import { bookingModeLabel, rankCatalogMatches } from "@/features/catalog/search";
 import { serviceHref } from "@/features/catalog/service-href";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useIsDesktop } from "@/lib/responsive";
+import { ServiceIcon } from "@/features/catalog/icon-catalogue/service-icon-view";
 
 export function CatalogScreen() {
   const router = useRouter();
@@ -39,16 +39,19 @@ export function CatalogScreen() {
 
   useEffect(() => {
     if (params.search === "1" || params.search === "true" || params.t) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- focuses the native search input when the route asks for it
       focusInput();
     }
   }, [params.search, params.t]);
 
-  useEffect(() => {
+  const [prevQParam, setPrevQParam] = useState(params.q);
+  if (params.q !== prevQParam) {
+    setPrevQParam(params.q);
     if (typeof params.q === "string" && params.q !== query) {
       setQuery(params.q);
       setSearchOpen(true);
     }
-  }, [params.q]);
+  }
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("open-catalog-search", () => {
@@ -253,7 +256,6 @@ function TilePhoto({
   const [loadError, setLoadError] = useState(false);
   const resolved = resolveImageUrl(imageUrl);
   const isCover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
-  const FallbackIcon = iconForService(iconKey || "service");
 
   return (
     <View
@@ -271,7 +273,7 @@ function TilePhoto({
           onError={() => setLoadError(true)}
         />
       ) : (
-        <FallbackIcon size={isDesktop ? 32 : 26} color="#00112e" strokeWidth={1.8} />
+        <ServiceIcon iconKey={iconKey} size={isDesktop ? 32 : 26} color="#00112e" strokeWidth={1.8} />
       )}
     </View>
   );

@@ -1,10 +1,9 @@
 // Ported from frontend/apps/customer/features/booking/view/address-stage.tsx
 // Exact match with Image 2 (Where is the work? Dialog modal, choice card with badges, Use my location, Add a new address, and Use this address)
-import { Badge, Button, Dialog, Input, Spinner, Text } from "@vsolve/mobile-ui";
+import { Badge, Dialog, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as Location from "expo-location";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
 
 import {
   useCreateAddress,
@@ -39,11 +38,12 @@ export function AddressSheet({
   );
 
   // Sync pending selection ONLY when the sheet opens or when selectedAddressId changes externally
-  useEffect(() => {
-    if (open) {
-      setPendingAddressId(selectedAddressId ?? addresses[0]?.id ?? null);
-    }
-  }, [open, selectedAddressId]);
+  const syncKey = `${open}|${selectedAddressId ?? ""}`;
+  const [prevSyncKey, setPrevSyncKey] = useState(syncKey);
+  if (syncKey !== prevSyncKey) {
+    setPrevSyncKey(syncKey);
+    if (open) setPendingAddressId(selectedAddressId ?? addresses[0]?.id ?? null);
+  }
 
   const [mode, setMode] = useState<"list" | "add" | "edit">("list");
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);

@@ -767,7 +767,7 @@ function StayDetailLoaded({
               <Star size={18} color={THEME_COLORS.amber} fill={THEME_COLORS.amber} />
               <Text className="text-sm font-extrabold text-navy-900">
                 {averageRating
-                  ? `${averageRating} Â· ${reviews.length} Review${
+                  ? `${averageRating} · ${reviews.length} Review${
                       reviews.length === 1 ? "" : "s"
                     }`
                   : "Guest Reviews"}
@@ -905,11 +905,13 @@ function StayDetailLoaded({
                   </Text>
                 </View>
                 {existingEnquiry.host_name ? (
-                  <View className="flex-row items-center gap-1.5 pt-1">
-                    <Phone size={13} color={THEME_COLORS.emerald600} />
-                    <Text className="text-xs text-emerald-800 font-medium">
-                      Host: {existingEnquiry.host_name}{" "}
-                      {existingEnquiry.host_phone ? `(${existingEnquiry.host_phone})` : ""}
+                  <View className="flex-row items-start gap-1.5 pt-1">
+                    <View className="pt-0.5">
+                      <Phone size={13} color={THEME_COLORS.emerald600} />
+                    </View>
+                    <Text className="min-w-0 flex-1 text-xs font-medium text-emerald-800">
+                      Host: {existingEnquiry.host_name}
+                      {existingEnquiry.host_phone ? ` · ${existingEnquiry.host_phone}` : ""}
                     </Text>
                   </View>
                 ) : null}
@@ -922,7 +924,7 @@ function StayDetailLoaded({
                 className="items-center justify-center rounded-xl bg-brand py-3.5 shadow-xs active:bg-brand/90"
               >
                 <Text className="text-sm font-bold text-white">
-                  View in My Enquiries â†’
+                  View in My Enquiries →
                 </Text>
               </Pressable>
 
@@ -960,7 +962,7 @@ function StayDetailLoaded({
               >
                 <Calendar size={14} color={THEME_COLORS.navy900} />
                 <Text className="text-xs font-bold text-navy-900">
-                  Schedule a Visit In-Person â†’
+                  Schedule a Visit In-Person →
                 </Text>
               </Pressable>
             ) : null}
@@ -1084,7 +1086,7 @@ function StayDetailLoaded({
                       adultCount <= 1 ? "opacity-50" : "active:bg-surface-hover"
                     }`}
                   >
-                    <Text className="text-sm font-bold text-navy-900">â€“</Text>
+                    <Text className="text-sm font-bold text-navy-900">–</Text>
                   </Pressable>
                   <Text className="w-5 text-center text-sm font-bold text-navy-900 tabular-nums">
                     {adultCount}
@@ -1117,7 +1119,7 @@ function StayDetailLoaded({
                       childCount <= 0 ? "opacity-50" : "active:bg-surface-hover"
                     }`}
                   >
-                    <Text className="text-sm font-bold text-navy-900">â€“</Text>
+                    <Text className="text-sm font-bold text-navy-900">–</Text>
                   </Pressable>
                   <Text className="w-5 text-center text-sm font-bold text-navy-900 tabular-nums">
                     {childCount}
@@ -1143,7 +1145,7 @@ function StayDetailLoaded({
                   guest{totalGuests === 1 ? "" : "s"} total{" "}
                   {maxGuests > 1 ? (
                     <Text className="text-text-secondary/70">
-                      Â· room fits up to {maxGuests}
+                      · room fits up to {maxGuests}
                     </Text>
                   ) : null}
                 </Text>
@@ -1178,10 +1180,10 @@ function StayDetailLoaded({
             <View className="gap-2.5 rounded-xl border border-line bg-surface-sunken p-4">
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs text-text-secondary">
-                  {formatRate(rate, period)} Ã— {stayLengthLabel(length, period)}
+                  {formatRate(rate, period)} × {stayLengthLabel(length, period)}
                 </Text>
                 <Text className="text-sm font-bold text-navy-900">
-                  {quoteQuery.isLoading ? "â€¦" : `about ${formatPaise(estimate)}`}
+                  {quoteQuery.isLoading ? "…" : `about ${formatPaise(estimate)}`}
                 </Text>
               </View>
               <View className="flex-row items-start gap-1.5 pt-1">
@@ -1194,7 +1196,7 @@ function StayDetailLoaded({
               <View className="flex-row items-start gap-1.5">
                 <Info size={13} color={THEME_COLORS.muted} className="mt-0.5" />
                 <Text className="flex-1 text-[11px] text-text-secondary leading-tight">
-                  An estimate only â€” you agree the final price and payment with the
+                  An estimate only — you agree the final price and payment with the
                   host.
                 </Text>
               </View>
@@ -1218,7 +1220,7 @@ function StayDetailLoaded({
                     className="self-start rounded-lg bg-rose-100 px-3 py-1.5 active:bg-rose-200"
                   >
                     <Text className="text-xs font-bold text-rose-900">
-                      Go to My Enquiries â†’
+                      Go to My Enquiries →
                     </Text>
                   </Pressable>
                 ) : null}
@@ -1385,19 +1387,19 @@ function SimilarStaysSection({
 
   return (
     <View className="gap-3 pt-2">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-1 pr-2">
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="min-w-0 flex-1">
           <Text className="text-base font-extrabold text-navy-900">
-            Similar Stays You May Like
+            Similar stays
           </Text>
           <Text className="text-[11px] text-text-secondary">
             Other verified rooms and accommodation in this area
           </Text>
         </View>
 
-        <Pressable onPress={() => router.push("/stays" as never)}>
+        <Pressable accessibilityRole="link" onPress={() => router.push("/stays" as never)} hitSlop={8} className="shrink-0 pt-0.5">
           <Text className="text-xs font-bold text-brand">
-            View all stays â†’
+            View all →
           </Text>
         </Pressable>
       </View>

@@ -3,7 +3,7 @@
 import { describeError } from "@vsolve/query/native";
 import { Badge, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { Pressable, Switch, View } from "react-native";
+import { Switch, View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 
 import { useCommunicationPreferences, useSetCommunicationPreference } from "@/features/account/queries";

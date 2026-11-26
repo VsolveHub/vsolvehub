@@ -9,11 +9,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
 import { Money } from "@/features/payment/view/money";
 import { formatBookingWhen } from "./booking-format";
-import { GroupStatusBadge } from "./group-status";
+import { GroupStatusBadge , heldUnitCount } from "./group-status";
 import { useIsDesktop } from "@/lib/responsive";
 
 import type { BookingGroup } from "../queries";
-import { heldUnitCount } from "./group-status";
+
 import searchAnimationData from "./search-lottie.json";
 
 const SEARCH_STEPS = [

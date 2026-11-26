@@ -1,10 +1,10 @@
-import { apiBaseUrl, webBaseUrl } from "@vsolve/mobile-core";
+import { apiBaseUrl } from "@vsolve/mobile-core";
 import { Image } from "expo-image";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { iconForService } from "./icon-catalogue/service-icon";
 import type { Category } from "./client-queries";
+import { ServiceIcon } from "@/features/catalog/icon-catalogue/service-icon-view";
 
 const CLOUDFLARE_R2_BASE = "https://media.vsolvehub.com";
 
@@ -67,10 +67,9 @@ export function CategoryArtwork({
     );
   }
 
-  const Icon = iconForService(category.icon_key || "service");
   return (
     <View className="items-center justify-center p-3">
-      <Icon size={iconSize} color="#00112e" strokeWidth={1.8} />
+      <ServiceIcon iconKey={category.icon_key} size={iconSize} color="#00112e" strokeWidth={1.8} />
     </View>
   );
 }

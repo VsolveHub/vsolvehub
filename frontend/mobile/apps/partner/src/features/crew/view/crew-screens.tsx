@@ -2,7 +2,7 @@
 import { describeError } from "@vsolve/query/native";
 import { Card, Text, useToast } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 
 import { useApplicationReference } from "@/features/application/reference-queries";
 

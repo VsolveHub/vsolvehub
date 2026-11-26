@@ -12,16 +12,7 @@ import Svg, { Path } from "react-native-svg";
 import { useAddresses } from "@/features/addresses/queries";
 import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useServiceDetail } from "@/features/catalog/client-queries";
-import {
-  useAddCartItem,
-  useCart,
-  useCartSuggestions,
-  useRemoveCartItem,
-  useSchedulingGroups,
-  useUpdateCartItem,
-  type Cart,
-  type CartItem,
-} from "@/features/checkout/queries";
+import { useAddCartItem, useCart, useCartSuggestions, useRemoveCartItem, useSchedulingGroups, useUpdateCartItem, type CartItem } from "@/features/checkout/queries";
 import { SlotsSheet } from "@/features/checkout/view/slots-sheet";
 import { deriveSchedulingGroups } from "@/features/checkout/view/scheduling-groups";
 import { useIsDesktop } from "@/lib/responsive";

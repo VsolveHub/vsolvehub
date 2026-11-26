@@ -116,8 +116,8 @@ export function OtpForm({
       ) : null}
       {phase === "code" ? (
         <View className="mt-5 gap-4">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-sm text-text-secondary">
+          <View className="flex-row flex-wrap items-center justify-between gap-x-2">
+            <Text className="min-w-0 shrink text-sm text-text-secondary">
               Code sent to <Text className="font-semibold tabular-nums text-text">{phone}</Text>
             </Text>
             <Button variant="ghost" size="sm" onPress={() => onChangeNumber()}>

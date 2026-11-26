@@ -206,7 +206,7 @@ export function StayEnquirySheet({
           </Button>
         </View>
       ) : (
-        <ScrollView
+        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
           className="max-h-[80vh] gap-4 py-2"
           showsVerticalScrollIndicator={false}
         >

@@ -1,5 +1,5 @@
 // Ported from frontend/apps/customer/features/checkout/view/order-summary.tsx
-import { Badge, Text, formatMoney } from "@vsolve/mobile-ui";
+import { Text, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";

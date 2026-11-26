@@ -1,31 +1,8 @@
 import { Text, useT } from "@vsolve/mobile-ui";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  FileText,
-  Headphones,
-  Lock,
-  MessageCircle,
-  Phone,
-  RefreshCw,
-  Send,
-  X,
-  XCircle,
-} from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, Headphones, Lock, MessageCircle, Phone, RefreshCw, Send, X } from "lucide-react-native";
 import { useState } from "react";
-import {
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { StatusTimeline, type TimelineNode } from "@/features/onboarding/components/status-timeline";
 import {
@@ -36,14 +13,7 @@ import {
   type ApplicationStatusView,
 } from "../model/status-view";
 import { usePartnerApplication } from "../queries";
-import {
-  PARTNER_SUPPORT_EMAIL,
-  PARTNER_SUPPORT_PHONE,
-  PARTNER_SUPPORT_PHONE_DISPLAY,
-  openSupportCall,
-  openSupportEmail,
-  openSupportWhatsApp,
-} from "@/features/support/contact";
+import { PARTNER_SUPPORT_EMAIL, PARTNER_SUPPORT_PHONE_DISPLAY, openSupportCall, openSupportEmail, openSupportWhatsApp } from "@/features/support/contact";
 
 export function ApplicationStatusScreen() {
   const t = useT();
@@ -277,7 +247,7 @@ export function ApplicationStatusScreen() {
               <CheckCircle2 size={26} color="#16a34a" strokeWidth={2.3} />
             </View>
             <View style={styles.bannerInfo}>
-              <Text style={styles.bannerTitle}>You're approved!</Text>
+              <Text style={styles.bannerTitle}>You&apos;re approved!</Text>
               <Text style={styles.bannerSubtitle}>
                 Open the V Solve Partner app to start receiving jobs.
               </Text>

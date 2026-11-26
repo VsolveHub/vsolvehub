@@ -1,6 +1,13 @@
 // Ported from frontend/apps/partner/features/application/model/main-categories.test.ts
 import { findSkillForCategory, tickableCategories } from "./main-categories";
 
+import {
+  groupByService,
+  isServiceGroupSelected,
+  syncRequiredSkills,
+  toggleServiceGroup,
+} from "./main-categories";
+
 const category = (slug: string, name: string) => ({ slug, name });
 const skill = (code: string) => ({ code, name: code }) as never;
 
@@ -19,13 +26,6 @@ describe("trade categories on Your work", () => {
     expect(shown.map((entry) => entry.slug)).toEqual(["electrician"]);
   });
 });
-
-import {
-  groupByService,
-  isServiceGroupSelected,
-  syncRequiredSkills,
-  toggleServiceGroup,
-} from "./main-categories";
 
 const variant = (
   serviceId: string,

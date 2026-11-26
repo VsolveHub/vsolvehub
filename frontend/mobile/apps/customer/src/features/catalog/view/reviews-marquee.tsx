@@ -2,7 +2,7 @@
 // frontend/apps/customer/features/catalog/components/homepage-client-sections.tsx
 import { Text } from "@vsolve/mobile-ui";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Animated, Easing, Platform, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
@@ -199,7 +199,7 @@ function ReviewCard({ review }: { review: (typeof REVIEWS)[number] }) {
 }
 
 export function ReviewsMarquee() {
-  const shift = useRef(new Animated.Value(0)).current;
+  const [shift] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     let isCancelled = false;

@@ -331,6 +331,8 @@ function VisitingHoursSheetContent({
                       {isOpen ? (
                         <View className="flex-row items-center gap-1">
                           <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Add a time slot"
                             hitSlop={10}
                             onPress={() => addSlot(weekday)}
                             className="size-7 items-center justify-center rounded-full bg-surface-muted"
@@ -338,6 +340,8 @@ function VisitingHoursSheetContent({
                             <Plus size={14} color={THEME_COLORS.navy900} />
                           </Pressable>
                           <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Copy these hours to every day"
                             hitSlop={10}
                             onPress={() => copyToAllDays(weekday)}
                             className="size-7 items-center justify-center rounded-full bg-surface-muted"
@@ -393,6 +397,8 @@ function VisitingHoursSheetContent({
                             </Text>
 
                             <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Remove this time slot"
                               hitSlop={10}
                               onPress={() => {
                                 setSaved(false);

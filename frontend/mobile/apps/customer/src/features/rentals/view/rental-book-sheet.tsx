@@ -1,24 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, COLOR_TOKENS, Dialog, QuantityStepper, Text, TouchDatePicker } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
-import {
-  AlertCircle,
-  Calendar,
-  Check,
-  CheckCircle2,
-  Clock,
-  MapPin,
-  ShieldCheck,
-  Store,
-  Truck,
-} from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { AlertCircle, Calendar, CheckCircle2, ShieldCheck, Store, Truck } from "lucide-react-native";
+import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { isApiRequestError } from "@vsolve/api-client";
 import { useAuthStore, useCompleteOrOpenCheckout } from "@vsolve/mobile-core";
 import { useCustomerProfile } from "@/features/account/queries";
-import { preferredAddressId, useAddresses, type Address } from "@/features/addresses/queries";
+import { preferredAddressId, useAddresses } from "@/features/addresses/queries";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 import { calculateRentalDays, formatPaise, type RentalAsset, type RentalBooking } from "../model";
 import { AddressSheet } from "@/features/checkout/view/address-sheet";
@@ -28,7 +18,7 @@ import { deliveryAddressFrom, deliveryProblem, extractPhoneDigits } from "./deli
 
 function getInitialAvailableDates(
   minIso: string,
-  reservedRanges?: Array<{ start_date: string; end_date: string }>,
+  reservedRanges?: { start_date: string; end_date: string }[],
   defaultDuration = 2,
 ): { start: string; end: string } {
   let candidateStart = addDaysIso(minIso, 1);
@@ -61,7 +51,7 @@ function getInitialAvailableDates(
 function checkDateOverlap(
   start: string,
   end: string,
-  reservedRanges?: Array<{ start_date: string; end_date: string }>,
+  reservedRanges?: { start_date: string; end_date: string }[],
 ): { start_date: string; end_date: string } | null {
   if (!reservedRanges || reservedRanges.length === 0) return null;
   for (const range of reservedRanges) {
@@ -113,11 +103,14 @@ export function RentalBookSheet({
   const effectiveAddressId = preferredAddressId(addresses, selectedAddressId);
   const selectedAddress = addresses.find((a) => a.id === effectiveAddressId) ?? null;
 
-  useEffect(() => {
-    if (profileQuery.data?.phone_number && !contactPhone) {
-      setContactPhone(extractPhoneDigits(profileQuery.data.phone_number));
-    }
-  }, [profileQuery.data?.phone_number, contactPhone]);
+  // Prefill the contact number from the profile once. After that the field is the customer's:
+  // clearing it to type another number must not bring the profile number back.
+  const profilePhone = profileQuery.data?.phone_number;
+  const [phonePrefilled, setPhonePrefilled] = useState(false);
+  if (!phonePrefilled && profilePhone) {
+    setPhonePrefilled(true);
+    if (!contactPhone) setContactPhone(extractPhoneDigits(profilePhone));
+  }
 
   // Check if current user already has an active or pending booking for this asset
   const myRentalsQuery = useQuery({
@@ -141,13 +134,13 @@ export function RentalBookSheet({
   );
 
   // Keep dates synchronized with latest reservations if current selection becomes reserved
-  useEffect(() => {
-    if (checkDateOverlap(startDate, endDate, asset.reserved_ranges)) {
-      const fresh = getInitialAvailableDates(minStart, asset.reserved_ranges, 2);
+  if (checkDateOverlap(startDate, endDate, asset.reserved_ranges)) {
+    const fresh = getInitialAvailableDates(minStart, asset.reserved_ranges, 2);
+    if (fresh.start !== startDate || fresh.end !== endDate) {
       setStartDate(fresh.start);
       setEndDate(fresh.end);
     }
-  }, [asset.reserved_ranges, minStart, startDate, endDate]);
+  }
 
   const permanentlyOutOfStock = asset.quantity_available === 0;
   const maxQty = Math.max(1, asset.quantity_available ?? 1);
@@ -328,7 +321,7 @@ export function RentalBookSheet({
       title="Book Rental Equipment"
       description={`Reserve ${asset.title} with verified partner`}
     >
-      <ScrollView className="max-h-[80vh] gap-4 py-2" showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets className="max-h-[80vh] gap-4 py-2" showsVerticalScrollIndicator={false}>
         {/* Existing active booking banner */}
         {existingBooking ? (
           <View className="rounded-xl border border-warning-line bg-warning-surface p-3 gap-2">

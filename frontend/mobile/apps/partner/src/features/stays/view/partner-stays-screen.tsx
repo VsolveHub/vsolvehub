@@ -1,8 +1,8 @@
-import { Badge, Button, EmptyState, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
+import { Button, EmptyState, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
 import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Plus } from "lucide-react-native";
+import { CalendarClock } from "lucide-react-native";
 
 import {
   type PartnerStayVisit,

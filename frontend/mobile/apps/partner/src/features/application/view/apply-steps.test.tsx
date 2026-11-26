@@ -3,10 +3,10 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { fireEvent, render } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
-import { Pressable, Text } from "react-native";
+import { Text } from "@vsolve/mobile-ui";
+import { Pressable } from "react-native";
 import { ApplyDockContext, type DockConfig } from "../model/dock-context";
 import { router } from "expo-router";
-const { setPathname } = require("expo-router") as { setPathname: (p: string) => void };
 import type { ReactElement } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -14,6 +14,7 @@ import { AboutStep } from "./about-step";
 import { ApplicationEditor } from "./application-editor";
 import { DocumentsStep } from "./documents-step";
 import { usePartnerApplication, useUpdateApplication } from "../queries";
+const { setPathname } = require("expo-router") as { setPathname: (p: string) => void };
 
 const mockPush = router.push;
 

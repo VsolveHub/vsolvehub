@@ -1,4 +1,4 @@
-﻿// Ported from frontend/apps/partner/app/(marketing)/page.tsx, partner-hero.tsx & layout.tsx
+// Ported from frontend/apps/partner/app/(marketing)/page.tsx, partner-hero.tsx & layout.tsx
 import { useAuthStore } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import * as WebBrowser from "expo-web-browser";
@@ -35,7 +35,7 @@ import {
   Wind,
   Wrench,
   Zap,
-} from "lucide-react-native";
+ Banknote, CalendarClock } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -289,7 +289,7 @@ const DEMO_OFFERS = [
   },
 ];
 
-import { Banknote, CalendarClock } from "lucide-react-native";
+
 
 export default function Index() {
   const router = useRouter();

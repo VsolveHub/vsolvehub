@@ -1,28 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isApiRequestError } from "@vsolve/api-client";
 import { useAuthStore } from "@vsolve/mobile-core";
-import { Skeleton, Text, TouchDatePicker } from "@vsolve/mobile-ui";
+import { Text, TouchDatePicker } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import {
-  AlertCircle,
-  ArrowLeft,
-  Calendar,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  FileText,
-  Info,
-  MapPin,
-  MessageSquare,
-  Phone,
-  ShieldCheck,
-  Star,
-  Users,
-  X,
-} from "lucide-react-native";
-import { useRef, useState } from "react";
+import { AlertCircle, ArrowLeft, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, FileText, Info, MapPin, MessageSquare, Phone, ShieldCheck, Star, Users } from "lucide-react-native";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -52,7 +35,6 @@ import {
   fetchStayQuote,
   fetchStays,
 } from "../queries";
-import { THEME_COLORS } from "../theme-colors";
 import { getAmenityIcon } from "./amenity-icon";
 import { StayCard } from "./stay-card";
 import { StayReviewSheet } from "./stay-review-sheet";
@@ -666,7 +648,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                   <Star size={18} color="#F59E0B" fill="#F59E0B" />
                   <Text className="text-sm font-extrabold text-navy-950">
                     {averageRating
-                      ? `${averageRating} Â· ${reviews.length} Review${reviews.length === 1 ? "" : "s"
+                      ? `${averageRating} · ${reviews.length} Review${reviews.length === 1 ? "" : "s"
                       }`
                       : "Guest Reviews"}
                   </Text>
@@ -900,7 +882,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           }}
                           className="size-7 items-center justify-center rounded-lg bg-white border border-slate-200 hover:border-slate-400 active:scale-95 cursor-pointer"
                         >
-                          <Text className="text-xs font-bold text-navy-900">â€“</Text>
+                          <Text className="text-xs font-bold text-navy-900">–</Text>
                         </Pressable>
                         <TextInput
                           value={lengthText}
@@ -954,7 +936,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           className={`size-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:border-slate-400 active:scale-95 cursor-pointer ${adultCount <= 1 ? "opacity-50" : ""
                             }`}
                         >
-                          <Text className="text-sm font-bold text-navy-950">â€“</Text>
+                          <Text className="text-sm font-bold text-navy-950">–</Text>
                         </Pressable>
                         <Text className="w-5 text-center text-sm font-bold text-navy-950 tabular-nums">
                           {adultCount}
@@ -985,7 +967,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                           className={`size-8 items-center justify-center rounded-full border border-slate-300 bg-white hover:border-slate-400 active:scale-95 cursor-pointer ${childCount <= 0 ? "opacity-50" : ""
                             }`}
                         >
-                          <Text className="text-sm font-bold text-navy-950">â€“</Text>
+                          <Text className="text-sm font-bold text-navy-950">–</Text>
                         </Pressable>
                         <Text className="w-5 text-center text-sm font-bold text-navy-950 tabular-nums">
                           {childCount}
@@ -1005,7 +987,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                     <View className="flex-row items-center justify-between px-1">
                       <Text className="text-xs text-slate-500">
                         {totalGuests} guest{totalGuests === 1 ? "" : "s"} total
-                        {maxGuests > 1 ? ` Â· room fits up to ${maxGuests}` : ""}
+                        {maxGuests > 1 ? ` · room fits up to ${maxGuests}` : ""}
                       </Text>
                       {totalGuests >= maxGuests && (
                         <View className="rounded-full bg-amber-50 px-2 py-0.5 border border-amber-200">
@@ -1038,7 +1020,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                   <View className="rounded-xl border border-[#E5E1DC] bg-[#FAF8F5] p-3.5 gap-2">
                     <View className="flex-row items-baseline justify-between border-b border-[#E5E1DC]/60 pb-2">
                       <Text className="text-xs text-slate-600">
-                        {formatPaise(rate)}/{monthly ? "month" : "night"} Ã— {length}{" "}
+                        {formatPaise(rate)}/{monthly ? "month" : "night"} × {length}{" "}
                         {monthly
                           ? length === 1
                             ? "month"
@@ -1063,7 +1045,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                     <View className="flex-row items-start gap-2">
                       <Info size={13} color="#94A3B8" style={{ marginTop: 2 }} />
                       <Text className="flex-1 text-[11px] leading-relaxed text-slate-500">
-                        An estimate only â€” you agree the final price and payment with the host.
+                        An estimate only — you agree the final price and payment with the host.
                       </Text>
                     </View>
                   </View>
@@ -1090,7 +1072,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                     {enquiryMutation.isPending ? (
                       <View className="flex-row items-center gap-2">
                         <ActivityIndicator size="small" color="#ffffff" />
-                        <Text className="text-sm font-bold text-white">Sending enquiryâ€¦</Text>
+                        <Text className="text-sm font-bold text-white">Sending enquiry…</Text>
                       </View>
                     ) : (
                       <Text className="text-sm font-bold text-white">Send enquiry</Text>
@@ -1120,7 +1102,7 @@ export function DesktopStayDetail({ property }: { property: StayProperty }) {
                 className="cursor-pointer"
               >
                 <Text className="text-xs font-bold text-[#EA580C] hover:underline">
-                  View all stays â†’
+                  View all stays →
                 </Text>
               </Pressable>
             </View>

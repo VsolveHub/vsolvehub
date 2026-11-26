@@ -1,7 +1,7 @@
 // Ported from frontend/apps/customer/features/quotes/view/quote-comparison.tsx
 import { Badge, Text, cn } from "@vsolve/mobile-ui";
 import { Link } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
 import {

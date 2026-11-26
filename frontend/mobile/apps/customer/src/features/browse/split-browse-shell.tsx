@@ -1,6 +1,8 @@
 import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { webBaseUrl } from "@vsolve/mobile-core";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,7 +10,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react-native";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { createElement, useState, type ComponentType, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -44,8 +46,11 @@ function TileThumb({
       />
     );
   }
-  const Icon = iconForService(iconKey || "service");
-  return <Icon size={Math.round(size * 0.52)} color="#00112e" strokeWidth={1.8} />;
+  return createElement(iconForService(iconKey || "service"), {
+    size: Math.round(size * 0.52),
+    color: "#00112e",
+    strokeWidth: 1.8,
+  });
 }
 
 const SIDEBAR_TILE_CAP = 6;
@@ -79,6 +84,12 @@ function SeeAllTilesModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/50 p-4 sm:p-6">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          className="absolute inset-0"
+          onPress={onClose}
+        />
         <View className="max-h-[82%] w-full max-w-[680px] overflow-hidden rounded-3xl bg-white p-5 sm:p-6 shadow-2xl">
           <View className="flex-row items-start justify-between gap-3 border-b border-line/60 pb-4">
             <View className="flex-1">
@@ -86,8 +97,11 @@ function SeeAllTilesModal({
               <Text className="mt-0.5 text-xs font-semibold text-[#EA580C]">{subtitle}</Text>
             </View>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               onPress={onClose}
-              className="size-8 items-center justify-center rounded-full bg-slate-100"
+              hitSlop={8}
+              className="size-9 items-center justify-center rounded-full bg-slate-100"
             >
               <X size={16} color="#00112e" />
             </Pressable>
@@ -268,7 +282,7 @@ export function SplitBrowseShell({
                   </View>
                 </View>
                 <Pressable
-                  onPress={() => router.push("/account" as never)}
+                  onPress={() => void WebBrowser.openBrowserAsync(`${webBaseUrl()}/contact`)}
                   className="mt-3 h-9 items-center justify-center rounded-xl border border-navy-900 bg-white active:bg-surface-sunken"
                 >
                   <Text className="text-xs font-bold text-navy-900">Contact Us</Text>
@@ -349,7 +363,7 @@ export function SplitBrowseShell({
   // MOBILE LAYOUT (< 400px safe, matches Web Mobile Left-Rail Split)
   // =========================================================================
   return (
-    <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-canvas">
       {/* Mobile Header */}
       <View className="flex-row items-center justify-between gap-2 border-b border-line/40 bg-white px-3 pb-2 pt-1.5">
         <View className="min-w-0 flex-1 flex-row items-center gap-1">
@@ -431,7 +445,7 @@ export function SplitBrowseShell({
                 <Text
                   numberOfLines={2}
                   className={`w-full px-0.5 text-center font-bold leading-tight ${
-                    isTablet ? "text-[11px]" : "text-[10px]"
+                    isTablet ? "text-xs" : "text-[11px]"
                   } ${isActive ? "text-[#C2410C]" : "text-navy-900"}`}
                 >
                   {tile.name}
@@ -471,12 +485,24 @@ export function SplitBrowseShell({
         onRequestClose={() => setMobileFiltersOpen(false)}
       >
         <View className="flex-1 justify-end bg-black/50">
-          <View className="max-h-[82%] rounded-t-3xl bg-white px-5 pb-6 pt-4">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close filters"
+            className="absolute inset-0"
+            onPress={() => setMobileFiltersOpen(false)}
+          />
+          <View
+            className="max-h-[82%] rounded-t-3xl bg-white px-5 pt-4"
+            style={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
+          >
             <View className="mb-3 flex-row items-center justify-between border-b border-line/60 pb-3">
               <Text className="text-base font-extrabold text-navy-900">Filters</Text>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close filters"
                 onPress={() => setMobileFiltersOpen(false)}
-                className="size-8 items-center justify-center rounded-full bg-slate-100"
+                hitSlop={8}
+                className="size-9 items-center justify-center rounded-full bg-slate-100"
               >
                 <X size={16} color="#00112e" />
               </Pressable>

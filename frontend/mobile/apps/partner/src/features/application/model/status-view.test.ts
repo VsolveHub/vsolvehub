@@ -1,9 +1,4 @@
-import {
-  extractRejectionReason,
-  extractTimelineDates,
-  formatSpecTimestamp,
-  resolveStatusView,
-} from "./status-view";
+import { extractRejectionReason, formatSpecTimestamp, resolveStatusView } from "./status-view";
 
 describe("resolveStatusView decision table", () => {
   it("returns 'rejected' when application is DECLINED, overriding approved documents", () => {

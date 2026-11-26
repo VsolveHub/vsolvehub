@@ -16,10 +16,6 @@ import type { ImageProps } from "expo-image";
 import { Image } from "expo-image";
 import type { LinearGradientProps } from "expo-linear-gradient";
 import { LinearGradient } from "expo-linear-gradient";
-
-// Type adapters for React 19 / TypeScript 6 JSX compatibility
-const ExpoImage = Image as unknown as (props: ImageProps) => React.JSX.Element;
-const ExpoLinearGradient = LinearGradient as unknown as (props: LinearGradientProps) => React.JSX.Element;
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
@@ -34,6 +30,10 @@ import {
 
 import { getActiveHeroSlides, type HeroSlide } from "../hero-slides";
 import { DiwaliSceneSvg } from "./diwali-scene-svg";
+
+// Type adapters for React 19 / TypeScript 6 JSX compatibility
+const ExpoImage = Image as unknown as (props: ImageProps) => React.JSX.Element;
+const ExpoLinearGradient = LinearGradient as unknown as (props: LinearGradientProps) => React.JSX.Element;
 
 /**
  * Safely resolves an image source for ExpoImage.
@@ -247,9 +247,12 @@ export function HeroBannerCarousel() {
               </View>
 
               {/* Bottom-left Headline */}
-              <Text className="absolute bottom-4 left-4 max-w-[68%] text-[1.3rem] font-extrabold leading-tight text-white">
-                {item.mobileHeadline}
-              </Text>
+              {/* A fixed-width box, so a long headline wraps instead of running off the card. */}
+              <View style={{ position: "absolute", left: 16, bottom: 16, width: Math.round(cardWidth * 0.68) }}>
+                <Text className="text-[1.3rem] font-extrabold leading-tight text-white">
+                  {item.mobileHeadline}
+                </Text>
+              </View>
             </Pressable>
           );
         }}

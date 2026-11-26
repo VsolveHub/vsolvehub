@@ -1,8 +1,8 @@
 // Ported from frontend/apps/partner/features/catalog/queries.test.ts
+import { getWorkCatalog } from "./queries";
+
 const mockGet = jest.fn();
 jest.mock("@vsolve/mobile-core", () => ({ getApiClient: () => ({ GET: mockGet }) }));
-
-import { getWorkCatalog } from "./queries";
 
 const payload = [
   {

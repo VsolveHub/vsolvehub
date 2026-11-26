@@ -1,15 +1,9 @@
 import * as Location from "expo-location";
 import { LocateFixed, MapPin, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, TextInput, View } from "react-native";
 
-import { COLOR_TOKENS, Spinner, Text } from "@vsolve/mobile-ui";
+import { COLOR_TOKENS, Text } from "@vsolve/mobile-ui";
 import { EMPTY_PLACE, type PlaceFilterValue } from "./nearby";
 
 export interface PlaceFilterProps {
@@ -51,6 +45,7 @@ export function PlaceFilter({
 
   useEffect(() => {
     if (!apiKey || value.source !== "typed" || value.name.trim().length < SEARCH_MIN_CHARS) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the debounced Places search when the query no longer qualifies
       setSuggestions([]);
       setOpen(false);
       return;

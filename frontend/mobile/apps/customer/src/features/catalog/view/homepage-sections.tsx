@@ -581,7 +581,8 @@ function HeroSplitCarousel({
   const cardWidth = Math.max(260, windowWidth - 32 - 34);
   const step = cardWidth + 10;
   const flatListRef = useRef<FlatList>(null);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  // State, not a ref: the value object is created once and is read during render.
+  const [scrollX] = useState(() => new Animated.Value(0));
   const currentIndexRef = useRef(0);
   const autoplayTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDragging = useRef(false);

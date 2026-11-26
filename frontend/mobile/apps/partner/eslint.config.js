@@ -31,4 +31,11 @@ module.exports = defineConfig([
       ],
     },
   },
+  {
+    // Jest module mocks and setup run under Jest, where `jest` is a global and mocks are
+    // throwaway stand-ins that never appear in React DevTools.
+    files: ["src/test/**/*.cjs"],
+    languageOptions: { globals: { jest: "readonly" } },
+    rules: { "react/display-name": "off" },
+  },
 ]);

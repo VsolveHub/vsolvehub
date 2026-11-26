@@ -112,7 +112,7 @@ export function RentalCard({ asset }: { asset: RentalAsset }) {
             </Text>
             {asset.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                Â· {asset.distance_km} km away
+                · {asset.distance_km} km away
               </Text>
             ) : null}
           </View>

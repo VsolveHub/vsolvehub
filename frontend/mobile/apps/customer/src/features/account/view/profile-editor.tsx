@@ -105,6 +105,7 @@ export function ProfileEditor({
                   </View>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Back"
                     onPress={onDone}
                     className="size-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
                   >
@@ -185,6 +186,7 @@ export function ProfileEditor({
             </View>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Back"
               onPress={onDone}
               className="size-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
             >

@@ -10,6 +10,12 @@ import { Button, Logo, Dialog, OtpForm, cn, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import {
+  isAssistantRouteAvailable,
+  requestOpenAssistant,
+  useAssistantLauncherState,
+} from "@/features/assistant/launcher-bridge";
+import { HelperBot } from "@/features/assistant/view/welcome-hero";
 import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import { readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
@@ -430,9 +436,11 @@ function NavIconMobile({ name, className }: { name: string; className?: string }
 
 export function BottomNav() {
   const session = useCustomerSession();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const hydrated = useHydrated();
   const cartQuery = useCart();
+  const assistantState = useAssistantLauncherState();
+  const showAssistantTab = isAssistantRouteAvailable(pathname);
   const cartCount = hydrated
     ? (cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
     : 0;
@@ -452,6 +460,64 @@ export function BottomNav() {
     >
       <div className="flex min-h-16 w-full items-center px-1 py-2">
         {targets.map((target) => {
+          if (target.icon === "cart" && showAssistantTab) {
+            const unread = assistantState.unreadCount;
+            return (
+              <button
+                key="assistant-tab"
+                type="button"
+                onClick={requestOpenAssistant}
+                aria-expanded={assistantState.open}
+                aria-label={
+                  unread > 0
+                    ? `Open the booking assistant, ${unread} unread`
+                    : "Ask AI"
+                }
+                className={cn(
+                  "group relative flex min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 border-none bg-transparent p-0 py-0.5",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+                )}
+              >
+                <span className="relative flex h-9 w-13 shrink-0 items-center justify-center">
+                  <span className="absolute -top-4 grid size-[52px] place-items-center rounded-full border border-line/80 bg-[#FAF9F7] p-1">
+                    <span
+                      className={cn(
+                        "relative grid size-11 place-items-center rounded-full border-2 bg-orange-50 shadow-[0_3px_10px_rgba(234,88,12,0.18)] transition-transform active:scale-95",
+                        assistantState.open ? "border-[#EA580C]" : "border-[#EA580C]/45",
+                      )}
+                    >
+                      {unread > 0 && !assistantState.open ? (
+                        <>
+                          <span
+                            aria-hidden
+                            className="assistant-ring-pulse pointer-events-none absolute inset-0 rounded-full border-2 border-[#EA580C]"
+                          />
+                          <span
+                            aria-hidden
+                            className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#EA580C] px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-[#FAF9F7]"
+                          >
+                            {unread > 9 ? "9+" : unread}
+                          </span>
+                        </>
+                      ) : null}
+                      <span className="assistant-bot-float grid place-items-center">
+                        <HelperBot size={32} className="size-8" />
+                      </span>
+                    </span>
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "max-w-full truncate text-[10px] font-bold leading-none",
+                    assistantState.open ? "text-action" : "text-[#00112e]",
+                  )}
+                >
+                  Ask AI
+                </span>
+              </button>
+            );
+          }
+
           const current = isCurrentTarget(target.href, pathname);
           return (
             <Link

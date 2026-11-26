@@ -150,7 +150,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </Text>
             {property.distance_km != null ? (
               <Text className="shrink-0 text-xs font-semibold text-navy-900">
-                Â· {property.distance_km} km away
+                · {property.distance_km} km away
               </Text>
             ) : null}
           </View>
@@ -196,7 +196,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             </View>
             <Text className="mt-0.5 text-[10px] text-text-muted" numberOfLines={1}>
               {typeof property.min_stay_nights === "number" && property.min_stay_nights > 1
-                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} Â· `
+                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, period)} · `
                 : ""}
               Enquire and the host calls you
             </Text>

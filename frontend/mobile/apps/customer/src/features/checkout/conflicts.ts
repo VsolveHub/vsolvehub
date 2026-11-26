@@ -1,5 +1,5 @@
 // Ported from frontend/apps/customer/features/checkout/conflicts.ts
-import { isApiRequestError, ApiRequestError } from "@vsolve/api-client";
+import { isApiRequestError } from "@vsolve/api-client";
 
 /**
  * The server refusals the group booking flow has to act on differently.

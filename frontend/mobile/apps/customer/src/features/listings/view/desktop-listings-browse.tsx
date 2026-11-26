@@ -1,4 +1,3 @@
-import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
@@ -24,6 +23,7 @@ import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";
 import { useSavedItems } from "../../stays/use-saved-items";
 import { getCareerImage } from "../career-images";
+import { listingPayText } from "../pay";
 import { VerifiedBadge, employerDetailLine, employerName, listingEmployer } from "./employer-identity";
 import { fetchListingFilters, fetchListings, type Listing } from "../queries";
 
@@ -52,13 +52,6 @@ function listingFields(value: unknown): Record<string, any> {
     : {};
 }
 
-function formatMoney(raw: unknown): string {
-  if (!raw) return "";
-  const s = String(raw).trim();
-  if (s.includes("₹")) return s;
-  return `₹ ${s}`;
-}
-
 function DesktopListingCard({ listing }: { listing: Listing }) {
   const router = useRouter();
   const saved = useSavedItems("listing");
@@ -68,18 +61,7 @@ function DesktopListingCard({ listing }: { listing: Listing }) {
 
   // Pay calculation
   const rawPay = fields.pay_range || fields.salary_range || fields.compensation;
-  let payText = "Pay on request";
-  if (rawPay) {
-    payText = formatMoney(rawPay);
-  } else if (listing.salary_display) {
-    payText = formatMoney(listing.salary_display);
-  } else if (listing.salary_min_paise && listing.salary_max_paise) {
-    payText = `₹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")} – ₹${Math.round(
-      listing.salary_max_paise / 100,
-    ).toLocaleString("en-IN")}/mo`;
-  } else if (listing.salary_min_paise) {
-    payText = `From ₹${Math.round(listing.salary_min_paise / 100).toLocaleString("en-IN")}/mo`;
-  }
+  const payText = listingPayText(listing, rawPay) ?? "Pay on request";
 
   // Location
   const locationText =
@@ -100,7 +82,7 @@ function DesktopListingCard({ listing }: { listing: Listing }) {
     ? String(rawExperience)
         .replace(/[-_]/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
-    : "1-2 years";
+    : "Experience not stated";
 
   // Employment Type
   const rawRoleType =

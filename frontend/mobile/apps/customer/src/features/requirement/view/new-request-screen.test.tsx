@@ -28,6 +28,10 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
 jest.mock("@/features/catalog/client-queries", () => ({
   useServiceDetail: () => ({
     isPending: false,
@@ -61,8 +65,6 @@ test("new request sends the typed details", async () => {
   await act(async () => {
     input.props.onChangeText("Two rooms");
   });
-  tap(await view.findByRole("button", { name: "Continue to Step 2" }));
-  tap(await view.findByRole("button", { name: "Continue to Review" }));
   tap(await view.findByRole("button", { name: "Send request" }));
   expect(mockCreate).toHaveBeenCalledWith(
     { variantId: "variant-1", answers: { details: "Two rooms" }, language: "en" },

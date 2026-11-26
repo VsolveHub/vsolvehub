@@ -1,6 +1,6 @@
 import { Button, Dialog, Input, QuantityStepper, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, View } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, Plus, Trash2, X } from "lucide-react-native";
@@ -572,14 +572,27 @@ function UnitSheetContent({
 
                               {existingRooms.length > 1 ? (
                                 <Pressable
-                                  onPress={async () => {
-                                    try {
-                                      await deletePartnerStayRoom(room.id);
-                                      invalidate();
-                                    } catch (err: any) {
-                                      setError(err?.message || "Failed to delete room.");
-                                    }
-                                  }}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Delete room"
+                                  hitSlop={8}
+                                  onPress={() =>
+                                    // A room delete cannot be undone, so it is never one tap.
+                                    Alert.alert("Delete room", "Delete this room? This cannot be undone.", [
+                                      { text: "Cancel", style: "cancel" },
+                                      {
+                                        text: "Delete",
+                                        style: "destructive",
+                                        onPress: async () => {
+                                          try {
+                                            await deletePartnerStayRoom(room.id);
+                                            invalidate();
+                                          } catch (err: any) {
+                                            setError(err?.message || "Failed to delete room.");
+                                          }
+                                        },
+                                      },
+                                    ])
+                                  }
                                   className="size-7 items-center justify-center rounded-full bg-rose-50"
                                 >
                                   <Trash2 size={12} color={THEME_COLORS.rose600} />

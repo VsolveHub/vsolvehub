@@ -5,7 +5,7 @@ import { getApiClient } from "@vsolve/mobile-core";
 import { Text, useT } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { usePathname, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode, useLayoutEffect } from "react";
 import { View } from "react-native";
 
 import { useApplyDock } from "../model/dock-context";
@@ -100,7 +100,9 @@ export function EmployerFrame({
   const failureMessage = error && !conflict ? describeError(error, "mutation").message : null;
 
   const commitRef = useRef(onContinue);
-  commitRef.current = onContinue;
+  useLayoutEffect(() => {
+    commitRef.current = onContinue;
+  });
   const stableOnCommit = useCallback(() => commitRef.current(), []);
 
   const backHref = back?.href ?? "/apply";

@@ -143,6 +143,7 @@ export function ConsentList({
           {/* Right Document Icon */}
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={doc.title}
             onPress={() => setSelectedDoc(doc)}
             style={styles.iconButton}
           >
@@ -178,7 +179,7 @@ export function ConsentList({
 
         <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
           <Text style={styles.docBodyText}>
-            By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub's partner terms, service quality standards, and platform policies.
+            By accepting this agreement, you acknowledge that you have read and agreed to comply with VSolve Hub&apos;s partner terms, service quality standards, and platform policies.
             {"\n\n"}
             Document URL: {selectedDoc?.document_url || "https://vsolvehub.com/terms"}
           </Text>

@@ -4,12 +4,21 @@ import { useAuthStore, useMobileLogout } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { usePathname, useRouter, Slot } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { DeviceEventEmitter, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { useCustomerProfile } from "@/features/account/queries";
+import { useMobileAssistantAlerts } from "@/features/assistant/alerts";
+import { ASSISTANT_ENABLED } from "@/features/assistant/enabled";
+import {
+  AssistantNudgePill,
+  AssistantTabOrb,
+  FloatingAssistantOrb,
+  ReplyPeekBanner,
+} from "@/features/assistant/view/assistant-launcher";
+import { AssistantPopup } from "@/features/assistant/view/assistant-screen";
 import { useCart } from "@/features/checkout/queries";
 import { subscribeOpenNotifications } from "@/features/notifications/alerts-bus";
 import { unreadBadgeLabel } from "@/features/notifications/model/feed";
@@ -28,6 +37,8 @@ interface TabItem {
   icon: TabIconType;
 }
 
+const ASSISTANT_HIDDEN_PREFIXES = ["/cart", "/checkout", "/login", "/signup", "/book/", "/bookings/"];
+
 export default function TabsLayout() {
   const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
@@ -42,6 +53,15 @@ export default function TabsLayout() {
   const cartCount = cart.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? cart.data?.items.length ?? 0;
   const unreadCount = useUnreadNotificationCount(status === "signedIn");
   const unreadTotal = unreadCount.data?.unread ?? 0;
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const assistantHidden =
+    !ASSISTANT_ENABLED ||
+    pathname.startsWith("/ai-chat") ||
+    ASSISTANT_HIDDEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  const assistantAlerts = useMobileAssistantAlerts({
+    activeOnChat: pathname.startsWith("/ai-chat") || assistantOpen,
+    enabled: !assistantHidden,
+  });
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
@@ -83,21 +103,25 @@ export default function TabsLayout() {
   const tabs: TabItem[] = [
     { name: "Home", href: "/", icon: "home" },
     { name: "Search", href: "/catalog", icon: "services" },
-    { name: "AI Chat", href: "/ai-chat", icon: "aichat" },
+    ...(ASSISTANT_ENABLED ? [{ name: "Ask AI", href: "/ai-chat", icon: "aichat" } as TabItem] : []),
     { name: "Bookings", href: "/activity", icon: "bookings" },
     status === "signedIn"
       ? { name: "Profile", href: "/account", icon: "profile" }
       : { name: "Log in", href: null, icon: "login" },
   ];
 
+  const openAssistant = () => {
+    assistantAlerts.dismissNudge();
+    if (!assistantHidden) {
+      setAssistantOpen(true);
+    }
+  };
+
   const handleTabPress = (tab: TabItem) => {
-    if (tab.name === "AI Chat") {
-      if (status === "signedIn") {
-        router.push("/ai-chat" as never);
-      } else {
-        setPendingRedirect("/ai-chat");
-        setLoginOpen(true);
-      }
+    if (tab.icon === "aichat") {
+      if (pathname.startsWith("/ai-chat")) return;
+      assistantAlerts.dismissNudge();
+      setAssistantOpen((prev) => !prev);
       return;
     }
 
@@ -396,14 +420,51 @@ export default function TabsLayout() {
         {status === "signedIn" || !requiresCustomerSignIn(pathname) ? <Slot /> : null}
       </View>
 
+      {/* Assistant pop-up, reply peek banner, first-visit nudge & Desktop floating orb */}
+      {assistantOpen && !assistantHidden ? (
+        <AssistantPopup isDesktop={isDesktop} onClose={() => setAssistantOpen(false)} />
+      ) : null}
+      {!assistantOpen && !assistantHidden && assistantAlerts.latestUnread ? (
+        <ReplyPeekBanner
+          message={assistantAlerts.latestUnread}
+          isDesktop={isDesktop}
+          bottomOffset={Math.max(8, insets.bottom) + 90}
+          onOpen={openAssistant}
+          onDismiss={assistantAlerts.dismissPeek}
+        />
+      ) : !assistantOpen && !assistantHidden && assistantAlerts.nudgeVisible ? (
+        <AssistantNudgePill
+          isDesktop={isDesktop}
+          bottomOffset={Math.max(8, insets.bottom) + 90}
+          onOpen={openAssistant}
+          onDismiss={assistantAlerts.dismissNudge}
+        />
+      ) : null}
+      {isDesktop && !assistantOpen && !assistantHidden ? (
+        <FloatingAssistantOrb
+          unreadCount={assistantAlerts.unreadCount}
+          onPress={openAssistant}
+        />
+      ) : null}
+
       {/* Bottom Tab Bar (Mobile Only) */}
       {!isDesktop && !chrome.hideMobileFooter ? (
         <View
-          className="flex-row items-center justify-around border-t border-[#EAE8E4] bg-white px-2 pt-2"
-          style={{ paddingBottom: Math.max(8, insets.bottom) }}
+          className="select-none flex-row items-center overflow-visible border-t border-[#EAE8E4] bg-[#FAF9F7] px-1 pt-2"
+          style={{ paddingBottom: Math.max(8, insets.bottom), overflow: "visible" }}
         >
           {tabs.map((tab) => {
             const active = tab.href ? isCustomerTabActive(tab.href, pathname) : false;
+            if (tab.icon === "aichat") {
+              return (
+                <AssistantTabOrb
+                  key={tab.name}
+                  active={active || assistantOpen}
+                  unreadCount={assistantAlerts.unreadCount}
+                  onPress={() => handleTabPress(tab)}
+                />
+              );
+            }
             const iconColor = active ? "#EA580C" : "#6B6560";
             return (
               <Pressable
@@ -411,7 +472,7 @@ export default function TabsLayout() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => handleTabPress(tab)}
-                className="min-w-16 items-center gap-1 px-2 py-0.5"
+                className="min-w-0 flex-1 items-center justify-center gap-1 px-1 py-0.5 active:opacity-80"
               >
                 <View className="h-7 w-7 items-center justify-center">
                   <TabIcon type={tab.icon} color={iconColor} />

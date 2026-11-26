@@ -28,7 +28,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { fetchListingFilters, fetchListings, type Listing } from "../queries";
+import { fetchListings, type Listing } from "../queries";
 import { JobCard } from "./job-card";
 import { DesktopListingsBrowse } from "./desktop-listings-browse";
 import { useIsDesktop } from "@/lib/responsive";

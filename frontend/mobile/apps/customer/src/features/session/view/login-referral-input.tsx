@@ -1,7 +1,7 @@
 // Ported from frontend/apps/customer/features/session/view/login-referral-input.tsx
 import { Badge, Button, Text } from "@vsolve/mobile-ui";
 import { CheckCircle2, Gift, Tag } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { useValidateReferralCode } from "@/features/account/queries";
@@ -12,17 +12,18 @@ export function LoginReferralInput() {
   const [code, setCode] = useState(() => readPendingReferral() ?? "");
   const [validationSuccess, setValidationSuccess] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const validateMutation = useValidateReferralCode();
-  const isValidating = validateMutation.isPending;
+  const { mutateAsync, isPending: isValidating } = useValidateReferralCode();
+  const validatedOnMountRef = useRef(false);
 
   const validateCode = useCallback(
     async (codeToTest: string) => {
       const clean = codeToTest.trim().toUpperCase();
       if (!clean) return;
 
+      validatedOnMountRef.current = true;
       setValidationError(null);
       try {
-        const data = await validateMutation.mutateAsync(clean);
+        const data = await mutateAsync(clean);
         if (data?.valid) {
           setValidationSuccess(data.referee_reward_summary || "Referral reward confirmed!");
           savePendingReferral(clean);
@@ -35,17 +36,18 @@ export function LoginReferralInput() {
         setValidationSuccess(null);
       }
     },
-    [validateMutation],
+    [mutateAsync],
   );
 
   useEffect(() => {
+    if (validatedOnMountRef.current) return;
     const pendingCode = readPendingReferral();
-    if (pendingCode) {
-      const timer = setTimeout(() => {
-        void validateCode(pendingCode);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
+    if (!pendingCode) return;
+    const timer = setTimeout(() => {
+      validatedOnMountRef.current = true;
+      void validateCode(pendingCode);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [validateCode]);
 
   const handleApplyClick = () => {

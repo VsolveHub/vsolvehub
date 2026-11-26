@@ -1,9 +1,11 @@
 // Ported from frontend/apps/customer/features/catalog/client-queries.ts
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { request, unwrap, type Schemas } from "@vsolve/api-client";
+import { request, type Schemas } from "@vsolve/api-client";
 import { STATIC_CONTENT, queryKeys } from "@vsolve/query/native";
 
 import { getApiClient } from "@vsolve/mobile-core";
+
+import { findCatalogService, type CatalogServiceHint } from "./service-cover";
 
 export type Category = Schemas["Category"];
 export type ServiceCard = Schemas["ServiceCard"];
@@ -85,8 +87,6 @@ export function useServiceDetail(serviceSlug: string | null, enabled = true) {
     ...CATALOG_FRESHNESS,
   });
 }
-
-import { findCatalogService, type CatalogServiceHint } from "./service-cover";
 
 export function useCatalogServiceIndex() {
   const categoriesQuery = useCategories();

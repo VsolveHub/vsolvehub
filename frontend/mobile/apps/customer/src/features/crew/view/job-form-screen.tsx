@@ -1,12 +1,11 @@
-import { Check, ChevronRight, MapPin } from "lucide-react-native";
-import { type ReactNode, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, TextInput, View } from "react-native";
+import { ChevronRight, MapPin } from "lucide-react-native";
+import { type ReactNode, useEffect } from "react";
+import { ActivityIndicator, Pressable, View } from "react-native";
 
 import { ErrorState, Text } from "@vsolve/mobile-ui";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 
 import { DRESS_CODE_CODE, STAFF_MEAL_CODE } from "../model/event-flow";
-import { formatReportingTime, reportingTimeOptions } from "../model/reporting-time";
 import { PhoneFrame, ScreenHeading } from "./phone-frame";
 import { PresetQuestions } from "./preset-questions";
 

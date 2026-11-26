@@ -43,7 +43,7 @@ export interface RentalAsset {
   structured_fields?: Record<string, string | number | boolean>;
   partner?: RentalPartner;
   distance_km?: number | null;
-  reserved_ranges?: Array<{ start_date: string; end_date: string }>;
+  reserved_ranges?: { start_date: string; end_date: string }[];
 }
 
 export interface RentalDeposit {

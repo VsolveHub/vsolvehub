@@ -1,6 +1,6 @@
 // Ported from frontend/apps/partner/features/session/view/me-home.tsx
 import { hasWorkspaceAction } from "@vsolve/query/native";
-import { Button, Text, cn } from "@vsolve/mobile-ui";
+import { Text, cn } from "@vsolve/mobile-ui";
 import { useMobileLogout } from "@vsolve/mobile-core";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";

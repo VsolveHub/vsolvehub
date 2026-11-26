@@ -5,7 +5,6 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { Text } from "@vsolve/mobile-ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
 import { useIsDesktop } from "@/lib/responsive";
 import { DesktopAccountNav } from "./desktop-account-nav";
 import { DesktopSiteFooter } from "@/features/session/view/desktop-site-footer";

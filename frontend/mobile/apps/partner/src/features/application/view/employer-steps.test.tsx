@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render } from "@testing-library/react-native";
-import { I18nProvider } from "@vsolve/mobile-ui";
+import { I18nProvider , Text } from "@vsolve/mobile-ui";
 import { router } from "expo-router";
 import { useCallback, useRef, useState, type ReactElement } from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { catalogs } from "../../../i18n/catalogs";
