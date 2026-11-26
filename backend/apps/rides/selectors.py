@@ -15,6 +15,7 @@ from django.db.models import (
     F,
     OuterRef,
     Q,
+    QuerySet,
     Subquery,
     Sum,
     Value,
@@ -28,6 +29,7 @@ from apps.rides.models import (
     TRACKED_RIDE_STATES,
     CaptainDutySession,
     CaptainPass,
+    CaptainPassPlan,
     CaptainVehicle,
     Ride,
     RideKind,
@@ -77,6 +79,23 @@ def queued_pass(partner: PartnerProfile) -> CaptainPass | None:
         CaptainPass.objects.select_related("plan")
         .filter(partner=partner, status=CaptainPass.Status.QUEUED)
         .first()
+    )
+
+
+def captain_vehicle_type(partner: PartnerProfile) -> str | None:
+    return (
+        CaptainVehicle.objects.filter(partner=partner)
+        .values_list("vehicle_type", flat=True)
+        .first()
+    )
+
+
+def pass_plans_for(partner: PartnerProfile) -> QuerySet[CaptainPassPlan]:
+    """Active plans this captain may buy: their vehicle's, and plans for every vehicle (A4)."""
+    return (
+        CaptainPassPlan.objects.filter(is_active=True)
+        .filter(Q(vehicle_type__isnull=True) | Q(vehicle_type=captain_vehicle_type(partner)))
+        .order_by("price_paise", "code")
     )
 
 

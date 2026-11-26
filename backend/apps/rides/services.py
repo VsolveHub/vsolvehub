@@ -27,6 +27,7 @@ from apps.rides.exceptions import (
     PassAlreadyActiveError,
     PassPurchasePendingError,
     PassRequiredError,
+    PlanNotForVehicleError,
     RateCardExistsError,
     RateCardInactiveError,
     RegistrationAlreadyUsedError,
@@ -341,6 +342,10 @@ def buy_pass(
         raise CaptainNotApprovedError(
             "You can buy a pass once your captain application is approved."
         )
+    if plan.vehicle_type is not None and plan.vehicle_type != selectors.captain_vehicle_type(
+        partner
+    ):
+        raise PlanNotForVehicleError
     now = timezone.now()
     _expire_lapsed_passes(partner_id=partner.id, now=now)
     # A queued pass is a paid pass waiting its turn. One in line is the most we can hold, so a

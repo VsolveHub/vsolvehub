@@ -53,6 +53,13 @@ class PassPurchasePendingError(RidesApiError):
         )
 
 
+class PlanNotForVehicleError(RidesApiError):
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__(code="plan_not_for_vehicle", message="This pass is not for your vehicle.")
+
+
 class AreaNotServedError(RidesApiError):
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 

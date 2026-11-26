@@ -208,8 +208,7 @@ class CaptainPassPlansView(APIView):
         responses=CaptainPassPlanSerializer(many=True),
     )
     def get(self, request: Any) -> Response:
-        del request
-        plans = CaptainPassPlan.objects.filter(is_active=True).order_by("price_paise", "code")
+        plans = selectors.pass_plans_for(_partner(request.user))
         return Response(CaptainPassPlanSerializer(plans, many=True).data)
 
 
