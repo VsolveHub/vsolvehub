@@ -105,12 +105,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "POST_NOTIFICATIONS",
       "VIBRATE",
     ],
-    // Location is used only while the app is open, so no location foreground service either:
-    // Google Play asks for a declaration and a demo video for every foreground-service type.
+    // Location is used while the app is open and, for on-duty captains, by the "You're on duty"
+    // foreground service (Rides brief §5.13). Background location stays blocked.
     blockedPermissions: [
       "ACCESS_BACKGROUND_LOCATION",
       "RECORD_AUDIO",
-      "FOREGROUND_SERVICE_LOCATION",
       "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
     ],
     ...(googleServicesFile ? { googleServicesFile } : {}),
