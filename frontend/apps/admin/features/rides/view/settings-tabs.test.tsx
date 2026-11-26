@@ -41,6 +41,8 @@ const PLAN = {
   name: "Daily Pass",
   price_paise: 4900,
   duration_hours: 24,
+  vehicle_type: null,
+  max_trips: null,
   is_active: true,
   created_at: "2026-11-06T10:00:00Z",
 };
@@ -117,7 +119,29 @@ describe("pass plans", () => {
       name: "Daily Pass",
       price_paise: 5900,
       duration_hours: 24,
+      vehicle_type: null,
+      max_trips: null,
       is_active: true,
     });
+  });
+
+  it("saves a vehicle and a trip limit, and refuses a limit of 0", async () => {
+    client.GET.mockResolvedValue(ok([PLAN]));
+    client.PATCH.mockResolvedValue(ok({ ...PLAN, vehicle_type: "CAB", max_trips: 100 }));
+    render(<PassPlans />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText(/^Vehicle/), { target: { value: "CAB" } });
+    fireEvent.change(screen.getByLabelText(/^Max trips/), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Enter a whole number of trips, at least 1, or leave it empty.")).toBeInTheDocument();
+    expect(client.PATCH).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/^Max trips/), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(client.PATCH).toHaveBeenCalledTimes(1));
+    expect(client.PATCH.mock.calls[0]![1].body).toMatchObject({ vehicle_type: "CAB", max_trips: 100 });
   });
 });

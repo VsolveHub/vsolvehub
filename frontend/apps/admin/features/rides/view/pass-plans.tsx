@@ -1,11 +1,11 @@
 "use client";
 
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Dialog, EmptyState, ErrorState, Field, Input, Spinner, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Dialog, EmptyState, ErrorState, Field, Input, Select, Spinner, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
-import { durationText, fromInput, toInput } from "../model";
-import { usePassPlans, useSavePassPlan, type PassPlan } from "../queries";
+import { VEHICLE_TYPES, durationText, fromInput, toInput } from "../model";
+import { usePassPlans, useSavePassPlan, type PassPlan, type PassPlanWrite } from "../queries";
 import { Stacked, Table, Td, Th, Toolbar } from "./layout";
 
 function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => void }) {
@@ -14,9 +14,13 @@ function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => v
   const [name, setName] = useState(plan?.name ?? "");
   const [price, setPrice] = useState(plan ? toInput(plan.price_paise, "rupees") : "");
   const [hours, setHours] = useState(plan ? String(plan.duration_hours) : "24");
+  const [vehicle, setVehicle] = useState(plan?.vehicle_type ?? "");
+  const [trips, setTrips] = useState(plan?.max_trips ? String(plan.max_trips) : "");
   const [active, setActive] = useState(plan?.is_active ?? true);
   // Each message shows under its own box, and goes as soon as that box changes.
-  const [problems, setProblems] = useState<Partial<Record<"code" | "name" | "price" | "hours", string>>>({});
+  const [problems, setProblems] = useState<Partial<Record<"code" | "name" | "price" | "hours" | "trips", string>>>(
+    {},
+  );
 
   function clear(key: keyof typeof problems) {
     setProblems((old) => (old[key] ? { ...old, [key]: undefined } : old));
@@ -25,14 +29,26 @@ function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => v
   function submit() {
     const pricePaise = fromInput(price, "rupees");
     const duration = fromInput(hours, "minutes");
+    // Empty means no trip limit.
+    const maxTrips = trips.trim() ? fromInput(trips, "minutes") : null;
     const found: typeof problems = {};
     if (!plan && !code.trim()) found.code = "Give the plan a code, for example DAILY_BIKE.";
     if (!name.trim()) found.name = "Give the plan a name captains will see.";
     if (pricePaise === null) found.price = "Enter the price in rupees.";
     if (duration === null || duration < 1) found.hours = "A pass lasts at least 1 whole hour.";
+    if (trips.trim() && (maxTrips === null || maxTrips < 1)) {
+      found.trips = "Enter a whole number of trips, at least 1, or leave it empty.";
+    }
     setProblems(found);
     if (pricePaise === null || duration === null || Object.keys(found).length > 0) return;
-    const body = { name: name.trim(), price_paise: pricePaise, duration_hours: duration, is_active: active };
+    const body = {
+      name: name.trim(),
+      price_paise: pricePaise,
+      duration_hours: duration,
+      vehicle_type: (vehicle || null) as PassPlanWrite["vehicle_type"],
+      max_trips: maxTrips,
+      is_active: active,
+    };
     if (plan) save.mutate({ planId: plan.id, body }, { onSuccess: onClose });
     else save.mutate({ body: { ...body, code: code.trim().toUpperCase() } }, { onSuccess: onClose });
   }
@@ -108,6 +124,26 @@ function PlanDialog({ plan, onClose }: { plan: PassPlan | null; onClose: () => v
               }}
             />
           </Field>
+          <Field label="Vehicle" description="Only captains with this vehicle can buy it.">
+            <Select value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
+              <option value="">All vehicles</option>
+              {VEHICLE_TYPES.map((type) => (
+                <option key={type.code} value={type.code}>
+                  {type.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Max trips" description="Leave empty for no limit." error={problems.trips}>
+            <Input
+              inputMode="numeric"
+              value={trips}
+              onChange={(e) => {
+                setTrips(e.target.value);
+                clear("trips");
+              }}
+            />
+          </Field>
         </div>
         <label className="flex items-center gap-2 border-t border-line pt-4 text-sm">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
@@ -159,6 +195,7 @@ export function PassPlans() {
             <>
               <Th>Plan</Th>
               <Th numeric>Price</Th>
+              <Th>Vehicle</Th>
               <Th>Lasts</Th>
               <Th>Status</Th>
               <Th>
@@ -173,7 +210,11 @@ export function PassPlans() {
                 <Stacked main={plan.name} sub={<span className="font-mono">{plan.code}</span>} />
               </Td>
               <Td numeric>{plan.price_paise === 0 ? "Free" : formatMoney(plan.price_paise)}</Td>
-              <Td>{durationText(plan.duration_hours)}</Td>
+              <Td>{VEHICLE_TYPES.find((type) => type.code === plan.vehicle_type)?.label ?? "All"}</Td>
+              <Td>
+                {durationText(plan.duration_hours)}
+                {plan.max_trips ? ` · ${plan.max_trips} trips` : ""}
+              </Td>
               <Td>{plan.is_active ? <Badge tone="success">On sale</Badge> : <Badge tone="neutral">Not on sale</Badge>}</Td>
               <Td>
                 <div className="flex justify-end">
