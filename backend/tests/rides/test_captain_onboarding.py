@@ -31,7 +31,8 @@ CAPTAIN = PartnerApplication.Track.RIDE_CAPTAIN
 
 class TestRequiredDocuments:
     def test_a_captain_needs_the_identity_documents_plus_licence_rc_and_insurance(self) -> None:
-        assert required_document_kinds(CAPTAIN) == (*IDENTITY_KINDS, *CAPTAIN_KINDS)
+        captain = PartnerApplication(track=CAPTAIN)
+        assert required_document_kinds(captain) == (*IDENTITY_KINDS, *CAPTAIN_KINDS)
         assert set(CAPTAIN_KINDS) == {"DRIVING_LICENCE", "VEHICLE_RC", "VEHICLE_INSURANCE"}
 
     @pytest.mark.parametrize(
@@ -40,11 +41,12 @@ class TestRequiredDocuments:
             PartnerApplication.Track.SERVICES,
             PartnerApplication.Track.STAY_HOST,
             PartnerApplication.Track.RENTAL_OWNER,
-            PartnerApplication.Track.EMPLOYER,
+            # EMPLOYER is not here: its documents depend on the employer profile, tested in
+            # tests/partners/test_employer_onboarding.py.
         ],
     )
     def test_every_other_track_is_unchanged(self, track: str) -> None:
-        assert required_document_kinds(track) == IDENTITY_KINDS
+        assert required_document_kinds(PartnerApplication(track=track)) == IDENTITY_KINDS
 
     def test_the_application_tells_the_app_which_documents_to_ask_for(self) -> None:
         application = start_application(make_user())
