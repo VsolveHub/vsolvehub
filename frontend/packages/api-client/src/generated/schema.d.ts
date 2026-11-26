@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.119.0)
- * Checksum: f7acc7666a739144
+ * Checksum: 9739e2945fe366c4
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11375,6 +11375,7 @@ export interface components {
             readonly name: string;
             readonly price_paise: number;
             readonly duration_hours: number;
+            readonly max_trips: number | null;
         };
         /** @description Operations' view of a plan. `code` is fixed once created. */
         CaptainPassPlanOps: {
@@ -11385,6 +11386,8 @@ export interface components {
             /** Format: int64 */
             price_paise: number;
             duration_hours: number;
+            vehicle_type?: (components["schemas"]["VehicleTypeEnum"] | components["schemas"]["NullEnum"]) | null;
+            max_trips?: number | null;
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at: string;
@@ -11396,6 +11399,8 @@ export interface components {
             /** Format: int64 */
             price_paise: number;
             duration_hours: number;
+            vehicle_type?: (components["schemas"]["VehicleTypeEnum"] | components["schemas"]["NullEnum"]) | null;
+            max_trips?: number | null;
             is_active?: boolean;
         };
         CaptainPosition: {
@@ -18052,6 +18057,8 @@ export interface components {
             /** Format: int64 */
             price_paise?: number;
             duration_hours?: number;
+            vehicle_type?: (components["schemas"]["VehicleTypeEnum"] | components["schemas"]["NullEnum"]) | null;
+            max_trips?: number | null;
             is_active?: boolean;
         };
         PatchedCartItemUpdateRequest: {

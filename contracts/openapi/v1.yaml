@@ -27294,10 +27294,15 @@ components:
         duration_hours:
           type: integer
           readOnly: true
+        max_trips:
+          type: integer
+          readOnly: true
+          nullable: true
       required:
       - code
       - duration_hours
       - id
+      - max_trips
       - name
       - price_paise
     CaptainPassPlanOps:
@@ -27324,6 +27329,16 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
+        vehicle_type:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        max_trips:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
         is_active:
           type: boolean
         created_at:
@@ -27359,6 +27374,16 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
+        vehicle_type:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        max_trips:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
         is_active:
           type: boolean
       required:
@@ -44548,6 +44573,16 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
+        vehicle_type:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/VehicleTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        max_trips:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
         is_active:
           type: boolean
     PatchedCartItemUpdateRequest:

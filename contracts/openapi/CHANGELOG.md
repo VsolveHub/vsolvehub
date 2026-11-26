@@ -249,6 +249,13 @@ added to this entry.
   while the offer was open. `POST /partner/rides/passes/` answers `409 pass_already_active` while
   a paid pass is queued. `POST /partner/rides/location/` accepts pings off duty while the captain
   has an open ride. A rider's SOS without a place uses the captain's last ping.
+- **Changed** (Taxi brief A4, Daily Pass per vehicle), additive: `CaptainPassPlanOps` adds
+  `vehicle_type` (`null` = every vehicle type) and `max_trips` (`null` = no trip limit, otherwise
+  at least 1), set on create and edit. `GET /partner/rides/pass-plans/` lists only the plans for
+  the captain's vehicle type and the plans for every vehicle, and adds `max_trips`.
+  `POST /partner/rides/passes/` answers `409 plan_not_for_vehicle` for a plan made for another
+  vehicle type. A pass with `max_trips` ends after the trip that reaches it (a completed ride, or
+  a delivered or returned parcel); a trip in progress always finishes.
 - Removed: none. Renamed: none.
 
 ## 1.117.0 - Firebase sign-in removed

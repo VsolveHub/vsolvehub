@@ -129,7 +129,7 @@ class ParcelPreferenceSerializer(serializers.Serializer[Any]):
 class CaptainPassPlanSerializer(serializers.ModelSerializer[CaptainPassPlan]):
     class Meta:
         model = CaptainPassPlan
-        fields = ("id", "code", "name", "price_paise", "duration_hours")
+        fields = ("id", "code", "name", "price_paise", "duration_hours", "max_trips")
         read_only_fields = fields
 
 
@@ -1211,14 +1211,34 @@ class RateCardUpdateSerializer(serializers.Serializer[Any]):
 class CaptainPassPlanOpsSerializer(serializers.ModelSerializer[CaptainPassPlan]):
     """Operations' view of a plan. `code` is fixed once created."""
 
+    #: Null for every vehicle type. Declared so a blank value is refused, not stored as a type.
+    vehicle_type = serializers.ChoiceField(
+        choices=VehicleType.choices, allow_null=True, required=False
+    )
+
     class Meta:
         model = CaptainPassPlan
-        fields = ("id", "code", "name", "price_paise", "duration_hours", "is_active", "created_at")
+        fields = (
+            "id",
+            "code",
+            "name",
+            "price_paise",
+            "duration_hours",
+            "vehicle_type",
+            "max_trips",
+            "is_active",
+            "created_at",
+        )
         read_only_fields = ("id", "created_at")
 
     def validate_duration_hours(self, value: int) -> int:
         if value < 1:
             raise serializers.ValidationError("A pass lasts at least an hour.")
+        return value
+
+    def validate_max_trips(self, value: int | None) -> int | None:
+        if value is not None and value < 1:
+            raise serializers.ValidationError("A trip limit is at least 1 trip.")
         return value
 
     def validate_code(self, value: str) -> str:
