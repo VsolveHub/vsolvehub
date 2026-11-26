@@ -3,7 +3,6 @@ import {
   EmptyState,
   ErrorState,
   ListingCardSkeleton,
-  Logo,
   Text,
 } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
@@ -171,7 +170,7 @@ function MobileListingsBrowseScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
-          paddingTop: Math.max(insets.top + 16, 38),
+          paddingTop: insets.top + 8,
           paddingBottom: Math.max(insets.bottom + 24, 40),
           paddingHorizontal: 16,
         }}
@@ -186,9 +185,24 @@ function MobileListingsBrowseScreen() {
           />
         }
       >
-        {/* Row 1: Logo & City Location Selector */}
-        <View className="flex-row items-center justify-between pb-1">
-          <Logo />
+        {/* Row 1: Back button & City Location Selector */}
+        <View className="min-h-11 flex-row items-center justify-between">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={10}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/");
+              }
+            }}
+            className="flex-row items-center gap-1 min-h-11 py-1 pr-2 active:opacity-70"
+          >
+            <ChevronLeft size={18} color="#0B1B3D" strokeWidth={2.4} />
+            <Text className="text-sm font-bold text-[#0B1B3D]">Back</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Select location"
@@ -203,27 +217,7 @@ function MobileListingsBrowseScreen() {
           </Pressable>
         </View>
 
-        {/* Row 2: Top line - Back button */}
-        <View className="flex-row items-center">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={10}
-            onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.push("/");
-              }
-            }}
-            className="flex-row items-center gap-1 py-1 pr-2 active:opacity-70"
-          >
-            <ChevronLeft size={18} color="#0B1B3D" strokeWidth={2.4} />
-            <Text className="text-sm font-bold text-[#0B1B3D]">Back</Text>
-          </Pressable>
-        </View>
-
-        {/* Row 3: Second line - Find jobs title & My Applications button */}
+        {/* Row 2: - Find jobs title & My Applications button */}
         <View className="flex-row items-center justify-between">
           <Text className="text-2xl font-black text-[#0B1B3D] tracking-tight">
             Find jobs
