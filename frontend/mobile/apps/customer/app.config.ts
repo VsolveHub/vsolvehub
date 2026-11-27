@@ -3,6 +3,11 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
 const googleServiceInfoPlist = process.env.GOOGLE_SERVICE_INFO_PLIST;
 
+// The Rides screens draw Google maps on Android, and Android stops the app when a map opens with
+// no key in the manifest. Same EAS secret name as the partner app (GOOGLE_MAPS_ANDROID_API_KEY,
+// restricted to this package and its signing certificate, never committed). iOS uses Apple Maps.
+const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY?.trim() ?? "";
+
 // Firebase, for Crashlytics crash reports only: sign-in is Django's own code (MSG91) since
 // 23 November 2026. The plugins read the Firebase config files, so they switch on only when a
 // build provides one (EAS file secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST). Expo Go
@@ -42,7 +47,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "vsolve-customer",
   owner: "webaura7000s",
   scheme: "vsolvehub",
-  version: "1.0.0",
+  // 1.1.0: Rides, Pick up & Drop and Taxi, which need the maps native module.
+  version: "1.1.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
@@ -94,6 +100,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     blockedPermissions: ["ACCESS_BACKGROUND_LOCATION", "RECORD_AUDIO"],
     ...(googleServicesFile ? { googleServicesFile } : {}),
+    ...(googleMapsAndroidKey ? { config: { googleMaps: { apiKey: googleMapsAndroidKey } } } : {}),
   },
   plugins: [
     // Push notifications (OneSignal). It must be the first plugin. `mode` is the iOS APNs

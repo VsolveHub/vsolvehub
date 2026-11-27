@@ -14,6 +14,8 @@ import {
 } from "react-native";
 
 import { NotificationPermissionSheet } from "@/features/onboarding/components/notification-permission-sheet";
+import { vehicleTypeName } from "@/features/rides/model/shell";
+import { useCaptainStatus } from "@/features/rides/queries";
 import { useApplyDock } from "../model/dock-context";
 import { hiringAsOf } from "../model/employer";
 import { SIZES } from "../model/employer-form";
@@ -55,6 +57,9 @@ export function ReviewStep() {
   const t = useT();
   const router = useRouter();
   const query = usePartnerApplication();
+  // A ride captain also sends a vehicle; it is listed below with the rest, to check or add.
+  const isCaptain = query.data?.track === "RIDE_CAPTAIN";
+  const vehicle = useCaptainStatus(isCaptain).data?.vehicle ?? null;
   const submit = useSubmitApplication();
   const updateApp = useUpdateApplication();
   const { registerDock } = useApplyDock();
@@ -422,6 +427,31 @@ export function ReviewStep() {
               <Text style={styles.editLink}>Edit</Text>
             </Pressable>
           </View>
+
+          {/* Row 3, ride captains only: the vehicle, which locks once the application is sent. */}
+          {isCaptain ? (
+            <>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLeftCol}>
+                  <Text style={styles.summaryLabel}>Your vehicle</Text>
+                  <Text style={styles.summaryValue}>
+                    {vehicle
+                      ? `${vehicleTypeName(vehicle.vehicle_type)} · ${vehicle.registration_number}`
+                      : "Not added yet"}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={vehicle ? "Edit your vehicle" : "Add your vehicle"}
+                  onPress={() => router.push("/rides/vehicle")}
+                  hitSlop={8}
+                >
+                  <Text style={styles.editLink}>{vehicle ? "Edit" : "Add"}</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
         </View>
 
         {/* Blocker Card: "Still needed before you can send:" */}

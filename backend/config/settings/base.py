@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "apps.ops_reports",
     "apps.mobile",
     "apps.stories",
+    "apps.rides",
     "apps.assistant",
 ]
 
@@ -292,6 +293,8 @@ REST_FRAMEWORK = {
         "payout_account": "10/hour",
         # Withdraw taps. The daily limit is the real rule; this only stops a loop hammering it.
         "payout_withdrawal": "20/hour",
+        # Rides price checks: each costs a Geocoding call and up to two Routes calls.
+        "rides_quotes": "20/min",
         # AI booking assistant. Every message is a paid model call, and these routes are open to
         # signed-out visitors, so they are keyed per user when signed in and per IP otherwise.
         # A real booking conversation is 10 to 20 messages; nobody honest starts 20 chats an hour.
@@ -423,7 +426,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.117.0",
+    "VERSION": "1.120.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -873,6 +876,66 @@ GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 2
 # 60: the Partner app re-asks for the road route as the Partner moves; a minute per rounded
 # origin keeps a still Partner, or a re-rendering screen, at one Routes API call a minute.
 ROUTING_CACHE_SECONDS = env.int("ROUTING_CACHE_SECONDS", default=60)
+
+# VSolve Rides. Routing provider (ADR-0004): "google", "fake" (laptops and tests only; refused
+# without DEBUG) or "unconfigured", which refuses every call.
+RIDES_ROUTING_PROVIDER = env("RIDES_ROUTING_PROVIDER", default="unconfigured")
+# A fare quote can be booked for this long, once.
+RIDES_QUOTE_TTL_SECONDS = env.int("RIDES_QUOTE_TTL_SECONDS", default=300)
+# Live captain positions ("who is near?"). Ephemeral; PostgreSQL stays the truth for duty.
+RIDES_REDIS_URL = env(
+    "RIDES_REDIS_URL", default=env("REDIS_URL", default="redis://127.0.0.1:56379/0")
+)
+# Dispatch (brief §5.6): one search radius per round, nearest captains first.
+RIDES_DISPATCH_RADII_M = [
+    int(radius) for radius in env.list("RIDES_DISPATCH_RADII_M", default=["2000", "4000", "6000"])
+]
+RIDES_OFFERS_PER_ROUND = env.int("RIDES_OFFERS_PER_ROUND", default=3)
+RIDES_OFFER_SECONDS = env.int("RIDES_OFFER_SECONDS", default=15)
+# The start OTP is HMAC(secret, ride id). No default on purpose: without it a ride cannot start.
+RIDES_OTP_SECRET = env("RIDES_OTP_SECRET", default="")
+# "Arrived" is accepted only this close to the pickup, from a fresh ping (see below).
+RIDES_ARRIVAL_RADIUS_M = env.int("RIDES_ARRIVAL_RADIUS_M", default=200)
+# Shown on every live ride and after an SOS.
+RIDES_EMERGENCY_NUMBER = env("RIDES_EMERGENCY_NUMBER", default="112")
+# A captain's GPS ping older than this is refused, and too old to prove "arrived".
+RIDES_PING_MAX_AGE_SECONDS = env.int("RIDES_PING_MAX_AGE_SECONDS", default=30)
+# Matching ignores positions less accurate than this (brief §5.6).
+RIDES_MATCHING_MAX_ACCURACY_M = env.int("RIDES_MATCHING_MAX_ACCURACY_M", default=100)
+# A pass purchase still waiting for payment blocks another one for this long (Revision 2).
+RIDES_PASS_PURCHASE_WINDOW_MINUTES = env.int("RIDES_PASS_PURCHASE_WINDOW_MINUTES", default=30)
+# Pick up & Drop (docs/parcel/README.md D4, D23): the value cap shown to customers (₹5,000) and the
+# prohibited-items list, as labels.
+RIDES_PARCEL_VALUE_CAP_PAISE = 500000
+RIDES_PARCEL_PROHIBITED_ITEMS = [
+    "Weapons and ammunition",
+    "Fireworks and explosives",
+    "Gas cylinders, fuel and other flammable or hazardous chemicals",
+    "Drugs and narcotics",
+    "Alcohol",
+    "Cash, currency, cheques and securities",
+    "Gold, silver, jewellery and precious stones",
+    "Live animals",
+    "Anything illegal",
+]
+# Taxi (docs/taxi/README.md D6, D7): a booked trip starts searching this long before pickup,
+# searches again after each empty round, and gives up this long before pickup.
+RIDES_BOOKED_LEAD_MINUTES = env.int("RIDES_BOOKED_LEAD_MINUTES", default=60)
+RIDES_BOOKED_RETRY_SECONDS = env.int("RIDES_BOOKED_RETRY_SECONDS", default=180)
+RIDES_BOOKED_SEARCH_UNTIL_MINUTES = env.int("RIDES_BOOKED_SEARCH_UNTIL_MINUTES", default=15)
+# How far ahead a trip may be booked, in what steps, and how many booked trips a rider may hold.
+RIDES_BOOK_AHEAD_MAX_DAYS = env.int("RIDES_BOOK_AHEAD_MAX_DAYS", default=7)
+RIDES_BOOK_AHEAD_STEP_MINUTES = env.int("RIDES_BOOK_AHEAD_STEP_MINUTES", default=15)
+RIDES_MAX_BOOKED_PER_RIDER = env.int("RIDES_MAX_BOOKED_PER_RIDER", default=3)
+# Rental packages (D10): hours on offer and the km each hour includes. A check constraint on
+# rides also lists the hours (`apps.rides.models.RENTAL_HOURS`), so change both together.
+RIDES_RENTAL_HOURS = [2, 4, 8]
+RIDES_RENTAL_KM_PER_HOUR = env.int("RIDES_RENTAL_KM_PER_HOUR", default=10)
+# Outstation (D12, D14): the shortest trip by road, and the longest round trip in days.
+RIDES_OUTSTATION_MIN_KM = env.int("RIDES_OUTSTATION_MIN_KM", default=40)
+RIDES_OUTSTATION_MAX_TRIP_DAYS = env.int("RIDES_OUTSTATION_MAX_TRIP_DAYS", default=7)
+# Rental km from the GPS track (D11) skip points less accurate than this.
+RIDES_TRACK_MAX_ACCURACY_M = env.int("RIDES_TRACK_MAX_ACCURACY_M", default=50)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
@@ -1081,6 +1144,18 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-booking-group-dispatch": {
         "task": "apps.assignments.tasks.reconcile_booking_group_dispatch",
         "schedule": 10.0,
+    },
+    "rides-expire-captain-passes": {
+        "task": "apps.rides.tasks.expire_captain_passes",
+        "schedule": 60.0,
+    },
+    "rides-sweep-captain-locations": {
+        "task": "apps.rides.tasks.sweep_captain_locations",
+        "schedule": 60.0,
+    },
+    "rides-redrive-dispatch": {
+        "task": "apps.rides.tasks.redrive_dispatch",
+        "schedule": 30.0,
     },
     # Weekly approved-partner counts per area, for the 12-week coverage trend. Re-running within a
     # week only refreshes that week's row.

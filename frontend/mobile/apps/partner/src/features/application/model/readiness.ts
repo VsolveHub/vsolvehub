@@ -28,6 +28,9 @@ export type RequirementCode =
   | "WORKING_HOURS"
   | "GOVERNMENT_ID"
   | "ADDRESS_PROOF"
+  | "DRIVING_LICENCE"
+  | "VEHICLE_RC"
+  | "VEHICLE_INSURANCE"
   | "SELFIE"
   | "BUSINESS_PROOF"
   | "AUTHORIZATION_LETTER"
@@ -55,6 +58,9 @@ const DOCUMENT_REQUIREMENTS: Partial<
   SELFIE: { code: "SELFIE", label: "A selfie" },
   BUSINESS_PROOF: { code: "BUSINESS_PROOF", label: "Business proof" },
   AUTHORIZATION_LETTER: { code: "AUTHORIZATION_LETTER", label: "Authorization letter" },
+  DRIVING_LICENCE: { code: "DRIVING_LICENCE", label: "Driving licence" },
+  VEHICLE_RC: { code: "VEHICLE_RC", label: "Vehicle RC" },
+  VEHICLE_INSURANCE: { code: "VEHICLE_INSURANCE", label: "Vehicle insurance" },
 };
 
 /**

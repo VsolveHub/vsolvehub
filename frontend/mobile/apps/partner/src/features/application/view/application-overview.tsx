@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   BedDouble,
+  Bike,
   Briefcase,
   Check,
   ChevronRight,
@@ -21,7 +22,14 @@ import { Platform, Pressable, useWindowDimensions, View } from "react-native";
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { isEditable, replaceableRejectedDocuments } from "../model/readiness";
 import { documentLabel } from "../model/status";
-import { firstStepHref, isListingTrack, isUnchosenDraft, trackPreview, type StartTrack } from "../model/steps";
+import {
+  firstStepHref,
+  isListingTrack,
+  isTrackOffered,
+  isUnchosenDraft,
+  trackPreview,
+  type StartTrack,
+} from "../model/steps";
 import { usePartnerApplication, usePartnerAvailability, useUpdateApplication } from "../queries";
 import { ApplicationStatusTracker } from "./status-banner";
 
@@ -145,7 +153,7 @@ function NotStarted() {
 
       {/* Track options */}
       <View accessibilityRole="radiogroup" style={{ gap: 12, width: "100%" }}>
-        {TRACK_CHOICES.map(({ track, title, description, icon: Icon }) => (
+        {OFFERED_TRACKS.map(({ track, title, description, icon: Icon }) => (
           <TrackCard
             key={track}
             icon={<Icon size={22} color="#ea580c" />}
@@ -202,8 +210,18 @@ const TRACK_CHOICES = [
     description: "A shop, clinic, office or business looking for people to work for you.",
     icon: Briefcase,
   },
+  {
+    track: "RIDE_CAPTAIN",
+    title: "I give rides (bike, auto, cab)",
+    description: "Driving licence, vehicle RC and insurance needed.",
+    icon: Bike,
+  },
 ] as const;
 
+/** The ways of joining this device offers: no rides track on iOS (captains are Android only). */
+const OFFERED_TRACKS = TRACK_CHOICES.filter((choice) => isTrackOffered(choice.track, Platform.OS));
+
+/** What a chosen way of joining asks for, before the applicant commits to it. */
 function TrackPreview({
   track,
   pending,
@@ -578,7 +596,7 @@ function Standing({ application }: { application: Application }) {
 function SwitchTrack({ current }: { current: string }) {
   const router = useRouter();
   const update = useUpdateApplication();
-  const others = TRACK_CHOICES.filter((choice) => choice.track !== current);
+  const others = OFFERED_TRACKS.filter((choice) => choice.track !== current);
 
   return (
     <View

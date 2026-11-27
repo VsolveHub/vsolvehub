@@ -18,6 +18,9 @@ const KIND_LABELS: Record<Schemas["PartnerDocumentKindEnum"], string> = {
   SELFIE: "Selfie",
   BUSINESS_PROOF: "Business proof",
   AUTHORIZATION_LETTER: "Letter from the owner",
+  DRIVING_LICENCE: "Driving licence",
+  VEHICLE_RC: "Vehicle registration (RC)",
+  VEHICLE_INSURANCE: "Vehicle insurance",
   OTHER: "Document",
 };
 

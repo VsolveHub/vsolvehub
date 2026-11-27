@@ -151,6 +151,12 @@ const DOCUMENT_LABEL_KEYS: Record<DocumentKind, { key: string; label: string }> 
     key: "apply.overview.documentLabels.authorizationLetter",
     label: "Authorization letter",
   },
+  DRIVING_LICENCE: { key: "apply.overview.documentLabels.drivingLicence", label: "Driving licence" },
+  VEHICLE_RC: { key: "apply.overview.documentLabels.vehicleRc", label: "Vehicle RC" },
+  VEHICLE_INSURANCE: {
+    key: "apply.overview.documentLabels.vehicleInsurance",
+    label: "Vehicle insurance",
+  },
   OTHER: { key: "apply.overview.documentLabels.other", label: "Document" },
 };
 
@@ -167,6 +173,7 @@ const TRACK_LABELS: Record<Schemas["TrackEnum"], { key: string; label: string }>
   STAY_HOST: { key: "apply.track.stays", label: "Stays" },
   RENTAL_OWNER: { key: "apply.track.rentals", label: "Rentals" },
   EMPLOYER: { key: "apply.track.employer", label: "Hiring" },
+  RIDE_CAPTAIN: { key: "apply.track.rideCaptain", label: "Rides" },
 };
 
 export function trackLabelKey(track: Schemas["TrackEnum"] | null | undefined): string {

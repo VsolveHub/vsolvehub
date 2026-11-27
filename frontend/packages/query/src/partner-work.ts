@@ -24,15 +24,28 @@ type PartnerSkill = Schemas["PartnerSkillOption"];
 /**
  * What the partner signed up to do, as the server records it on the application.
  *
- * `STAY_HOST` lists a property, `RENTAL_OWNER` lists items for rent and `EMPLOYER` hires staff.
- * Trades, service areas and working hours describe travelling to a customer, so none of the three
- * sees those steps.
+ * `STAY_HOST` lists a property, `RENTAL_OWNER` lists items for rent, `EMPLOYER` hires staff and
+ * `RIDE_CAPTAIN` drives for Rides. Trades, service areas and working hours describe travelling to a
+ * customer, so none of the four sees those steps.
  */
-export type ApplicationTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
+export type ApplicationTrack =
+  | "SERVICES"
+  | "STAY_HOST"
+  | "RENTAL_OWNER"
+  | "EMPLOYER"
+  | "RIDE_CAPTAIN";
 
-/** Stays, rentals and hiring share the short application. Services walk the full list. */
+/**
+ * Stays, rentals, hiring and ride captains share the short application, as the server does.
+ * Services walk the full list.
+ */
 export function isListingTrack(track?: string | null): boolean {
-  return track === "STAY_HOST" || track === "RENTAL_OWNER" || track === "EMPLOYER";
+  return (
+    track === "STAY_HOST" ||
+    track === "RENTAL_OWNER" ||
+    track === "EMPLOYER" ||
+    track === "RIDE_CAPTAIN"
+  );
 }
 
 /* -------------------------------------------------------------------------

@@ -33,6 +33,15 @@ type DocumentKind = Schemas["PartnerDocumentKindEnum"];
  * registration"), and each says what the applicant gave that it must match, so the reviewer's
  * checklist is no surprise to them. Every other track keeps its two documents as they were.
  */
+/** Why each non-employer slot is asked. A ride captain's three driving documents come last. */
+const STANDARD_HINTS: Partial<Record<DocumentKind, string>> = {
+  GOVERNMENT_ID: "Confirms who you are. If you upload Aadhaar, cover the first 8 digits.",
+  ADDRESS_PROOF: "Any recent bill or statement showing your name and address.",
+  DRIVING_LICENCE: "Your valid driving licence for the vehicle you will drive.",
+  VEHICLE_RC: "The registration certificate (RC) of that vehicle.",
+  VEHICLE_INSURANCE: "That vehicle's current insurance policy.",
+};
+
 function slotText(
   application: Application | null,
   kind: DocumentKind,
@@ -40,14 +49,7 @@ function slotText(
 ): { label: string; hint: string | null; notes: string[] } {
   const fallback = documentLabel(kind);
   if (application?.track !== "EMPLOYER") {
-    return {
-      label: fallback,
-      hint:
-        kind === "GOVERNMENT_ID"
-          ? "Confirms who you are. If you upload Aadhaar, cover the first 8 digits."
-          : "Any recent bill or statement showing your name and address.",
-      notes: [],
-    };
+    return { label: fallback, hint: STANDARD_HINTS[kind] ?? null, notes: [] };
   }
   const employer = application.employer;
   switch (kind) {
@@ -128,9 +130,11 @@ export function DocumentsStep() {
   });
   const offered = offeredDocumentKinds(application);
 
+  // Ride captains go on to their vehicle; everyone else to the agreements.
+  const isCaptain = application?.track === "RIDE_CAPTAIN";
   const onCommit = useCallback(() => {
-    router.push("/apply/review");
-  }, [router]);
+    router.push(isCaptain ? "/rides/vehicle" : "/apply/review");
+  }, [router, isCaptain]);
 
   // The step before Documents in this partner's own list: hours for services, Business details
   // for employers, About you for stays and rentals.
@@ -142,7 +146,7 @@ export function DocumentsStep() {
     registerDock({
       label: "Continue",
       backHref,
-      nextStepName: "Agree & send",
+      nextStepName: isCaptain ? "Your vehicle" : "Agree & send",
       onCommit,
       isSaving: false,
       proceedDisabled: false,
@@ -153,7 +157,7 @@ export function DocumentsStep() {
       requestId: null,
       fieldMessages: [],
     });
-  }, [registerDock, onCommit, backHref]);
+  }, [registerDock, onCommit, backHref, isCaptain]);
 
   useEffect(() => {
     return () => {

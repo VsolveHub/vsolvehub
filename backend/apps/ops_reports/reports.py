@@ -338,6 +338,7 @@ PAYMENT_PURPOSE_LABELS = {
     "A9_STAY_RESERVATION": "Stay reservation",
     "A7_RENTAL_BOOKING": "Rental booking",
     "A9_STAY_SUBSCRIPTION": "Stay plan",
+    "RIDE_CAPTAIN_PASS": "Ride captain pass",
 }
 
 

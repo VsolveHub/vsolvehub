@@ -45,7 +45,8 @@ export function appChromeLayout(pathname: string): AppChromeLayout {
   if (
     normalized.startsWith("/requests") ||
     normalized.startsWith("/bookings/") ||
-    normalized.startsWith("/book/")
+    normalized.startsWith("/book/") ||
+    normalized.startsWith("/rides")
   ) {
     return REQUEST_CHROME_LAYOUT;
   }

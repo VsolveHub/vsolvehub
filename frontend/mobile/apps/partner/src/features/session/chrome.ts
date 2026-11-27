@@ -15,7 +15,10 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/stays" ||
     pathname === "/stays/enquiries" ||
     pathname === "/stays/visits" ||
-    pathname === "/listings"
+    pathname === "/listings" ||
+    pathname === "/rides" ||
+    pathname === "/rides/history" ||
+    pathname === "/rides/wallet"
   ) {
     return "full";
   }
@@ -29,7 +32,8 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
  * global path, so without this list it judged them partner-only and sent an applicant back to
  * `/apply` about a second after Help & support or Delete account opened.
  */
-const OPEN_TO_ANY_ACCOUNT = ["/help", "/delete-account"];
+// A captain saves the vehicle while the application is still a draft, before approval.
+const OPEN_TO_ANY_ACCOUNT = ["/help", "/delete-account", "/rides/vehicle"];
 
 /** Portal routes demand an approved Partner. Home, apply and the open pages do not. */
 export function routeRequiresPartnerRole(pathname: string): boolean {
@@ -61,6 +65,7 @@ export function focusedHeaderTitle(pathname: string, titleOverride: string | nul
   else if (pathname.startsWith("/stays")) title = "Stay Hosting";
   else if (pathname.startsWith("/listings/post")) title = "Post Job Opening";
   else if (pathname.startsWith("/listings")) title = "Details";
+  else if (pathname.startsWith("/rides")) title = "Rides";
   if (titleOverride !== null) title = titleOverride;
   return title;
 }

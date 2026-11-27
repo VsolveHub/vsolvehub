@@ -42,6 +42,7 @@ const TYPE_OPTIONS: { value: ApplicantTrack; label: string }[] = [
   { value: "STAY_HOST", label: "Property hosts" },
   { value: "RENTAL_OWNER", label: "Rental owners" },
   { value: "EMPLOYER", label: "Employers" },
+  { value: "RIDE_CAPTAIN", label: "Ride captains" },
 ];
 
 /** What a row says about the applicant's kind, in the singular. */
@@ -50,6 +51,7 @@ const TYPE_BADGE: Record<ApplicantTrack, string> = {
   STAY_HOST: "Property host",
   RENTAL_OWNER: "Rental owner",
   EMPLOYER: "Employer",
+  RIDE_CAPTAIN: "Ride captain",
 };
 
 const STATUS_TONE: Record<string, "info" | "warning" | "success" | "danger" | "neutral"> = {

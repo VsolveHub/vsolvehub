@@ -503,6 +503,7 @@ def submit_partner_application(
     if application.track not in (
         PartnerApplication.Track.STAY_HOST,
         PartnerApplication.Track.RENTAL_OWNER,
+        PartnerApplication.Track.RIDE_CAPTAIN,
         # Same short application as a stay host: who they are and the agreements. Without this
         # an employer was asked for trades, areas and hours that this track never shows.
         PartnerApplication.Track.EMPLOYER,
@@ -545,8 +546,15 @@ def submit_partner_application(
         for kind in required_document_kinds(application)
     ):
         raise PartnerApplicationIncompleteError(
-            "Upload every required identity document before submitting.",
+            "Upload every required document before submitting.",
         )
+    if application.track == PartnerApplication.Track.RIDE_CAPTAIN:
+        # The vehicle locks once the application is sent (the reviewer checks its documents), so
+        # an application without one would be approved with no way to add it.
+        from apps.rides.models import CaptainVehicle  # noqa: PLC0415
+
+        if not CaptainVehicle.objects.filter(partner=partner).exists():
+            raise PartnerApplicationIncompleteError("Add your vehicle details before submitting.")
 
     previous_status = application.status
     if (

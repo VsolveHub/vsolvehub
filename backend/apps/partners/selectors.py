@@ -227,9 +227,23 @@ def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
 
 MIN_EMPLOYER_NAME_LENGTH = 2
 
+#: Documents a ride captain uploads on top of the identity documents every partner provides.
+RIDE_CAPTAIN_DOCUMENT_KINDS = (
+    PartnerDocument.Kind.DRIVING_LICENCE,
+    PartnerDocument.Kind.VEHICLE_RC,
+    PartnerDocument.Kind.VEHICLE_INSURANCE,
+)
+
 
 def required_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
-    """The document kinds this application must hold to be submitted and approved."""
+    """The document kinds this application must hold to be submitted and approved.
+
+    A ride captain also needs a driving licence, the vehicle RC and insurance.
+    """
+    if application.track == PartnerApplication.Track.RIDE_CAPTAIN:
+        return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS) + tuple(
+            str(kind) for kind in RIDE_CAPTAIN_DOCUMENT_KINDS
+        )
     if application.track != PartnerApplication.Track.EMPLOYER:
         return tuple(settings.PARTNER_REQUIRED_DOCUMENT_KINDS)
     kind = PartnerDocument.Kind
@@ -247,10 +261,16 @@ def required_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
 
 
 def offered_document_kinds(application: PartnerApplication) -> tuple[str, ...]:
-    """The document slots the apps show. An employer is offered exactly what it must upload."""
+    """The document slots the apps show. An employer is offered exactly what it must upload.
+
+    A ride captain is offered the usual identity slots plus the three driving documents.
+    """
     if application.track == PartnerApplication.Track.EMPLOYER:
         return required_document_kinds(application)
-    return (PartnerDocument.Kind.GOVERNMENT_ID, PartnerDocument.Kind.ADDRESS_PROOF)
+    offered = (PartnerDocument.Kind.GOVERNMENT_ID, PartnerDocument.Kind.ADDRESS_PROOF)
+    if application.track == PartnerApplication.Track.RIDE_CAPTAIN:
+        return offered + RIDE_CAPTAIN_DOCUMENT_KINDS
+    return offered
 
 
 def employer_missing_fields(partner: PartnerProfile) -> list[str]:

@@ -158,6 +158,9 @@ def test_every_registered_template_renders_from_its_documented_context() -> None
         # Partner application notices (`apps.partners.services.base._notify_application_event`).
         "reason": "The photo is blurred",
         "document": "Government identity",
+        # Service area notices (`apps.partners.services.operations_areas`).
+        "postal_code": "500032",
+        "area_name": "Gachibowli",
         # Booked-visit notices (`apps.fulfilment.visit_notices`).
         "service": "Door Repair",
         "when": "Thu 5 Nov, 2:00 pm",

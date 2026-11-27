@@ -1,0 +1,201 @@
+"""`seed_rides_demo`: development only, placeholder cards, never overwrites a live price."""
+
+import uuid
+
+import pytest
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from pytest_django.fixtures import SettingsWrapper
+
+from apps.identity.models import UserRole
+from apps.locations.models import ServiceArea
+from apps.partners.models import PartnerProfile
+from apps.rides.management.commands.seed_rides_demo import AREA_SLUG, TEST_CAPTAINS
+from apps.rides.models import (
+    CaptainPass,
+    CaptainPassPlan,
+    CaptainVehicle,
+    RideKind,
+    RideRateCard,
+    VehicleType,
+)
+from apps.rides.selectors import captain_status
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def area() -> ServiceArea:
+    return ServiceArea.objects.get_or_create(
+        slug=AREA_SLUG, defaults={"name": "Gachibowli", "timezone": "Asia/Kolkata"}
+    )[0]
+
+
+def seed() -> None:
+    call_command("seed_rides_demo", "--i-understand-this-is-dev-only")
+
+
+@pytest.mark.usefixtures("area")
+def test_refused_without_debug(settings: SettingsWrapper) -> None:
+    settings.DEBUG = False
+    with pytest.raises(CommandError, match="DEBUG"):
+        seed()
+
+
+@pytest.mark.usefixtures("area")
+def test_refused_without_the_flag(settings: SettingsWrapper) -> None:
+    settings.DEBUG = True
+    with pytest.raises(CommandError, match="i-understand"):
+        call_command("seed_rides_demo")
+
+
+def test_refused_when_the_area_is_missing(settings: SettingsWrapper) -> None:
+    settings.DEBUG = True
+    ServiceArea.objects.filter(slug=AREA_SLUG).delete()
+    with pytest.raises(CommandError, match=AREA_SLUG):
+        seed()
+
+
+def test_creates_one_active_card_per_vehicle(settings: SettingsWrapper, area: ServiceArea) -> None:
+    settings.DEBUG = True
+    seed()
+    active = RideRateCard.objects.filter(service_area=area, is_active=True, kind=RideKind.RIDE)
+    assert sorted(active.values_list("vehicle_type", flat=True)) == ["AUTO", "BIKE", "CAB"]
+
+
+def test_creates_a_parcel_card_for_bike_and_auto_with_the_default_limits(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    settings.DEBUG = True
+    seed()
+
+    parcel = RideRateCard.objects.filter(service_area=area, kind=RideKind.PARCEL, is_active=True)
+
+    assert {c.vehicle_type: (c.max_parcel_weight_grams, c.parcel_size_label) for c in parcel} == {
+        "BIKE": (10_000, "40 x 30 x 20 cm"),
+        "AUTO": (50_000, "1.3 x 3.5 x 3.3 ft"),
+    }  # no cab parcel card
+
+
+def test_a_live_parcel_price_is_never_overwritten(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    settings.DEBUG = True
+    RideRateCard.objects.create(
+        service_area=area,
+        vehicle_type=VehicleType.BIKE,
+        kind=RideKind.PARCEL,
+        max_parcel_weight_grams=5000,
+        parcel_size_label="small",
+        base_fare_paise=9900,
+        included_distance_m=0,
+        per_km_paise=0,
+        per_minute_paise=0,
+        minimum_fare_paise=0,
+        free_waiting_minutes=0,
+        waiting_per_minute_paise=0,
+    )
+    seed()
+    card = RideRateCard.objects.get(service_area=area, kind=RideKind.PARCEL, vehicle_type="BIKE")
+    assert (card.base_fare_paise, card.max_parcel_weight_grams) == (9900, 5000)
+    assert RideRateCard.objects.filter(service_area=area, kind=RideKind.RIDE).count() == 3
+
+
+def test_running_twice_changes_nothing(settings: SettingsWrapper, area: ServiceArea) -> None:
+    settings.DEBUG = True
+    seed()
+    seed()
+    assert RideRateCard.objects.filter(service_area=area).count() == 5  # 3 rides + 2 parcels
+
+
+def test_a_live_price_is_never_overwritten(settings: SettingsWrapper, area: ServiceArea) -> None:
+    settings.DEBUG = True
+    RideRateCard.objects.create(
+        service_area=area,
+        vehicle_type=VehicleType.BIKE,
+        base_fare_paise=4200,
+        included_distance_m=0,
+        per_km_paise=0,
+        per_minute_paise=0,
+        minimum_fare_paise=0,
+        free_waiting_minutes=0,
+        waiting_per_minute_paise=0,
+    )
+    seed()
+    bike = RideRateCard.objects.get(
+        service_area=area, vehicle_type=VehicleType.BIKE, kind=RideKind.RIDE
+    )
+    assert bike.base_fare_paise == 4200
+
+
+def test_a_retired_card_gets_the_next_version(settings: SettingsWrapper, area: ServiceArea) -> None:
+    settings.DEBUG = True
+    RideRateCard.objects.create(
+        service_area=area,
+        vehicle_type=VehicleType.CAB,
+        base_fare_paise=1,
+        included_distance_m=0,
+        per_km_paise=0,
+        per_minute_paise=0,
+        minimum_fare_paise=0,
+        free_waiting_minutes=0,
+        waiting_per_minute_paise=0,
+        is_active=False,
+        version=4,
+    )
+    seed()
+    assert RideRateCard.objects.get(vehicle_type=VehicleType.CAB, is_active=True).version == 5
+
+
+@pytest.mark.usefixtures("area")
+def test_other_areas_are_untouched(settings: SettingsWrapper) -> None:
+    settings.DEBUG = True
+    other = ServiceArea.objects.create(
+        slug=f"other-{uuid.uuid4().hex[:6]}", name="Other", timezone="Asia/Kolkata"
+    )
+    seed()
+    assert not RideRateCard.objects.filter(service_area=other).exists()
+
+
+def test_creates_a_free_and_a_paid_pass_plan(settings: SettingsWrapper, area: ServiceArea) -> None:
+    del area
+    settings.DEBUG = True
+    seed()
+    plans = {
+        plan.code: (plan.price_paise, plan.duration_hours, plan.max_trips, plan.vehicle_type)
+        for plan in CaptainPassPlan.objects.all()
+    }
+    assert plans == {
+        "launch-pass": (0, 720, 100, None),
+        "day-pass-bike": (1900, 24, None, "BIKE"),
+        "day-pass-auto": (2900, 24, None, "AUTO"),
+        "day-pass-cab": (4900, 24, None, "CAB"),
+    }
+
+
+def test_an_edited_pass_plan_is_never_overwritten(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    del area
+    settings.DEBUG = True
+    CaptainPassPlan.objects.create(
+        code="day-pass-cab", name="Day pass", price_paise=5900, duration_hours=24
+    )
+    seed()
+    assert CaptainPassPlan.objects.get(code="day-pass-cab").price_paise == 5900
+
+
+def test_three_approved_test_captains_ready_for_duty(
+    settings: SettingsWrapper, area: ServiceArea
+) -> None:
+    del area
+    settings.DEBUG = True
+    seed()
+    seed()  # twice: still one captain, one vehicle and one active pass each
+
+    for phone, _, vehicle_type, _ in TEST_CAPTAINS:
+        partner = PartnerProfile.objects.get(user__phone_number=phone)
+        assert captain_status(partner).blocked_reasons == []
+        assert CaptainVehicle.objects.get(partner=partner).vehicle_type == vehicle_type
+        assert CaptainPass.objects.filter(partner=partner, status="ACTIVE").count() == 1
+        assert UserRole.objects.filter(user=partner.user, role__code="partner").exists()

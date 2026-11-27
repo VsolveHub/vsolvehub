@@ -134,6 +134,7 @@ describe("the workspaces", () => {
       "/operations/requests",
       "/operations/rentals",
       "/operations/stays",
+      "/operations/rides",
       "/operations/listings",
       // Partners (working hours are edited on a partner's record; crew documents are a tab on
       // Applications)

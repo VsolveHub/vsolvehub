@@ -17,6 +17,14 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/review", label: "Agree & send" },
 ] as const;
 
+/** Ride captains add their vehicle before agreeing: it locks once the application is sent. */
+export const CAPTAIN_APPLICATION_STEPS: readonly ApplicationStep[] = [
+  { href: "/apply/about", label: "About you" },
+  { href: "/apply/documents", label: "Documents" },
+  { href: "/rides/vehicle", label: "Your vehicle" },
+  { href: "/apply/review", label: "Agree & send" },
+] as const;
+
 /**
  * People who travel to a customer also say what they do, where and when. The server refuses a
  * services application without trades, areas and hours, so these cannot be skipped.
@@ -57,7 +65,7 @@ const EMPLOYER_BUSINESS_STEPS: readonly ApplicationStep[] = [
   REVIEW,
 ];
 
-/** Stays, rentals and hiring share the short application. Services walk the full list. */
+/** Stays, rentals, hiring and ride captains share the short application. Services walk the full list. */
 export { isListingTrack };
 
 /** The step sequence for this partner. Services is the server's default track, as on the web. */
@@ -70,6 +78,7 @@ export function applicationSteps(
     if (hiringAs === "BUSINESS") return EMPLOYER_BUSINESS_STEPS;
     return EMPLOYER_UNCHOSEN_STEPS;
   }
+  if (track === "RIDE_CAPTAIN") return CAPTAIN_APPLICATION_STEPS;
   return isListingTrack(track) ? APPLICATION_STEPS : SERVICE_APPLICATION_STEPS;
 }
 
@@ -93,13 +102,22 @@ export function firstStepHref(track: string): string {
 }
 
 /** The ways to join offered on the first screen. */
-export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
+export type StartTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER" | "RIDE_CAPTAIN";
+
+/**
+ * Whether this device offers a way of joining. Captains are Android only in V1 (Rides brief,
+ * Revision 2), so iOS never shows the rides track; every other track shows everywhere.
+ */
+export function isTrackOffered(track: StartTrack, os: string): boolean {
+  return track !== "RIDE_CAPTAIN" || os !== "ios";
+}
 
 const AFTER_APPROVAL: Record<StartTrack, string> = {
   SERVICES: "After approval, job offers come to you in the V Solve Hub partner app.",
   STAY_HOST: "After approval, you add your property and rooms, and guests can book.",
   RENTAL_OWNER: "After approval, you add your items, and customers can rent them.",
   EMPLOYER: "After approval, you post your jobs and people can apply.",
+  RIDE_CAPTAIN: "After approval, you go on duty and ride requests come to you.",
 };
 
 /** What the first screen shows once a way of joining is picked, before anything starts. */

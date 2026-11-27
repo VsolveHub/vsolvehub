@@ -27,6 +27,15 @@ function Home({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** An applicant's Home: the application overview, which is taller than a phone screen, so it scrolls. */
+function OverviewHome() {
+  return (
+    <ScrollView className="flex-1" contentContainerClassName="mx-auto w-full max-w-md px-4 py-6">
+      <ApplicationOverview />
+    </ScrollView>
+  );
+}
+
 export function WorkHome() {
   const query = usePartnerApplication();
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
@@ -58,11 +67,7 @@ export function WorkHome() {
     // workspace dock.
     const route = shellForApplication(isMissing ? null : (query.data?.status ?? null));
     if (route !== "/home") return <Redirect href={route} />;
-    return (
-      <View className="mx-auto w-full max-w-md px-4 py-6">
-        <ApplicationOverview />
-      </View>
-    );
+    return <OverviewHome />;
   }
 
   return <WorkStack />;

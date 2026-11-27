@@ -1,0 +1,262 @@
+"""Builders for Pick up & Drop tests. Test rows only; nothing here reaches production code."""
+
+import uuid
+from datetime import timedelta
+from decimal import Decimal
+from typing import Any
+
+import pytest
+from django.utils import timezone
+from freezegun import freeze_time
+
+from apps.identity.models import User
+from apps.locations.geocoding import GeocodedAddress
+from apps.locations.models import PostalCode, ServiceArea, ServiceAreaPostalCode
+from apps.partners.models import PartnerProfile
+from apps.rides import engine, location, services
+from apps.rides.models import FareQuote, Ride, RideKind, RideOffer, RideRateCard
+from tests.rides.helpers import partner_client
+from tests.rides.ride_world import PICKUP, captain, dispatch
+
+SERVED_PIN = "500032"
+DROP = (Decimal("17.450000"), Decimal("78.380000"))
+CAPTAIN = "/api/v1/partner/rides"
+RIDES = "/api/v1/rides/"
+QUOTES = "/api/v1/rides/quotes/"
+AVAILABILITY = "/api/v1/rides/availability/?latitude=17.440000&longitude=78.348900"
+
+#: D5 defaults.
+LIMITS = {
+    "BIKE": (10_000, "40 x 30 x 20 cm"),
+    "AUTO": (50_000, "1.3 x 3.5 x 3.3 ft"),
+}
+
+QUOTE_BODY: dict[str, Any] = {
+    "pickup": {"latitude": "17.440000", "longitude": "78.348900", "address": "Gachibowli Stadium"},
+    "drop": {"latitude": "17.450000", "longitude": "78.380000", "address": "Hitech City"},
+}
+
+
+def served_area() -> ServiceArea:
+    """A service area that owns the postal code the fake geocoder returns."""
+    area = ServiceArea.objects.create(
+        slug=f"area-{uuid.uuid4().hex[:6]}", name="Gachibowli", timezone="Asia/Kolkata"
+    )
+    pin, _ = PostalCode.objects.get_or_create(
+        code=SERVED_PIN, defaults={"city": "Hyderabad", "state": "Telangana"}
+    )
+    ServiceAreaPostalCode.objects.create(service_area=area, postal_code=pin)
+    return area
+
+
+def pickup_in(monkeypatch: pytest.MonkeyPatch, postal_code: str = SERVED_PIN) -> None:
+    """Make every pickup resolve to this postal code, so no real geocoder is called."""
+
+    def reverse(*, latitude: Decimal, longitude: Decimal) -> GeocodedAddress:
+        return GeocodedAddress(
+            formatted_address="Somewhere",
+            line1="",
+            locality="",
+            city="Hyderabad",
+            state="Telangana",
+            postal_code=postal_code,
+            country_code="IN",
+            latitude=latitude,
+            longitude=longitude,
+            provider="test",
+        )
+
+    monkeypatch.setattr(services, "reverse_geocode", reverse)
+
+
+def make_card(
+    area: ServiceArea, vehicle_type: str, kind: str = RideKind.RIDE, **overrides: Any
+) -> RideRateCard:
+    """A rate card. A parcel card gets the D5 limits unless the test says otherwise."""
+    fields: dict[str, Any] = {
+        "service_area": area,
+        "vehicle_type": vehicle_type,
+        "kind": kind,
+        "base_fare_paise": 2000,
+        "included_distance_m": 1000,
+        "per_km_paise": 800,
+        "per_minute_paise": 100,
+        "minimum_fare_paise": 3000,
+        "free_waiting_minutes": 3,
+        "waiting_per_minute_paise": 100,
+    }
+    if kind == RideKind.PARCEL:
+        weight, size = LIMITS.get(vehicle_type, (10_000, "any size"))
+        fields["max_parcel_weight_grams"], fields["parcel_size_label"] = weight, size
+    fields.update(overrides)
+    return RideRateCard.objects.create(**fields)
+
+
+def parcel_quote(rider: User, card: RideRateCard) -> FareQuote:
+    """A parcel quote straight from the database, for tests that start at booking."""
+    return FareQuote.objects.create(
+        rider=rider,
+        service_area=card.service_area,
+        vehicle_type=card.vehicle_type,
+        kind=RideKind.PARCEL,
+        rate_card=card,
+        rate_card_version=card.version,
+        pickup_latitude=PICKUP[0],
+        pickup_longitude=PICKUP[1],
+        pickup_label="Gachibowli",
+        drop_latitude=Decimal("17.450000"),
+        drop_longitude=Decimal("78.380000"),
+        drop_label="Hitec City",
+        distance_m=4200,
+        duration_s=900,
+        route_polyline="abc",
+        fare_paise=5100,
+        expires_at=timezone.now() + timedelta(seconds=300),
+    )
+
+
+def end(**overrides: Any) -> dict[str, Any]:
+    """One end of a parcel, complete unless the test blanks something."""
+    fields: dict[str, Any] = {
+        "name": "Asha Rao",
+        "phone": "9876543210",
+        "building": "Sky Towers",
+        "unit": "4B",
+        "meet_at": "DOOR",
+        "instructions": "Ring twice",
+    }
+    fields.update(overrides)
+    return fields
+
+
+def parcel_body(**overrides: Any) -> dict[str, Any]:
+    """The `parcel` object of POST /rides/: sending, Sender pays, PIN on."""
+    body: dict[str, Any] = {
+        "mode": "SEND",
+        "payer": "SENDER",
+        "pin_required": True,
+        "pickup": end(name="Ravi Kumar", phone="9123456780", meet_at="CURB"),
+        "drop": end(),
+    }
+    body.update(overrides)
+    return body
+
+
+def book_parcel(client: Any, quote: FareQuote, parcel: Any = None, key: str = "k-1") -> Any:
+    body: dict[str, Any] = {"quote_id": str(quote.id)}
+    if parcel is not None:
+        body["parcel"] = parcel
+    return client.post(RIDES, body, format="json", HTTP_IDEMPOTENCY_KEY=key)
+
+
+def new_parcel(
+    rider: User, area: ServiceArea, *, vehicle: str = "BIKE", parcel: dict[str, Any] | None = None
+) -> Ride:
+    """Book a parcel straight through the engine, making the area's parcel card if it has none."""
+    card = RideRateCard.objects.filter(
+        service_area=area, vehicle_type=vehicle, kind=RideKind.PARCEL, is_active=True
+    ).first() or make_card(area, vehicle, RideKind.PARCEL)
+    quote = parcel_quote(rider, card)
+    return engine.create_ride(rider=rider, quote_id=quote.id, parcel=parcel or parcel_body())
+
+
+def ping_at(partner: PartnerProfile, point: tuple[Decimal, Decimal], *, age_s: int = 0) -> None:
+    """The captain's latest GPS ping at this point, taken `age_s` seconds ago."""
+    location.record_position(
+        partner_id=partner.id,
+        latitude=float(point[0]),
+        longitude=float(point[1]),
+        accuracy_m=10,
+        heading=None,
+        captured_at=(timezone.now() - timedelta(seconds=age_s)).isoformat(),
+        listed_in=None,
+    )
+
+
+def accepted_parcel(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel a captain 1 km away has accepted."""
+    driver = captain(area, km=1, vehicle=vehicle)
+    ride = dispatch(new_parcel(rider, area, vehicle=vehicle, parcel=parcel))
+    engine.accept_offer(partner=driver, offer_id=RideOffer.objects.get(ride=ride).id)
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def picked_up(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel the captain has collected: arrived at the pickup, given the pickup code."""
+    ride, driver = accepted_parcel(rider, area, parcel=parcel, vehicle=vehicle)
+    ping_at(driver, PICKUP)
+    engine.mark_arrived(partner=driver, ride_id=ride.id)
+    engine.start_trip(partner=driver, ride_id=ride.id, otp=engine.ride_otp(ride.id))
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def at_drop(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A collected parcel whose captain has arrived at the drop."""
+    ride, driver = picked_up(rider, area, parcel=parcel, vehicle=vehicle)
+    ping_at(driver, DROP)
+    engine.mark_arrived_at_drop(partner=driver, ride_id=ride.id)
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def step(partner: PartnerProfile, ride: Ride, name: str) -> Any:
+    return partner_client(partner.user).post(f"{CAPTAIN}/{ride.id}/{name}/")
+
+
+def deliver(partner: PartnerProfile, ride: Ride, pin: str | None = None, key: str = "d-1") -> Any:
+    return partner_client(partner.user).post(
+        f"{CAPTAIN}/{ride.id}/deliver/",
+        {"pin": pin} if pin else {},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=key,
+    )
+
+
+def after_wait() -> Any:
+    """Time moved on past the rate card's 3 free waiting minutes at the drop."""
+    return freeze_time(timezone.now() + timedelta(minutes=4))
+
+
+def returning(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel whose receiver was not there: the captain is taking it back."""
+    ride, driver = at_drop(rider, area, parcel=parcel, vehicle=vehicle)
+    with after_wait():
+        assert step(driver, ride, "receiver-unavailable").status_code == 200
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def hand_back(driver: PartnerProfile, ride: Ride, otp: str | None = None, key: str = "r-1") -> Any:
+    """The captain is back at the pickup and gives the code the sender told them."""
+    ping_at(driver, PICKUP)
+    return partner_client(driver.user).post(
+        f"{CAPTAIN}/{ride.id}/returned/",
+        {"otp": otp or engine.ride_otp(ride.id)},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=key,
+    )
+
+
+def returned(
+    rider: User, area: ServiceArea, *, parcel: dict[str, Any] | None = None, vehicle: str = "BIKE"
+) -> tuple[Ride, PartnerProfile]:
+    """A parcel handed back at the pickup (its money still to settle)."""
+    ride, driver = returning(rider, area, parcel=parcel, vehicle=vehicle)
+    assert hand_back(driver, ride).status_code == 200
+    ride.refresh_from_db()
+    return ride, driver
+
+
+def wrong_code(real: str) -> str:
+    """A 4-digit code that is not `real`."""
+    return "0000" if real != "0000" else "1111"

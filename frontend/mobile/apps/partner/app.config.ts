@@ -60,7 +60,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // `appVersion` runtime policy this keeps its JS off 1.0.0 binaries, which would crash on it.
   // 1.2.0: sign-in moves from Firebase to MSG91 (`otp`). A new version, not an OTA update, so
   // the server's MOBILE_PARTNER_MIN_VERSION can retire the Firebase 1.1.0 builds.
-  version: "1.2.0",
+  // 1.3.0: Rides, Pick up & Drop and Taxi, with the on-duty location foreground service.
+  version: "1.3.0",
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
@@ -105,12 +106,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "POST_NOTIFICATIONS",
       "VIBRATE",
     ],
-    // Location is used only while the app is open, so no location foreground service either:
-    // Google Play asks for a declaration and a demo video for every foreground-service type.
+    // Location is used while the app is open and, for on-duty captains, by the "You're on duty"
+    // foreground service (Rides brief §5.13). Background location stays blocked.
     blockedPermissions: [
       "ACCESS_BACKGROUND_LOCATION",
       "RECORD_AUDIO",
-      "FOREGROUND_SERVICE_LOCATION",
       "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
     ],
     ...(googleServicesFile ? { googleServicesFile } : {}),
@@ -160,6 +160,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         locationWhenInUsePermission:
           "Vsolve Hub uses your location to find work near you and to confirm arrival.",
+        // Rides captains on duty: a location foreground service ("You're on duty") keeps pings
+        // going with the screen off. Adds FOREGROUND_SERVICE and FOREGROUND_SERVICE_LOCATION
+        // only; ACCESS_BACKGROUND_LOCATION stays blocked above (Rides brief §5.13).
+        isAndroidForegroundServiceEnabled: true,
+        androidForegroundServiceIcon: "./assets/android-icon-monochrome.png",
       },
     ],
     [

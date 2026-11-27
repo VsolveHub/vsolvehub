@@ -5,6 +5,7 @@ import {
   applicationSteps,
   firstStepHref,
   isLastStep,
+  isTrackOffered,
   isUnchosenDraft,
   nextStep,
   stepIndexOf,
@@ -66,6 +67,19 @@ describe("the stays and rentals path", () => {
   });
 });
 
+describe("the ride captain path", () => {
+  it("adds the vehicle after the documents, before the agreements", () => {
+    expect(applicationSteps("RIDE_CAPTAIN").map((step) => step.href)).toEqual([
+      "/apply/about",
+      "/apply/documents",
+      "/rides/vehicle",
+      "/apply/review",
+    ]);
+    expect(nextStep("/apply/documents", "RIDE_CAPTAIN")?.href).toBe("/rides/vehicle");
+    expect(nextStep("/rides/vehicle", "RIDE_CAPTAIN")?.href).toBe("/apply/review");
+  });
+});
+
 describe("the lists themselves", () => {
   it("have no duplicate hrefs and label every step", () => {
     for (const list of [APPLICATION_STEPS, SERVICE_APPLICATION_STEPS]) {
@@ -99,6 +113,18 @@ describe("what the first screen shows before starting", () => {
     expect(trackPreview("RENTAL_OWNER").time).toBe("About 3 minutes");
     expect(trackPreview("STAY_HOST").after).toMatch(/property and rooms/);
     expect(trackPreview("RENTAL_OWNER").after).toMatch(/add your items/);
+    expect(trackPreview("RIDE_CAPTAIN").time).toBe("About 3 minutes");
+    expect(trackPreview("RIDE_CAPTAIN").after).toMatch(/ride requests/);
+  });
+});
+
+describe("which ways of joining a device offers", () => {
+  it("hides the rides track on iOS only: captains are Android only in V1", () => {
+    expect(isTrackOffered("RIDE_CAPTAIN", "ios")).toBe(false);
+    expect(isTrackOffered("RIDE_CAPTAIN", "android")).toBe(true);
+    for (const track of ["SERVICES", "STAY_HOST", "RENTAL_OWNER", "EMPLOYER"] as const) {
+      expect(isTrackOffered(track, "ios")).toBe(true);
+    }
   });
 });
 

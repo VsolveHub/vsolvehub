@@ -45,7 +45,7 @@ are never reused, including for records that are superseded or withdrawn.
 
 Numbers **0010** (customer wallet, Phase C) and **0011** (A7/A9 archetype engines) are reserved
 and unused on this branch. **0012** is drafted here as Proposed for the A10 listing engine.
-The next free number after those reservations is **0013**.
+**0013** is the AI booking assistant and **0014** is Rides V1. The next free number is **0015**.
 
 ## Index
 
@@ -62,3 +62,5 @@ The next free number after those reservations is **0013**.
 | [0010](0010-customer-wallet-and-loyalty-scope.md) | Customer wallet and loyalty scope | Accepted |
 | 0011 | A7 rental and A9 stay archetype engines | Reserved — not drafted on this branch |
 | [0012](0012-a10-listing-engine.md) | A10 listing engine | Proposed |
+| [0013](0013-ai-booking-assistant.md) | AI booking assistant over the existing booking commands | Accepted |
+| [0014](0014-rides-v1.md) | VSolve Rides V1: bike, auto and cab rides | Proposed |

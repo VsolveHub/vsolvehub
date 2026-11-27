@@ -8,6 +8,7 @@ describe("tracks", () => {
     expect(isListingTrack("STAY_HOST")).toBe(true);
     expect(isListingTrack("RENTAL_OWNER")).toBe(true);
     expect(isListingTrack("EMPLOYER")).toBe(true);
+    expect(isListingTrack("RIDE_CAPTAIN")).toBe(true);
     expect(isListingTrack("SERVICES")).toBe(false);
     expect(isListingTrack(null)).toBe(false);
   });
