@@ -258,6 +258,11 @@ def test_a_customer_notice_is_mirrored_only_to_the_customer_app() -> None:
     assert [ticket.device.app for ticket in tickets] == [PushDevice.App.CUSTOMER]
 
 
+# `OneSignalMessageTransport` sends these itself, with its own copy. Listing one in
+# push_templates would send a second banner.
+_SENT_BY_TRANSPORT = {"partner.instant_dispatch_offer"}
+
+
 def test_every_push_template_code_in_the_backend_is_registered() -> None:
     root = Path(__file__).resolve().parents[2] / "apps"
     found: set[str] = set()
@@ -267,6 +272,7 @@ def test_every_push_template_code_in_the_backend_is_registered() -> None:
             continue
         for match in _PUSH_CALL.finditer(text):
             found.add(next(group for group in match.groups() if group))
+    found -= _SENT_BY_TRANSPORT
     assert found
     assert found <= set(registered_push_template_codes())
     for code in found:
