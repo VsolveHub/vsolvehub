@@ -1,5 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
 
+import { VEHICLE_TYPES } from "./vehicle";
+
 export type CaptainStatus = Schemas["CaptainStatus"];
 export type BlockedReason = "suspended" | "not_approved" | "vehicle_missing" | "pass_required";
 
@@ -28,10 +30,7 @@ export function blockedReasonTexts(reasons: readonly string[]): string[] {
   return reasons.map((reason) => BLOCKED_TEXT[reason as BlockedReason] ?? "You can't go on duty yet.");
 }
 
-/** "Bike", "Auto" or "Cab" for a vehicle type from the server. */
+/** "Bike", "Cab", "Tempo Traveller" and so on for a vehicle type from the server. */
 export function vehicleTypeName(type: string): string {
-  if (type === "BIKE") return "Bike";
-  if (type === "AUTO") return "Auto";
-  if (type === "CAB") return "Cab";
-  return type;
+  return VEHICLE_TYPES.find((vehicle) => vehicle.type === type)?.label ?? type;
 }

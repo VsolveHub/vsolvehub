@@ -4,7 +4,10 @@ Money is integer paise, calculated on the server. Every invariant that matters i
 constraint, so a bug in a service cannot write an impossible row.
 """
 
+import operator
 import uuid
+from collections.abc import Iterable
+from functools import reduce
 from typing import Any
 
 from django.conf import settings
@@ -13,9 +16,11 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 __all__ = [
+    "KIND_VEHICLE_TYPES",
     "OPEN_RIDE_STATES",
     "PARCEL_LIMIT_FIELDS",
     "RATE_FIELDS",
+    "RENTAL_HOURS",
     "TRACKED_RIDE_STATES",
     "ActorKind",
     "CaptainDutySession",
@@ -47,13 +52,54 @@ class VehicleType(models.TextChoices):
     BIKE = "BIKE", "Bike"
     AUTO = "AUTO", "Auto"
     CAB = "CAB", "Cab"
+    #: Taxi (ADR-0016, D2, D4): what each type means is checked by Operations at approval.
+    EV_CAB = "EV_CAB", "EV Cab"
+    PREMIUM = "PREMIUM", "Premium"
+    SUV = "SUV", "SUV"
+    INNOVA = "INNOVA", "Innova"
+    TEMPO = "TEMPO", "Tempo Traveller"
 
 
 class RideKind(models.TextChoices):
-    """A passenger ride, or a Pick up & Drop parcel (ADR-0015)."""
+    """A ride, a Pick up & Drop parcel (ADR-0015), or a Taxi rental or outstation (ADR-0016)."""
 
     RIDE = "RIDE", "Ride"
     PARCEL = "PARCEL", "Pick up & Drop"
+    RENTAL = "RENTAL", "Rental"
+    OUTSTATION = "OUTSTATION", "Outstation"
+
+
+#: Which vehicle types each kind offers (Taxi brief D3). A rate card check constraint enforces it.
+KIND_VEHICLE_TYPES: dict[str, tuple[str, ...]] = {
+    RideKind.RIDE: (
+        VehicleType.BIKE,
+        VehicleType.AUTO,
+        VehicleType.CAB,
+        VehicleType.EV_CAB,
+        VehicleType.PREMIUM,
+        VehicleType.SUV,
+        VehicleType.INNOVA,
+    ),
+    RideKind.PARCEL: (VehicleType.BIKE, VehicleType.AUTO),
+    RideKind.RENTAL: (
+        VehicleType.CAB,
+        VehicleType.EV_CAB,
+        VehicleType.PREMIUM,
+        VehicleType.SUV,
+        VehicleType.INNOVA,
+        VehicleType.TEMPO,
+    ),
+    RideKind.OUTSTATION: (
+        VehicleType.CAB,
+        VehicleType.PREMIUM,
+        VehicleType.SUV,
+        VehicleType.INNOVA,
+        VehicleType.TEMPO,
+    ),
+}
+
+#: Rental packages in hours (D10). Also `RIDES_RENTAL_HOURS`; a constraint cannot read settings.
+RENTAL_HOURS = (2, 4, 8)
 
 
 class CaptainVehicle(models.Model):
@@ -107,6 +153,30 @@ RATE_FIELDS = (
 PARCEL_LIMIT_FIELDS = ("max_parcel_weight_grams", "parcel_size_label")
 
 
+def _any_of(conditions: Iterable[Q]) -> Q:
+    """One `Q` that holds when any of `conditions` does."""
+    return reduce(operator.or_, conditions)
+
+
+_NO_RENTAL = Q(
+    rental_2h_paise__isnull=True, rental_4h_paise__isnull=True, rental_8h_paise__isnull=True
+)
+_NO_ROUND_TRIP = Q(round_trip_per_km_paise__isnull=True, round_trip_min_km_per_day__isnull=True)
+
+#: The drop is empty for a rental (no destination, D10) and set for every other kind.
+_DROP_MATCHES_KIND = Q(
+    kind=RideKind.RENTAL, drop_latitude__isnull=True, drop_longitude__isnull=True, drop_label=""
+) | (~Q(kind=RideKind.RENTAL) & Q(drop_latitude__isnull=False, drop_longitude__isnull=False))
+#: Rental hours on a rental only, and one of the packages (D10).
+_RENTAL_HOURS_MATCH_KIND = Q(kind=RideKind.RENTAL, rental_hours__in=RENTAL_HOURS) | (
+    ~Q(kind=RideKind.RENTAL) & Q(rental_hours__isnull=True)
+)
+#: A round trip is an outstation trip with a return time (D12, D14); nothing else has one.
+_ROUND_TRIP_HAS_RETURN = Q(round_trip=True, kind=RideKind.OUTSTATION, return_at__isnull=False) | Q(
+    round_trip=False, return_at__isnull=True
+)
+
+
 class RideRateCard(models.Model):
     """Operations' price list for one vehicle type and kind in one service area.
 
@@ -126,7 +196,7 @@ class RideRateCard(models.Model):
         related_name="ride_rate_cards",
     )
     vehicle_type = models.CharField(max_length=8, choices=VehicleType.choices)
-    kind = models.CharField(max_length=8, choices=RideKind.choices, default=RideKind.RIDE)
+    kind = models.CharField(max_length=12, choices=RideKind.choices, default=RideKind.RIDE)
     #: Parcel cards only (null on a ride card): the heaviest item this vehicle takes, in grams,
     #: and a label such as "40 x 30 x 20 cm".
     max_parcel_weight_grams = models.PositiveIntegerField(null=True, blank=True)
@@ -140,6 +210,15 @@ class RideRateCard(models.Model):
     minimum_fare_paise = models.PositiveBigIntegerField()
     free_waiting_minutes = models.PositiveSmallIntegerField()
     waiting_per_minute_paise = models.PositiveBigIntegerField()
+    #: Rental cards only (Taxi brief §4.1): the price of each package; empty = not offered. On a
+    #: rental card `per_km_paise` and `per_minute_paise` are the extra-km and extra-minute rates.
+    rental_2h_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    rental_4h_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    rental_8h_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    #: Outstation cards only: the round-trip rate and the km billed at least per day (D13). On an
+    #: outstation card `per_km_paise` is the one-way rate and `minimum_fare_paise` its minimum.
+    round_trip_per_km_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    round_trip_min_km_per_day = models.PositiveSmallIntegerField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
     #: Starts at 1 and goes up by one per edit, per (area, vehicle type, kind).
@@ -171,13 +250,15 @@ class RideRateCard(models.Model):
                 condition=Q(version__gte=1),
                 name="rides_rate_card_version_from_one",
             ),
-            # Bike and Auto only: there are no cab parcels (D2).
+            # Each kind offers only its own vehicle types (Taxi D3; parcels Bike and Auto).
             models.CheckConstraint(
-                condition=Q(kind=RideKind.RIDE)
-                | Q(vehicle_type__in=(VehicleType.BIKE, VehicleType.AUTO)),
-                name="rides_parcel_card_is_bike_or_auto",
+                condition=_any_of(
+                    Q(kind=kind, vehicle_type__in=vehicle_types)
+                    for kind, vehicle_types in KIND_VEHICLE_TYPES.items()
+                ),
+                name="rides_card_vehicle_allowed_for_kind",
             ),
-            # A parcel card states its limits; a ride card has none.
+            # A parcel card states its limits; no other card has any.
             models.CheckConstraint(
                 condition=(
                     Q(
@@ -188,13 +269,42 @@ class RideRateCard(models.Model):
                     & ~Q(parcel_size_label="")
                 )
                 | (
-                    Q(
-                        kind=RideKind.RIDE,
-                        max_parcel_weight_grams__isnull=True,
-                        parcel_size_label="",
-                    )
+                    ~Q(kind=RideKind.PARCEL)
+                    & Q(max_parcel_weight_grams__isnull=True, parcel_size_label="")
                 ),
                 name="rides_parcel_card_has_limits",
+            ),
+            # The price fields each kind uses (Taxi brief §4.1).
+            models.CheckConstraint(
+                condition=(
+                    Q(kind__in=(RideKind.RIDE, RideKind.PARCEL)) & _NO_RENTAL & _NO_ROUND_TRIP
+                )
+                | (
+                    Q(
+                        kind=RideKind.RENTAL,
+                        base_fare_paise=0,
+                        included_distance_m=0,
+                        minimum_fare_paise=0,
+                    )
+                    & (
+                        Q(rental_2h_paise__isnull=False)
+                        | Q(rental_4h_paise__isnull=False)
+                        | Q(rental_8h_paise__isnull=False)
+                    )
+                    & _NO_ROUND_TRIP
+                )
+                | (
+                    Q(
+                        kind=RideKind.OUTSTATION,
+                        base_fare_paise=0,
+                        included_distance_m=0,
+                        per_minute_paise=0,
+                        round_trip_per_km_paise__isnull=False,
+                        round_trip_min_km_per_day__isnull=False,
+                    )
+                    & _NO_RENTAL
+                ),
+                name="rides_rate_card_fields_match_kind",
             ),
         ]
 
@@ -222,16 +332,24 @@ class FareQuote(models.Model):
         related_name="ride_quotes",
     )
     vehicle_type = models.CharField(max_length=8, choices=VehicleType.choices)
-    kind = models.CharField(max_length=8, choices=RideKind.choices, default=RideKind.RIDE)
+    kind = models.CharField(max_length=12, choices=RideKind.choices, default=RideKind.RIDE)
     rate_card = models.ForeignKey(RideRateCard, on_delete=models.PROTECT, related_name="quotes")
     rate_card_version = models.PositiveIntegerField()
 
     pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6)
     pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6)
     pickup_label = models.CharField(max_length=255)
-    drop_latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    drop_longitude = models.DecimalField(max_digits=9, decimal_places=6)
-    drop_label = models.CharField(max_length=255)
+    #: Empty only for a rental, which has no destination (D10).
+    drop_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_label = models.CharField(max_length=255, blank=True)
+    #: Booked for later (D6); empty = now.
+    pickup_at = models.DateTimeField(null=True, blank=True)
+    #: Rentals only: 2, 4 or 8 (D10).
+    rental_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Outstation only: a round trip, with its return time (D12, D14).
+    round_trip = models.BooleanField(default=False)
+    return_at = models.DateTimeField(null=True, blank=True)
 
     distance_m = models.PositiveIntegerField()
     duration_s = models.PositiveIntegerField()
@@ -255,10 +373,22 @@ class FareQuote(models.Model):
             ),
             models.CheckConstraint(
                 condition=Q(pickup_latitude__gte=-90, pickup_latitude__lte=90)
-                & Q(drop_latitude__gte=-90, drop_latitude__lte=90)
                 & Q(pickup_longitude__gte=-180, pickup_longitude__lte=180)
-                & Q(drop_longitude__gte=-180, drop_longitude__lte=180),
+                & (Q(drop_latitude__isnull=True) | Q(drop_latitude__gte=-90, drop_latitude__lte=90))
+                & (
+                    Q(drop_longitude__isnull=True)
+                    | Q(drop_longitude__gte=-180, drop_longitude__lte=180)
+                ),
                 name="rides_quote_coordinates_in_range",
+            ),
+            models.CheckConstraint(
+                condition=_DROP_MATCHES_KIND, name="rides_quote_drop_matches_kind"
+            ),
+            models.CheckConstraint(
+                condition=_RENTAL_HOURS_MATCH_KIND, name="rides_quote_rental_hours_match_kind"
+            ),
+            models.CheckConstraint(
+                condition=_ROUND_TRIP_HAS_RETURN, name="rides_quote_round_trip_has_return"
             ),
         ]
         indexes = [models.Index(fields=("rider", "-created_at"), name="rides_quote_rider_recent")]
@@ -406,6 +536,8 @@ class CaptainDutySession(models.Model):
 
 
 class RideState(models.TextChoices):
+    #: Taxi (D7): booked for later, no search yet. Not open and not tracked.
+    BOOKED = "BOOKED", "Booked"
     SEARCHING = "SEARCHING", "Searching"
     CAPTAIN_ASSIGNED = "CAPTAIN_ASSIGNED", "Captain assigned"
     CAPTAIN_ARRIVED = "CAPTAIN_ARRIVED", "Captain arrived"
@@ -479,7 +611,7 @@ class Ride(models.Model):
     rider = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="rides"
     )
-    kind = models.CharField(max_length=8, choices=RideKind.choices, default=RideKind.RIDE)
+    kind = models.CharField(max_length=12, choices=RideKind.choices, default=RideKind.RIDE)
     #: One-to-one: a quote books at most one ride.
     quote = models.OneToOneField(FareQuote, on_delete=models.PROTECT, related_name="ride")
     service_area = models.ForeignKey(
@@ -490,9 +622,17 @@ class Ride(models.Model):
     pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6)
     pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6)
     pickup_label = models.CharField(max_length=255)
-    drop_latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    drop_longitude = models.DecimalField(max_digits=9, decimal_places=6)
-    drop_label = models.CharField(max_length=255)
+    #: Empty only for a rental, which has no destination (D10).
+    drop_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_label = models.CharField(max_length=255, blank=True)
+    #: Booked for later (D6); empty = now.
+    pickup_at = models.DateTimeField(null=True, blank=True)
+    #: Rentals only: 2, 4 or 8 (D10).
+    rental_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Outstation only: a round trip, with its return time (D12, D14).
+    round_trip = models.BooleanField(default=False)
+    return_at = models.DateTimeField(null=True, blank=True)
 
     state = models.CharField(max_length=20, choices=RideState.choices, default=RideState.SEARCHING)
     captain = models.ForeignKey(
@@ -508,6 +648,10 @@ class Ride(models.Model):
     #: Set when the trip completes (a parcel: at pickup): `fare_paise + waiting_paise`, plus the
     #: parcel's return leg once a return starts.
     final_fare_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    #: Rentals only, set at End trip (D11): use beyond the package and what it costs.
+    extra_km = models.PositiveIntegerField(null=True, blank=True)
+    extra_minutes = models.PositiveIntegerField(null=True, blank=True)
+    extras_paise = models.PositiveBigIntegerField(null=True, blank=True)
     payment_method = models.CharField(
         max_length=16, choices=PaymentMethod.choices, default=PaymentMethod.CASH_OR_UPI
     )
@@ -569,6 +713,26 @@ class Ride(models.Model):
             ),
             models.CheckConstraint(
                 condition=Q(otp_attempts__lte=5), name="rides_otp_attempts_at_most_five"
+            ),
+            models.CheckConstraint(
+                condition=_DROP_MATCHES_KIND, name="rides_ride_drop_matches_kind"
+            ),
+            models.CheckConstraint(
+                condition=_RENTAL_HOURS_MATCH_KIND, name="rides_ride_rental_hours_match_kind"
+            ),
+            models.CheckConstraint(
+                condition=_ROUND_TRIP_HAS_RETURN, name="rides_ride_round_trip_has_return"
+            ),
+            # A booked ride knows when to pick up (D7).
+            models.CheckConstraint(
+                condition=~Q(state=RideState.BOOKED) | Q(pickup_at__isnull=False),
+                name="rides_booked_ride_has_a_pickup_time",
+            ),
+            # Rental extras exist on rentals only (D11).
+            models.CheckConstraint(
+                condition=Q(kind=RideKind.RENTAL)
+                | Q(extra_km__isnull=True, extra_minutes__isnull=True, extras_paise__isnull=True),
+                name="rides_only_a_rental_has_extras",
             ),
         ]
         indexes = [

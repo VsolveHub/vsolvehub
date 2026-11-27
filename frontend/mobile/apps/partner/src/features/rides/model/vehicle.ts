@@ -1,4 +1,4 @@
-export type VehicleType = "BIKE" | "AUTO" | "CAB";
+export type VehicleType = "BIKE" | "AUTO" | "CAB" | "EV_CAB" | "PREMIUM" | "SUV" | "INNOVA" | "TEMPO";
 
 export interface VehicleDraft {
   vehicle_type: VehicleType | "";
@@ -14,10 +14,16 @@ export const EMPTY_VEHICLE: VehicleDraft = {
   colour: "",
 };
 
-export const VEHICLE_TYPES: readonly { type: VehicleType; label: string }[] = [
+/** Every vehicle type, with the one-line hint Operations checks at approval (Taxi brief D4). */
+export const VEHICLE_TYPES: readonly { type: VehicleType; label: string; hint?: string }[] = [
   { type: "BIKE", label: "Bike" },
   { type: "AUTO", label: "Auto" },
   { type: "CAB", label: "Cab" },
+  { type: "EV_CAB", label: "EV Cab", hint: "An electric car." },
+  { type: "PREMIUM", label: "Premium", hint: "A sedan Operations accepts as premium." },
+  { type: "SUV", label: "SUV", hint: "6 or more seats." },
+  { type: "INNOVA", label: "Innova", hint: "Toyota Innova, Innova Crysta or Innova Hycross only." },
+  { type: "TEMPO", label: "Tempo Traveller", hint: "12 or more seats." },
 ];
 
 /**

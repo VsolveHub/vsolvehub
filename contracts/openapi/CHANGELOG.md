@@ -1,5 +1,15 @@
 # API Contract Changelog
 
+## 1.120.0 - Taxi: Rental, Outstation, Book for later
+
+Additive. Taxi on the Rides engine (`docs/taxi/README.md` §4.4, ADR-0016). In progress on
+`taxi/v1`: the endpoint changes of §4.4 are added here as they land.
+
+- **Added** to every ride `vehicle_type`: `EV_CAB`, `PREMIUM`, `SUV`, `INNOVA`, `TEMPO` (D2).
+- **Added** to every ride `kind`: `RENTAL` and `OUTSTATION` (D1). The generated enum is renamed
+  `Kind899Enum` to `KindB9cEnum`.
+- **Added** to the ride `state`: `BOOKED` (D7).
+
 ## 1.119.0 - Pick up & Drop V1
 
 Additive. Parcels on the Rides engine (`docs/parcel/README.md` §4.2, ADR-0015).

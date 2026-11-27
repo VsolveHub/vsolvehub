@@ -43,6 +43,8 @@ export function VehicleScreen() {
   }, [saved]);
 
   const editable = canEditVehicle(status.data?.approval);
+  const chosen = VEHICLE_TYPES.find((vehicle) => vehicle.type === draft.vehicle_type);
+  const chosenHint = chosen?.hint ? `${chosen.label}: ${chosen.hint}` : null;
   const problems = vehicleProblems(draft);
   const set = (field: keyof VehicleDraft) => (value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
@@ -96,7 +98,7 @@ export function VehicleScreen() {
           ) : null}
 
           <Field label="Vehicle type" required error={showProblems ? problems.vehicle_type : undefined}>
-            <View className="flex-row gap-2">
+            <View className="flex-row flex-wrap gap-2">
               {VEHICLE_TYPES.map(({ type, label }) => {
                 const chosen = draft.vehicle_type === type;
                 return (
@@ -107,7 +109,7 @@ export function VehicleScreen() {
                     disabled={!editable}
                     onPress={() => set("vehicle_type")(type)}
                     className={cn(
-                      "flex-1 items-center rounded-xl border py-3",
+                      "w-[31%] items-center rounded-xl border py-3",
                       chosen ? "border-[#f87000] bg-[#fff4ea]" : "border-line bg-surface",
                     )}
                   >
@@ -116,6 +118,9 @@ export function VehicleScreen() {
                 );
               })}
             </View>
+            {chosenHint ? (
+              <Text className="mt-2 text-sm text-text-muted">{chosenHint}</Text>
+            ) : null}
           </Field>
 
           <Field

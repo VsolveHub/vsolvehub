@@ -634,6 +634,13 @@ def _is_near(
     return distance <= int(settings.RIDES_ARRIVAL_RADIUS_M)
 
 
+def _drop_point(ride: Ride) -> tuple[Decimal, Decimal]:
+    """The drop of a ride that has one. Only a rental has none (`rides_ride_drop_matches_kind`)."""
+    if ride.drop_latitude is None or ride.drop_longitude is None:
+        raise InvalidTransitionError
+    return ride.drop_latitude, ride.drop_longitude
+
+
 def _last_position(partner: PartnerProfile) -> dict[str, str] | None:
     try:
         return location.last_position(partner.id)
@@ -773,7 +780,7 @@ def mark_arrived_at_drop(*, partner: PartnerProfile, ride_id: UUID) -> Ride:
     if parcel.arrived_at_drop_at is not None:
         return ride
     now = timezone.now()
-    if not _is_near(_last_position(partner), ride.drop_latitude, ride.drop_longitude, now):
+    if not _is_near(_last_position(partner), *_drop_point(ride), now):
         raise NotAtDropError
     parcel.arrived_at_drop_at = now
     parcel.save(update_fields=("arrived_at_drop_at",))
@@ -855,7 +862,7 @@ def _return_fare_paise(ride: Ride) -> int:
     """The return leg, drop back to pickup, on the quote's own rate card version (D13)."""
     try:
         route = get_route(
-            pickup=(ride.drop_latitude, ride.drop_longitude),
+            pickup=_drop_point(ride),
             drop=(ride.pickup_latitude, ride.pickup_longitude),
             vehicle_type=ride.vehicle_type,
         )

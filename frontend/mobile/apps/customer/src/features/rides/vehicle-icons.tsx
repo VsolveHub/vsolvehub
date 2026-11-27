@@ -1,7 +1,7 @@
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 /**
- * Side-view vehicle art for Rides: bike, auto and cab. Two-tone in the VSolve theme, so they do not
+ * Side-view vehicle art for Rides: bike, auto, cab, SUV and van. Two-tone in the VSolve theme, so they do not
  * take a colour prop. The values are the tokens in guide/03-design-system.md: navy-700, signal-500
  * and white. Drawn on a 48px grid; `size` scales the whole picture.
  */
@@ -71,6 +71,44 @@ export function CabIcon({ size = 24 }: VehicleIconProps) {
       <Rect x={41} y={25} width={3} height={2.5} rx={1} fill={SIGNAL} />
       <Wheel cx={13} cy={31} r={5.5} hub={1.8} />
       <Wheel cx={35} cy={31} r={5.5} hub={1.8} />
+    </Svg>
+  );
+}
+
+export function SuvIcon({ size = 24 }: VehicleIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      {/* A taller, squarer body than the cab, with a roof rack */}
+      <Path
+        d="M4 31 V23 C4 21.5 5 20.5 7 20 L10 19.5 L13 12 H36 L39 19.5 L42 20 C43.5 20.5 44 21.5 44 23 V31 Z"
+        fill={NAVY}
+      />
+      <Path d="M15.5 14.5 H23 V19.5 H13.5 Z" fill={WHITE} />
+      <Path d="M25.5 14.5 H34.5 L36.5 19.5 H25.5 Z" fill={WHITE} />
+      <Rect x={15} y={9.5} width={19} height={1.5} rx={0.75} fill={SIGNAL} />
+      <Rect x={41} y={23} width={3} height={2.5} rx={1} fill={SIGNAL} />
+      <Wheel cx={13} cy={31} r={5.5} hub={1.8} />
+      <Wheel cx={35} cy={31} r={5.5} hub={1.8} />
+    </Svg>
+  );
+}
+
+export function VanIcon({ size = 24 }: VehicleIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      {/* Tempo Traveller: a long box with a row of passenger windows */}
+      <Path
+        d="M3 32 V13 C3 11 4.5 10 6.5 10 H37 C39 10 40.5 11 41.5 13 L45 21 V32 Z"
+        fill={NAVY}
+      />
+      <Rect x={6} y={13.5} width={8} height={6} rx={1} fill={WHITE} />
+      <Rect x={16} y={13.5} width={8} height={6} rx={1} fill={WHITE} />
+      <Rect x={26} y={13.5} width={8} height={6} rx={1} fill={WHITE} />
+      <Path d="M36 13.5 H38.5 L41.5 20 H36 Z" fill={WHITE} />
+      <Rect x={3} y={23} width={42} height={2} fill={SIGNAL} />
+      <Rect x={42.5} y={27} width={2.5} height={2} rx={1} fill={SIGNAL} />
+      <Wheel cx={11} cy={32} r={5.5} hub={1.8} />
+      <Wheel cx={36} cy={32} r={5.5} hub={1.8} />
     </Svg>
   );
 }

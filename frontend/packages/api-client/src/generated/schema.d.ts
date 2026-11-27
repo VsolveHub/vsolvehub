@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.119.0)
- * Checksum: 9739e2945fe366c4
+ * Source:   contracts/openapi/v1.yaml (version 1.120.0)
+ * Checksum: b6d8805ebffba75d
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11417,7 +11417,7 @@ export interface components {
         CaptainRide: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly pickup: components["schemas"]["RidePlace"];
@@ -13743,7 +13743,7 @@ export interface components {
         FareQuote: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             /** @description Parcel quotes only; null for a ride. */
             readonly max_weight_grams: number | null;
             /** @description Parcel quotes only; empty for a ride. */
@@ -13768,9 +13768,11 @@ export interface components {
              *
              *     * `RIDE` - Ride
              *     * `PARCEL` - Pick up & Drop
+             *     * `RENTAL` - Rental
+             *     * `OUTSTATION` - Outstation
              * @default RIDE
              */
-            kind: components["schemas"]["Kind899Enum"];
+            kind: components["schemas"]["KindB9cEnum"];
         };
         FulfilmentPlan: {
             /** Format: uuid */
@@ -14326,9 +14328,11 @@ export interface components {
         /**
          * @description * `RIDE` - Ride
          *     * `PARCEL` - Pick up & Drop
+         *     * `RENTAL` - Rental
+         *     * `OUTSTATION` - Outstation
          * @enum {string}
          */
-        Kind899Enum: "RIDE" | "PARCEL";
+        KindB9cEnum: "RIDE" | "PARCEL" | "RENTAL" | "OUTSTATION";
         LastDutyEnd: {
             /** @description CAPTAIN_OFF, LOCATION_STALE, PASS_EXPIRED, SUSPENDED or OPERATIONS. */
             reason: string;
@@ -16295,7 +16299,7 @@ export interface components {
         OpsRideDetail: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly pickup: components["schemas"]["RidePlace"];
@@ -16341,7 +16345,7 @@ export interface components {
         OpsRideRow: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             /** Format: uuid */
@@ -20190,7 +20194,7 @@ export interface components {
             service_area_id: string;
             vehicle_type: components["schemas"]["VehicleTypeEnum"];
             /** @default RIDE */
-            kind: components["schemas"]["Kind899Enum"];
+            kind: components["schemas"]["KindB9cEnum"];
             /** @description Pick up & Drop cards only: the heaviest item, in grams. */
             max_parcel_weight_grams?: number;
             /** @description Pick up & Drop cards only, such as '40 x 30 x 20 cm'. */
@@ -21310,7 +21314,7 @@ export interface components {
         Ride: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             readonly pickup: components["schemas"]["RidePlace"];
@@ -21375,7 +21379,7 @@ export interface components {
         RideHistory: {
             /** Format: uuid */
             readonly id: string;
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             readonly state: components["schemas"]["StateEnum"];
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
             pickup_address: string;
@@ -21424,7 +21428,7 @@ export interface components {
             readonly service_area_id: string;
             readonly service_area_name: string;
             readonly vehicle_type: components["schemas"]["VehicleTypeEnum"];
-            readonly kind: components["schemas"]["Kind899Enum"];
+            readonly kind: components["schemas"]["KindB9cEnum"];
             readonly base_fare_paise: number;
             readonly included_distance_m: number;
             readonly per_km_paise: number;
@@ -22307,7 +22311,8 @@ export interface components {
          */
         StartedByEnum: "AUTOMATIC" | "CUSTOMER" | "OPERATIONS";
         /**
-         * @description * `SEARCHING` - Searching
+         * @description * `BOOKED` - Booked
+         *     * `SEARCHING` - Searching
          *     * `CAPTAIN_ASSIGNED` - Captain assigned
          *     * `CAPTAIN_ARRIVED` - Captain arrived
          *     * `IN_TRIP` - In trip
@@ -22318,7 +22323,7 @@ export interface components {
          *     * `RETURNED` - Returned
          * @enum {string}
          */
-        StateEnum: "SEARCHING" | "CAPTAIN_ASSIGNED" | "CAPTAIN_ARRIVED" | "IN_TRIP" | "COMPLETED" | "NO_CAPTAIN_FOUND" | "CANCELLED" | "RETURNING" | "RETURNED";
+        StateEnum: "BOOKED" | "SEARCHING" | "CAPTAIN_ASSIGNED" | "CAPTAIN_ARRIVED" | "IN_TRIP" | "COMPLETED" | "NO_CAPTAIN_FOUND" | "CANCELLED" | "RETURNING" | "RETURNED";
         /**
          * @description * `REQUESTED` - Requested
          *     * `ACCEPTED` - Accepted
@@ -23017,16 +23022,26 @@ export interface components {
          * @description * `BIKE` - Bike
          *     * `AUTO` - Auto
          *     * `CAB` - Cab
+         *     * `EV_CAB` - EV Cab
+         *     * `PREMIUM` - Premium
+         *     * `SUV` - SUV
+         *     * `INNOVA` - Innova
+         *     * `TEMPO` - Tempo Traveller
          * @enum {string}
          */
-        VehicleTypeEnum: "BIKE" | "AUTO" | "CAB";
+        VehicleTypeEnum: "BIKE" | "AUTO" | "CAB" | "EV_CAB" | "PREMIUM" | "SUV" | "INNOVA" | "TEMPO";
         /**
          * @description * `BIKE` - Bike
          *     * `AUTO` - Auto
          *     * `CAB` - Cab
+         *     * `EV_CAB` - EV Cab
+         *     * `PREMIUM` - Premium
+         *     * `SUV` - SUV
+         *     * `INNOVA` - Innova
+         *     * `TEMPO` - Tempo Traveller
          * @enum {string}
          */
-        VehicleTypesEnum: "BIKE" | "AUTO" | "CAB";
+        VehicleTypesEnum: "BIKE" | "AUTO" | "CAB" | "EV_CAB" | "PREMIUM" | "SUV" | "INNOVA" | "TEMPO";
         /**
          * @description A responding vendor, as much of one as the Customer has paid to see.
          *

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.119.0
+  version: 1.120.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -27422,7 +27422,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         state:
           allOf:
@@ -33254,7 +33254,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         max_weight_grams:
           type: integer
@@ -33315,13 +33315,15 @@ components:
           $ref: '#/components/schemas/TripPointRequest'
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           default: RIDE
           description: |-
             PARCEL for Pick up & Drop.
 
             * `RIDE` - Ride
             * `PARCEL` - Pick up & Drop
+            * `RENTAL` - Rental
+            * `OUTSTATION` - Outstation
       required:
       - drop
       - pickup
@@ -34739,14 +34741,18 @@ components:
         * `CANCEL` - Cancel
         * `REVERSE` - Reverse
         * `ADJUSTMENT` - Adjustment
-    Kind899Enum:
+    KindB9cEnum:
       enum:
       - RIDE
       - PARCEL
+      - RENTAL
+      - OUTSTATION
       type: string
       description: |-
         * `RIDE` - Ride
         * `PARCEL` - Pick up & Drop
+        * `RENTAL` - Rental
+        * `OUTSTATION` - Outstation
     LastDutyEnd:
       type: object
       properties:
@@ -39902,7 +39908,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         state:
           allOf:
@@ -40069,7 +40075,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         state:
           allOf:
@@ -49842,7 +49848,7 @@ components:
           $ref: '#/components/schemas/VehicleTypeEnum'
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           default: RIDE
         max_parcel_weight_grams:
           type: integer
@@ -52576,7 +52582,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         state:
           allOf:
@@ -52773,7 +52779,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         state:
           allOf:
@@ -52928,7 +52934,7 @@ components:
           readOnly: true
         kind:
           allOf:
-          - $ref: '#/components/schemas/Kind899Enum'
+          - $ref: '#/components/schemas/KindB9cEnum'
           readOnly: true
         base_fare_paise:
           type: integer
@@ -55113,6 +55119,7 @@ components:
         * `OPERATIONS` - Operations
     StateEnum:
       enum:
+      - BOOKED
       - SEARCHING
       - CAPTAIN_ASSIGNED
       - CAPTAIN_ARRIVED
@@ -55124,6 +55131,7 @@ components:
       - RETURNED
       type: string
       description: |-
+        * `BOOKED` - Booked
         * `SEARCHING` - Searching
         * `CAPTAIN_ASSIGNED` - Captain assigned
         * `CAPTAIN_ARRIVED` - Captain arrived
@@ -56740,21 +56748,41 @@ components:
       - BIKE
       - AUTO
       - CAB
+      - EV_CAB
+      - PREMIUM
+      - SUV
+      - INNOVA
+      - TEMPO
       type: string
       description: |-
         * `BIKE` - Bike
         * `AUTO` - Auto
         * `CAB` - Cab
+        * `EV_CAB` - EV Cab
+        * `PREMIUM` - Premium
+        * `SUV` - SUV
+        * `INNOVA` - Innova
+        * `TEMPO` - Tempo Traveller
     VehicleTypesEnum:
       enum:
       - BIKE
       - AUTO
       - CAB
+      - EV_CAB
+      - PREMIUM
+      - SUV
+      - INNOVA
+      - TEMPO
       type: string
       description: |-
         * `BIKE` - Bike
         * `AUTO` - Auto
         * `CAB` - Cab
+        * `EV_CAB` - EV Cab
+        * `PREMIUM` - Premium
+        * `SUV` - SUV
+        * `INNOVA` - Innova
+        * `TEMPO` - Tempo Traveller
     VendorCard:
       type: object
       description: |-

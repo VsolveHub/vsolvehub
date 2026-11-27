@@ -426,7 +426,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.119.0",
+    "VERSION": "1.120.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -918,6 +918,24 @@ RIDES_PARCEL_PROHIBITED_ITEMS = [
     "Live animals",
     "Anything illegal",
 ]
+# Taxi (docs/taxi/README.md D6, D7): a booked trip starts searching this long before pickup,
+# searches again after each empty round, and gives up this long before pickup.
+RIDES_BOOKED_LEAD_MINUTES = env.int("RIDES_BOOKED_LEAD_MINUTES", default=60)
+RIDES_BOOKED_RETRY_SECONDS = env.int("RIDES_BOOKED_RETRY_SECONDS", default=180)
+RIDES_BOOKED_SEARCH_UNTIL_MINUTES = env.int("RIDES_BOOKED_SEARCH_UNTIL_MINUTES", default=15)
+# How far ahead a trip may be booked, in what steps, and how many booked trips a rider may hold.
+RIDES_BOOK_AHEAD_MAX_DAYS = env.int("RIDES_BOOK_AHEAD_MAX_DAYS", default=7)
+RIDES_BOOK_AHEAD_STEP_MINUTES = env.int("RIDES_BOOK_AHEAD_STEP_MINUTES", default=15)
+RIDES_MAX_BOOKED_PER_RIDER = env.int("RIDES_MAX_BOOKED_PER_RIDER", default=3)
+# Rental packages (D10): hours on offer and the km each hour includes. A check constraint on
+# rides also lists the hours (`apps.rides.models.RENTAL_HOURS`), so change both together.
+RIDES_RENTAL_HOURS = [2, 4, 8]
+RIDES_RENTAL_KM_PER_HOUR = env.int("RIDES_RENTAL_KM_PER_HOUR", default=10)
+# Outstation (D12, D14): the shortest trip by road, and the longest round trip in days.
+RIDES_OUTSTATION_MIN_KM = env.int("RIDES_OUTSTATION_MIN_KM", default=40)
+RIDES_OUTSTATION_MAX_TRIP_DAYS = env.int("RIDES_OUTSTATION_MAX_TRIP_DAYS", default=7)
+# Rental km from the GPS track (D11) skip points less accurate than this.
+RIDES_TRACK_MAX_ACCURACY_M = env.int("RIDES_TRACK_MAX_ACCURACY_M", default=50)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     "GEOCODING_CACHE_COORDINATE_PRECISION",
     default=5,
