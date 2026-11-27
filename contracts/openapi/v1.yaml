@@ -26288,7 +26288,7 @@ components:
         vehicle_types:
           type: array
           items:
-            $ref: '#/components/schemas/VehicleTypesEnum'
+            $ref: '#/components/schemas/VehicleTypeEnum'
           description: 'Bookable here, cheapest first. Empty: hide the Rides entry.'
         parcel:
           type: array
@@ -26298,9 +26298,26 @@ components:
             hide the entry.'
         parcel_rules:
           $ref: '#/components/schemas/ParcelRules'
+        rental:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAvailability'
+          description: 'Rental vehicles bookable here, cheapest first. Empty: hide
+            the Rental tab.'
+        outstation:
+          type: array
+          items:
+            $ref: '#/components/schemas/VehicleTypeEnum'
+          description: 'Outstation vehicles bookable here, cheapest first. Empty:
+            hide the tab.'
+        book_ahead:
+          $ref: '#/components/schemas/BookAhead'
       required:
+      - book_ahead
+      - outstation
       - parcel
       - parcel_rules
+      - rental
       - vehicle_types
     AvailableFromEnum:
       enum:
@@ -26317,6 +26334,22 @@ components:
     BlankEnum:
       enum:
       - ''
+    BookAhead:
+      type: object
+      properties:
+        min_minutes:
+          type: integer
+          description: The earliest later pickup, from now.
+        max_days:
+          type: integer
+          description: The latest later pickup, in days from now.
+        step_minutes:
+          type: integer
+          description: Later pickup times are on these steps.
+      required:
+      - max_days
+      - min_minutes
+      - step_minutes
     Booking:
       type: object
       properties:
@@ -33281,18 +33314,63 @@ components:
         route_polyline:
           type: string
           readOnly: true
+        rental_hours:
+          type: integer
+          readOnly: true
+          nullable: true
+        included_km:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: 'Rentals only: km in the package.'
+        extra_km_paise:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: 'Rentals only: per extra km.'
+        extra_minute_paise:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: 'Rentals only: per extra minute, charged per started minute.'
+        round_trip:
+          type: boolean
+          readOnly: true
+        return_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        billed_km:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: 'Outstation only: the km the fixed price is for.'
+        days:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: 'Outstation round trips only: calendar days, both ends counted.'
         expires_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - billed_km
+      - days
       - distance_m
       - duration_s
       - expires_at
+      - extra_km_paise
+      - extra_minute_paise
       - fare_paise
       - id
+      - included_km
       - kind
       - max_weight_grams
+      - rental_hours
+      - return_at
+      - round_trip
       - route_polyline
       - size_label
       - vehicle_type
@@ -33303,7 +33381,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/FareQuote'
-          description: Bike, then auto, then cab; only the bookable ones.
+          description: Cheapest vehicle first; only the bookable ones.
       required:
       - quotes
     FareQuoteRequestRequest:
@@ -33312,20 +33390,37 @@ components:
         pickup:
           $ref: '#/components/schemas/TripPointRequest'
         drop:
-          $ref: '#/components/schemas/TripPointRequest'
+          allOf:
+          - $ref: '#/components/schemas/TripPointRequest'
+          description: Required, except for a rental.
         kind:
           allOf:
           - $ref: '#/components/schemas/KindB9cEnum'
           default: RIDE
           description: |-
-            PARCEL for Pick up & Drop.
+            PARCEL for Pick up & Drop; RENTAL and OUTSTATION for Taxi.
 
             * `RIDE` - Ride
             * `PARCEL` - Pick up & Drop
             * `RENTAL` - Rental
             * `OUTSTATION` - Outstation
+        rental_hours:
+          allOf:
+          - $ref: '#/components/schemas/RentalHoursEnum'
+          description: |-
+            Rentals only, and required for them.
+
+            * `2` - 2 h
+            * `4` - 4 h
+            * `8` - 8 h
+        round_trip:
+          type: boolean
+          description: Outstation only. Default false.
+        return_at:
+          type: string
+          format: date-time
+          description: Outstation round trips only, and required for them.
       required:
-      - drop
       - pickup
     FulfilmentPlan:
       type: object
@@ -51230,6 +51325,19 @@ components:
       - next
       - previous
       - results
+    RentalAvailability:
+      type: object
+      properties:
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleTypeEnum'
+        packages:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalPackage'
+          description: Only the packages offered, shortest first.
+      required:
+      - packages
+      - vehicle_type
     RentalBooking:
       type: object
       properties:
@@ -51416,6 +51524,16 @@ components:
         * `RELEASED` - Released
         * `PARTIALLY_CONSUMED` - Partially consumed
         * `FULLY_CONSUMED` - Fully consumed
+    RentalHoursEnum:
+      enum:
+      - 2
+      - 4
+      - 8
+      type: integer
+      description: |-
+        * `2` - 2 h
+        * `4` - 4 h
+        * `8` - 8 h
     RentalModerationRequest:
       type: object
       properties:
@@ -51428,6 +51546,20 @@ components:
       required:
       - action
       - reason
+    RentalPackage:
+      type: object
+      properties:
+        hours:
+          type: integer
+        km:
+          type: integer
+          description: The km the package includes.
+        price_paise:
+          type: integer
+      required:
+      - hours
+      - km
+      - price_paise
     RentalPhotoUpload:
       type: object
       properties:
@@ -56744,26 +56876,6 @@ components:
       - is_current
       - last_seen_at
     VehicleTypeEnum:
-      enum:
-      - BIKE
-      - AUTO
-      - CAB
-      - EV_CAB
-      - PREMIUM
-      - SUV
-      - INNOVA
-      - TEMPO
-      type: string
-      description: |-
-        * `BIKE` - Bike
-        * `AUTO` - Auto
-        * `CAB` - Cab
-        * `EV_CAB` - EV Cab
-        * `PREMIUM` - Premium
-        * `SUV` - SUV
-        * `INNOVA` - Innova
-        * `TEMPO` - Tempo Traveller
-    VehicleTypesEnum:
       enum:
       - BIKE
       - AUTO

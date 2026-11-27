@@ -8,7 +8,6 @@ the ride first and does nothing if someone else already moved it on.
 import hashlib
 import hmac
 import logging
-import math
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -39,7 +38,7 @@ from apps.rides.exceptions import (
     VehicleUnavailableError,
     WaitNotOverError,
 )
-from apps.rides.fares import trip_fare_paise, waiting_charge_paise
+from apps.rides.fares import metres_between, trip_fare_paise, waiting_charge_paise
 from apps.rides.models import (
     OPEN_RIDE_STATES,
     ActorKind,
@@ -180,7 +179,7 @@ def create_ride(*, rider: Any, quote_id: UUID, parcel: dict[str, Any] | None = N
         )
     ):
         raise ParcelDetailsRequiredError
-    if quote.kind == RideKind.RIDE and parcel is not None:
+    if quote.kind != RideKind.PARCEL and parcel is not None:
         raise ValidationError({"parcel": "Parcel details are only for a Pick up & Drop quote."})
     vehicle_on_sale = RideRateCard.objects.filter(
         service_area=quote.service_area,
@@ -205,6 +204,9 @@ def create_ride(*, rider: Any, quote_id: UUID, parcel: dict[str, Any] | None = N
         drop_latitude=quote.drop_latitude,
         drop_longitude=quote.drop_longitude,
         drop_label=quote.drop_label,
+        rental_hours=quote.rental_hours,
+        round_trip=quote.round_trip,
+        return_at=quote.return_at,
         fare_paise=quote.fare_paise,
     )
     try:
@@ -607,15 +609,6 @@ def _captain_ride(partner: PartnerProfile, ride_id: UUID) -> Ride:
     return ride
 
 
-def _metres_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Great-circle distance (haversine); plenty precise for a 200 m check."""
-    earth_m = 6_371_000
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp, dl = p2 - p1, math.radians(lng2 - lng1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * earth_m * math.asin(math.sqrt(a))
-
-
 def _is_near(
     position: dict[str, str] | None, latitude: Decimal, longitude: Decimal, now: datetime
 ) -> bool:
@@ -625,7 +618,7 @@ def _is_near(
     captured_at = datetime.fromisoformat(position["captured_at"])
     if now - captured_at > timedelta(seconds=int(settings.RIDES_PING_MAX_AGE_SECONDS)):
         return False
-    distance = _metres_between(
+    distance = metres_between(
         float(position["latitude"]),
         float(position["longitude"]),
         float(latitude),

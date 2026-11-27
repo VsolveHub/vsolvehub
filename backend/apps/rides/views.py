@@ -19,7 +19,9 @@ from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rides import engine, selectors, services
+from apps.rides.fares import rental_fare_paise, rental_included_km
 from apps.rides.models import (
+    RENTAL_HOURS,
     ActorKind,
     CaptainPass,
     CaptainPassPlan,
@@ -580,9 +582,32 @@ class AvailabilityView(APIView):
             "value_cap_paise": settings.RIDES_PARCEL_VALUE_CAP_PAISE,
             "prohibited_items": settings.RIDES_PARCEL_PROHIBITED_ITEMS,
         }
+        rental = [
+            {
+                "vehicle_type": card.vehicle_type,
+                "packages": [
+                    {"hours": hours, "km": rental_included_km(hours), "price_paise": price}
+                    for hours in RENTAL_HOURS
+                    if (price := rental_fare_paise(card, hours)) is not None
+                ],
+            }
+            for card in found.rental_cards
+        ]
+        book_ahead = {
+            "min_minutes": settings.RIDES_BOOKED_LEAD_MINUTES,
+            "max_days": settings.RIDES_BOOK_AHEAD_MAX_DAYS,
+            "step_minutes": settings.RIDES_BOOK_AHEAD_STEP_MINUTES,
+        }
         return Response(
             AvailabilitySerializer(
-                {"vehicle_types": found.vehicle_types, "parcel": parcel, "parcel_rules": rules}
+                {
+                    "vehicle_types": found.vehicle_types,
+                    "parcel": parcel,
+                    "parcel_rules": rules,
+                    "rental": rental,
+                    "outstation": found.outstation_types,
+                    "book_ahead": book_ahead,
+                }
             ).data
         )
 
@@ -1173,12 +1198,19 @@ class FareQuotesView(ThrottledWriteMixin, APIView):
         serializer = FareQuoteRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        pickup, drop = data["pickup"], data["drop"]
+        pickup, drop = data["pickup"], data.get("drop")
         quotes = services.create_quotes(
             rider=request.user,
             pickup=services.TripPoint(pickup["latitude"], pickup["longitude"], pickup["address"]),
-            drop=services.TripPoint(drop["latitude"], drop["longitude"], drop["address"]),
+            drop=(
+                services.TripPoint(drop["latitude"], drop["longitude"], drop["address"])
+                if drop is not None
+                else None
+            ),
             kind=data["kind"],
+            rental_hours=data.get("rental_hours"),
+            round_trip=data["round_trip"],
+            return_at=data.get("return_at"),
         )
         return Response(
             FareQuoteListSerializer({"quotes": quotes}).data, status=http_status.HTTP_201_CREATED

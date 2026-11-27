@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -21,9 +21,11 @@ from apps.rides import location, selectors
 from apps.rides.exceptions import (
     AreaNotServedError,
     CaptainNotApprovedError,
+    InvalidReturnTimeError,
     LocationStaleError,
     LocationUnavailableError,
     NotOnDutyError,
+    OutstationTooShortError,
     PassAlreadyActiveError,
     PassPurchasePendingError,
     PassRequiredError,
@@ -31,10 +33,17 @@ from apps.rides.exceptions import (
     RateCardExistsError,
     RateCardInactiveError,
     RegistrationAlreadyUsedError,
+    RentalPackageUnavailableError,
     RoutingUnavailableApiError,
     VehicleNotEligibleError,
 )
-from apps.rides.fares import trip_fare_paise
+from apps.rides.fares import (
+    outstation_days,
+    outstation_fare_paise,
+    rental_fare_paise,
+    rental_included_km,
+    trip_fare_paise,
+)
 from apps.rides.models import (
     OPEN_RIDE_STATES,
     PARCEL_LIMIT_FIELDS,
@@ -164,8 +173,22 @@ def set_parcel_preference(*, partner: PartnerProfile, takes_parcels: bool) -> Ca
     return vehicle
 
 
-#: The order the rider sees: cheapest kind of vehicle first.
-_VEHICLE_ORDER = {VehicleType.BIKE: 0, VehicleType.AUTO: 1, VehicleType.CAB: 2}
+#: The order the rider sees: cheapest kind of vehicle first (Taxi brief starting prices).
+_VEHICLE_ORDER = {
+    vehicle: position
+    for position, vehicle in enumerate(
+        (
+            VehicleType.BIKE,
+            VehicleType.AUTO,
+            VehicleType.CAB,
+            VehicleType.EV_CAB,
+            VehicleType.PREMIUM,
+            VehicleType.SUV,
+            VehicleType.INNOVA,
+            VehicleType.TEMPO,
+        )
+    )
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,78 +226,99 @@ class Availability:
     vehicle_types: list[str]
     #: The active parcel cards here (they carry the limits), cheapest vehicle first.
     parcel_cards: list[RideRateCard]
+    #: The active rental cards here (they carry the package prices), cheapest vehicle first.
+    rental_cards: list[RideRateCard]
+    #: Outstation vehicle types bookable here, cheapest first.
+    outstation_types: list[str]
 
 
 def availability(*, latitude: Decimal, longitude: Decimal) -> Availability:
-    """What can be booked from here: rides and Pick up & Drop. Empty lists when nothing can.
+    """What can be booked from here: rides, Pick up & Drop, rentals and outstation trips.
 
-    Drives the Rides and Pick up & Drop entries on the customer Home screen (D21), so "not served
-    here" is an empty answer, not an error. A geocoder failure still raises: the app hides the
-    entries then.
+    Drives the Rides and Pick up & Drop entries on the customer Home screen (D21) and the Ride
+    screen's tabs (Taxi D19), so "not served here" is an empty answer, not an error. A geocoder
+    failure still raises: the app hides the entries then.
     """
     try:
         area = _pickup_area(TripPoint(latitude, longitude, ""))
     except AreaNotServedError:
-        return Availability(vehicle_types=[], parcel_cards=[])
+        return Availability(vehicle_types=[], parcel_cards=[], rental_cards=[], outstation_types=[])
     cards = _active_cards(area)
     return Availability(
         vehicle_types=[c.vehicle_type for c in cards if c.kind == RideKind.RIDE],
         parcel_cards=[c for c in cards if c.kind == RideKind.PARCEL],
+        rental_cards=[c for c in cards if c.kind == RideKind.RENTAL],
+        outstation_types=[c.vehicle_type for c in cards if c.kind == RideKind.OUTSTATION],
     )
 
 
 def _active_cards(area: ServiceArea, *, kind: str | None = None) -> list[RideRateCard]:
-    """The area's active rate cards, bike first, then auto, then cab."""
+    """The area's active rate cards, cheapest vehicle first (`_VEHICLE_ORDER`)."""
     cards = RideRateCard.objects.filter(service_area=area, is_active=True)
     if kind is not None:
         cards = cards.filter(kind=kind)
     return sorted(cards, key=lambda card: _VEHICLE_ORDER[VehicleType(card.vehicle_type)])
 
 
-def create_quotes(
-    *, rider: Any, pickup: TripPoint, drop: TripPoint, kind: str = RideKind.RIDE
-) -> list[FareQuote]:
-    """One quote per bookable vehicle type, priced on the server from the road route.
+def _check_return_time(return_at: datetime, *, leave: datetime) -> None:
+    """D14: a round trip comes back after it leaves, at most `RIDES_OUTSTATION_MAX_TRIP_DAYS`
+    after it."""
+    latest = leave + timedelta(days=int(settings.RIDES_OUTSTATION_MAX_TRIP_DAYS))
+    if not leave < return_at <= latest:
+        raise InvalidReturnTimeError
 
-    A vehicle type is bookable only while its area has an active rate card of this kind. If any
-    route cannot be had, no quote is made: a partial list would hide a vehicle the rider could
-    have booked.
+
+def create_quotes(
+    *,
+    rider: Any,
+    pickup: TripPoint,
+    drop: TripPoint | None,
+    kind: str = RideKind.RIDE,
+    rental_hours: int | None = None,
+    round_trip: bool = False,
+    return_at: datetime | None = None,
+) -> list[FareQuote]:
+    """One quote per bookable vehicle type, priced on the server.
+
+    A vehicle type is bookable only while its area has an active rate card of this kind. A ride,
+    parcel or outstation trip is priced from the road route; if any route cannot be had, no quote
+    is made, since a partial list would hide a vehicle the rider could have booked. A rental has no
+    drop and no route: it is priced as a package (D10).
     """
     area = _pickup_area(pickup)
     cards = _active_cards(area, kind=kind)
     if not cards:
         raise AreaNotServedError
 
-    expires_at = timezone.now() + timedelta(seconds=settings.RIDES_QUOTE_TTL_SECONDS)
-    quotes: list[FareQuote] = []
-    for card in cards:
-        try:
-            route = get_route(pickup=pickup.point, drop=drop.point, vehicle_type=card.vehicle_type)
-        except RoutingUnavailableError as exc:
-            raise RoutingUnavailableApiError from exc
-        quotes.append(
-            FareQuote(
-                rider=rider,
-                service_area=area,
-                vehicle_type=card.vehicle_type,
-                kind=kind,
-                rate_card=card,
-                rate_card_version=card.version,
-                pickup_latitude=pickup.latitude,
-                pickup_longitude=pickup.longitude,
-                pickup_label=pickup.label,
-                drop_latitude=drop.latitude,
-                drop_longitude=drop.longitude,
-                drop_label=drop.label,
-                distance_m=route.distance_m,
-                duration_s=route.duration_s,
-                route_polyline=route.encoded_polyline,
-                fare_paise=trip_fare_paise(
-                    card, distance_m=route.distance_m, duration_s=route.duration_s
-                ),
-                expires_at=expires_at,
-            )
-        )
+    now = timezone.now()
+    trip: dict[str, Any] = {
+        "rider": rider,
+        "service_area": area,
+        "kind": kind,
+        "pickup_latitude": pickup.latitude,
+        "pickup_longitude": pickup.longitude,
+        "pickup_label": pickup.label,
+        "rental_hours": rental_hours,
+        "round_trip": round_trip,
+        "return_at": return_at,
+        "expires_at": now + timedelta(seconds=settings.RIDES_QUOTE_TTL_SECONDS),
+    }
+    if kind == RideKind.RENTAL:
+        if rental_hours is None:
+            raise ValueError("A rental quote needs rental_hours")
+        quotes = _rental_quotes(cards, hours=rental_hours, trip=trip)
+    else:
+        if drop is None:
+            raise ValueError(f"A {kind} quote needs a drop")
+        days = 1
+        if round_trip:
+            if return_at is None:
+                raise ValueError("A round trip needs return_at")
+            _check_return_time(return_at, leave=now)
+            days = outstation_days(now, return_at)
+        quotes = [
+            _routed_quote(card, pickup=pickup, drop=drop, days=days, trip=trip) for card in cards
+        ]
 
     created = FareQuote.objects.bulk_create(quotes)
     # No coordinates or labels in the log: they are the rider's exact whereabouts.
@@ -283,10 +327,74 @@ def create_quotes(
         extra={
             "rider_id": str(rider.pk),
             "service_area_id": str(area.id),
+            "kind": kind,
             "quote_count": len(created),
         },
     )
     return created
+
+
+def _rental_quotes(
+    cards: list[RideRateCard], *, hours: int, trip: dict[str, Any]
+) -> list[FareQuote]:
+    """A quote per card that offers the package: its price, and the km and hours it includes."""
+    quotes: list[FareQuote] = []
+    for card in cards:
+        price = rental_fare_paise(card, hours)
+        if price is None:
+            continue
+        quotes.append(
+            FareQuote(
+                **trip,
+                vehicle_type=card.vehicle_type,
+                rate_card=card,
+                rate_card_version=card.version,
+                drop_latitude=None,
+                drop_longitude=None,
+                drop_label="",
+                distance_m=rental_included_km(hours) * 1000,
+                duration_s=hours * 3600,
+                route_polyline="",
+                fare_paise=price,
+            )
+        )
+    if not quotes:
+        raise RentalPackageUnavailableError
+    return quotes
+
+
+def _routed_quote(
+    card: RideRateCard, *, pickup: TripPoint, drop: TripPoint, days: int, trip: dict[str, Any]
+) -> FareQuote:
+    """A ride, parcel or outstation quote from the road route.
+
+    The route is cached per pickup, drop and travel mode, so the car types share one call.
+    """
+    try:
+        route = get_route(pickup=pickup.point, drop=drop.point, vehicle_type=card.vehicle_type)
+    except RoutingUnavailableError as exc:
+        raise RoutingUnavailableApiError from exc
+    if card.kind == RideKind.OUTSTATION:
+        if route.distance_m < int(settings.RIDES_OUTSTATION_MIN_KM) * 1000:
+            raise OutstationTooShortError
+        fare = outstation_fare_paise(
+            card, road_metres=route.distance_m, round_trip=trip["round_trip"], days=days
+        )
+    else:
+        fare = trip_fare_paise(card, distance_m=route.distance_m, duration_s=route.duration_s)
+    return FareQuote(
+        **trip,
+        vehicle_type=card.vehicle_type,
+        rate_card=card,
+        rate_card_version=card.version,
+        drop_latitude=drop.latitude,
+        drop_longitude=drop.longitude,
+        drop_label=drop.label,
+        distance_m=route.distance_m,
+        duration_s=route.duration_s,
+        route_polyline=route.encoded_polyline,
+        fare_paise=fare,
+    )
 
 
 # --- Daily Pass (brief §5.8; the Stay subscription pattern) -----------------------------------

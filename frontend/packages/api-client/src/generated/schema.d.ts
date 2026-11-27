@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.120.0)
- * Checksum: b6d8805ebffba75d
+ * Checksum: 0b365580d4699488
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -10964,10 +10964,15 @@ export interface components {
         };
         Availability: {
             /** @description Bookable here, cheapest first. Empty: hide the Rides entry. */
-            vehicle_types: components["schemas"]["VehicleTypesEnum"][];
+            vehicle_types: components["schemas"]["VehicleTypeEnum"][];
             /** @description Pick up & Drop vehicles bookable here, with limits. Empty: hide the entry. */
             parcel: components["schemas"]["ParcelLimits"][];
             parcel_rules: components["schemas"]["ParcelRules"];
+            /** @description Rental vehicles bookable here, cheapest first. Empty: hide the Rental tab. */
+            rental: components["schemas"]["RentalAvailability"][];
+            /** @description Outstation vehicles bookable here, cheapest first. Empty: hide the tab. */
+            outstation: components["schemas"]["VehicleTypeEnum"][];
+            book_ahead: components["schemas"]["BookAhead"];
         };
         /**
          * @description * `IMMEDIATE` - Immediately
@@ -10979,6 +10984,14 @@ export interface components {
         AvailableFromEnum: "IMMEDIATE" | "WEEK" | "FORTNIGHT" | "MONTH";
         /** @enum {unknown} */
         BlankEnum: "";
+        BookAhead: {
+            /** @description The earliest later pickup, from now. */
+            min_minutes: number;
+            /** @description The latest later pickup, in days from now. */
+            max_days: number;
+            /** @description Later pickup times are on these steps. */
+            step_minutes: number;
+        };
         Booking: {
             /** Format: uuid */
             readonly id: string;
@@ -13753,18 +13766,33 @@ export interface components {
             readonly distance_m: number;
             readonly duration_s: number;
             readonly route_polyline: string;
+            readonly rental_hours: number | null;
+            /** @description Rentals only: km in the package. */
+            readonly included_km: number | null;
+            /** @description Rentals only: per extra km. */
+            readonly extra_km_paise: number | null;
+            /** @description Rentals only: per extra minute, charged per started minute. */
+            readonly extra_minute_paise: number | null;
+            readonly round_trip: boolean;
+            /** Format: date-time */
+            readonly return_at: string | null;
+            /** @description Outstation only: the km the fixed price is for. */
+            readonly billed_km: number | null;
+            /** @description Outstation round trips only: calendar days, both ends counted. */
+            readonly days: number | null;
             /** Format: date-time */
             readonly expires_at: string;
         };
         FareQuoteList: {
-            /** @description Bike, then auto, then cab; only the bookable ones. */
+            /** @description Cheapest vehicle first; only the bookable ones. */
             quotes: components["schemas"]["FareQuote"][];
         };
         FareQuoteRequestRequest: {
             pickup: components["schemas"]["TripPointRequest"];
-            drop: components["schemas"]["TripPointRequest"];
+            /** @description Required, except for a rental. */
+            drop?: components["schemas"]["TripPointRequest"];
             /**
-             * @description PARCEL for Pick up & Drop.
+             * @description PARCEL for Pick up & Drop; RENTAL and OUTSTATION for Taxi.
              *
              *     * `RIDE` - Ride
              *     * `PARCEL` - Pick up & Drop
@@ -13773,6 +13801,21 @@ export interface components {
              * @default RIDE
              */
             kind: components["schemas"]["KindB9cEnum"];
+            /**
+             * @description Rentals only, and required for them.
+             *
+             *     * `2` - 2 h
+             *     * `4` - 4 h
+             *     * `8` - 8 h
+             */
+            rental_hours?: components["schemas"]["RentalHoursEnum"];
+            /** @description Outstation only. Default false. */
+            round_trip?: boolean;
+            /**
+             * Format: date-time
+             * @description Outstation round trips only, and required for them.
+             */
+            return_at?: string;
         };
         FulfilmentPlan: {
             /** Format: uuid */
@@ -20741,6 +20784,11 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["RentalAsset"][];
         };
+        RentalAvailability: {
+            vehicle_type: components["schemas"]["VehicleTypeEnum"];
+            /** @description Only the packages offered, shortest first. */
+            packages: components["schemas"]["RentalPackage"][];
+        };
         RentalBooking: {
             /** Format: uuid */
             readonly id: string;
@@ -20816,9 +20864,22 @@ export interface components {
          * @enum {string}
          */
         RentalDepositStatusEnum: "REQUESTED" | "AUTHORIZED" | "HELD" | "RELEASED" | "PARTIALLY_CONSUMED" | "FULLY_CONSUMED";
+        /**
+         * @description * `2` - 2 h
+         *     * `4` - 4 h
+         *     * `8` - 8 h
+         * @enum {integer}
+         */
+        RentalHoursEnum: 2 | 4 | 8;
         RentalModerationRequest: {
             action: components["schemas"]["Action68eEnum"];
             reason: string;
+        };
+        RentalPackage: {
+            hours: number;
+            /** @description The km the package includes. */
+            km: number;
+            price_paise: number;
         };
         RentalPhotoUpload: {
             /** Format: uuid */
@@ -23030,18 +23091,6 @@ export interface components {
          * @enum {string}
          */
         VehicleTypeEnum: "BIKE" | "AUTO" | "CAB" | "EV_CAB" | "PREMIUM" | "SUV" | "INNOVA" | "TEMPO";
-        /**
-         * @description * `BIKE` - Bike
-         *     * `AUTO` - Auto
-         *     * `CAB` - Cab
-         *     * `EV_CAB` - EV Cab
-         *     * `PREMIUM` - Premium
-         *     * `SUV` - SUV
-         *     * `INNOVA` - Innova
-         *     * `TEMPO` - Tempo Traveller
-         * @enum {string}
-         */
-        VehicleTypesEnum: "BIKE" | "AUTO" | "CAB" | "EV_CAB" | "PREMIUM" | "SUV" | "INNOVA" | "TEMPO";
         /**
          * @description A responding vendor, as much of one as the Customer has paid to see.
          *

@@ -20,10 +20,12 @@ from apps.rides.engine import (
     ride_otp,
     searching_again,
 )
+from apps.rides.fares import outstation_billed_km, outstation_days, rental_included_km
 from apps.rides.models import (
     OPEN_RIDE_STATES,
     PARCEL_LIMIT_FIELDS,
     RATE_FIELDS,
+    RENTAL_HOURS,
     ActorKind,
     CaptainDutySession,
     CaptainPass,
@@ -284,6 +286,25 @@ class ParcelRulesSerializer(serializers.Serializer[Any]):
     prohibited_items = serializers.ListField(child=serializers.CharField())
 
 
+class RentalPackageSerializer(serializers.Serializer[Any]):
+    hours = serializers.IntegerField()
+    km = serializers.IntegerField(help_text="The km the package includes.")
+    price_paise = serializers.IntegerField()
+
+
+class RentalAvailabilitySerializer(serializers.Serializer[Any]):
+    vehicle_type = serializers.ChoiceField(choices=VehicleType.choices)
+    packages = RentalPackageSerializer(
+        many=True, help_text="Only the packages offered, shortest first."
+    )
+
+
+class BookAheadSerializer(serializers.Serializer[Any]):
+    min_minutes = serializers.IntegerField(help_text="The earliest later pickup, from now.")
+    max_days = serializers.IntegerField(help_text="The latest later pickup, in days from now.")
+    step_minutes = serializers.IntegerField(help_text="Later pickup times are on these steps.")
+
+
 class AvailabilitySerializer(serializers.Serializer[Any]):
     vehicle_types = serializers.ListField(
         child=serializers.ChoiceField(choices=VehicleType.choices),
@@ -294,19 +315,64 @@ class AvailabilitySerializer(serializers.Serializer[Any]):
         help_text="Pick up & Drop vehicles bookable here, with limits. Empty: hide the entry.",
     )
     parcel_rules = ParcelRulesSerializer()
+    rental = RentalAvailabilitySerializer(
+        many=True,
+        help_text="Rental vehicles bookable here, cheapest first. Empty: hide the Rental tab.",
+    )
+    outstation = serializers.ListField(
+        child=serializers.ChoiceField(choices=VehicleType.choices),
+        help_text="Outstation vehicles bookable here, cheapest first. Empty: hide the tab.",
+    )
+    book_ahead = BookAheadSerializer()
 
 
 class FareQuoteRequestSerializer(serializers.Serializer[Any]):
     pickup = TripPointSerializer()
-    drop = TripPointSerializer()
+    drop = TripPointSerializer(required=False, help_text="Required, except for a rental.")
     kind = serializers.ChoiceField(
-        choices=RideKind.choices, default=RideKind.RIDE, help_text="PARCEL for Pick up & Drop."
+        choices=RideKind.choices,
+        default=RideKind.RIDE,
+        help_text="PARCEL for Pick up & Drop; RENTAL and OUTSTATION for Taxi.",
+    )
+    rental_hours = serializers.ChoiceField(
+        choices=[(hours, f"{hours} h") for hours in RENTAL_HOURS],
+        required=False,
+        help_text="Rentals only, and required for them.",
+    )
+    # Optional, not defaulted, so the generated client does not make every caller send it.
+    round_trip = serializers.BooleanField(
+        required=False, help_text="Outstation only. Default false."
+    )
+    return_at = serializers.DateTimeField(
+        required=False, help_text="Outstation round trips only, and required for them."
     )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        pickup, drop = attrs["pickup"], attrs["drop"]
-        if (pickup["latitude"], pickup["longitude"]) == (drop["latitude"], drop["longitude"]):
-            raise serializers.ValidationError({"drop": "Choose a drop that isn't your pickup."})
+        attrs.setdefault("round_trip", False)
+        kind = attrs["kind"]
+        drop = attrs.get("drop")
+        if kind == RideKind.RENTAL:
+            if drop is not None:
+                raise serializers.ValidationError({"drop": "A rental has no drop."})
+            if attrs.get("rental_hours") is None:
+                raise serializers.ValidationError({"rental_hours": "Choose 2, 4 or 8 hours."})
+        else:
+            if drop is None:
+                raise serializers.ValidationError({"drop": "Choose a drop."})
+            pickup = attrs["pickup"]
+            if (pickup["latitude"], pickup["longitude"]) == (drop["latitude"], drop["longitude"]):
+                raise serializers.ValidationError({"drop": "Choose a drop that isn't your pickup."})
+            if attrs.get("rental_hours") is not None:
+                raise serializers.ValidationError({"rental_hours": "Only a rental has hours."})
+        if kind != RideKind.OUTSTATION:
+            if attrs["round_trip"] or attrs.get("return_at") is not None:
+                raise serializers.ValidationError(
+                    {"round_trip": "Only an outstation trip can be a round trip."}
+                )
+        elif attrs["round_trip"] and attrs.get("return_at") is None:
+            raise serializers.ValidationError({"return_at": "Choose when you come back."})
+        elif not attrs["round_trip"] and attrs.get("return_at") is not None:
+            raise serializers.ValidationError({"return_at": "A one-way trip has no return time."})
         return attrs
 
 
@@ -322,6 +388,19 @@ class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
         read_only=True,
         help_text="Parcel quotes only; empty for a ride.",
     )
+    # Rentals (D10, D11) and outstation trips (D13), worked out from the quote's own rate card
+    # version, so they never change after the quote is made. Null for every other kind.
+    included_km = serializers.SerializerMethodField(help_text="Rentals only: km in the package.")
+    extra_km_paise = serializers.SerializerMethodField(help_text="Rentals only: per extra km.")
+    extra_minute_paise = serializers.SerializerMethodField(
+        help_text="Rentals only: per extra minute, charged per started minute."
+    )
+    billed_km = serializers.SerializerMethodField(
+        help_text="Outstation only: the km the fixed price is for."
+    )
+    days = serializers.SerializerMethodField(
+        help_text="Outstation round trips only: calendar days, both ends counted."
+    )
 
     class Meta:
         model = FareQuote
@@ -335,9 +414,47 @@ class FareQuoteSerializer(serializers.ModelSerializer[FareQuote]):
             "distance_m",
             "duration_s",
             "route_polyline",
+            "rental_hours",
+            "included_km",
+            "extra_km_paise",
+            "extra_minute_paise",
+            "round_trip",
+            "return_at",
+            "billed_km",
+            "days",
             "expires_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_included_km(self, obj: FareQuote) -> int | None:
+        return rental_included_km(obj.rental_hours) if obj.rental_hours is not None else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_extra_km_paise(self, obj: FareQuote) -> int | None:
+        return obj.rate_card.per_km_paise if obj.kind == RideKind.RENTAL else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_extra_minute_paise(self, obj: FareQuote) -> int | None:
+        return obj.rate_card.per_minute_paise if obj.kind == RideKind.RENTAL else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_billed_km(self, obj: FareQuote) -> int | None:
+        if obj.kind != RideKind.OUTSTATION:
+            return None
+        return outstation_billed_km(
+            obj.rate_card,
+            road_metres=obj.distance_m,
+            round_trip=obj.round_trip,
+            days=self.get_days(obj) or 1,
+        )
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_days(self, obj: FareQuote) -> int | None:
+        # The quote is priced from the moment it is made (step 6 adds a booked pickup time).
+        if obj.return_at is None:
+            return None
+        return outstation_days(obj.created_at, obj.return_at)
 
 
 _MOBILE = re.compile(r"[6-9]\d{9}")
@@ -1249,5 +1366,5 @@ class CaptainPassPlanOpsSerializer(serializers.ModelSerializer[CaptainPassPlan])
 
 class FareQuoteListSerializer(serializers.Serializer[Any]):
     quotes = FareQuoteSerializer(
-        many=True, help_text="Bike, then auto, then cab; only the bookable ones."
+        many=True, help_text="Cheapest vehicle first; only the bookable ones."
     )

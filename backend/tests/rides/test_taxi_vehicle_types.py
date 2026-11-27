@@ -1,4 +1,5 @@
-"""Taxi database rules (docs/taxi/README.md §4.1): impossible rows are refused by PostgreSQL."""
+"""Taxi vehicle types and kinds (D2, D3, §4.1): the database rules, and quotes for the new
+vehicles."""
 
 import uuid
 from datetime import timedelta
@@ -8,6 +9,7 @@ from typing import Any
 import pytest
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from pytest_django.fixtures import SettingsWrapper
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
@@ -20,7 +22,9 @@ from apps.rides.models import (
     RideState,
     VehicleType,
 )
-from tests.rides.helpers import make_user
+from tests.rides.helpers import customer_client, make_user
+from tests.rides.parcel_world import QUOTE_BODY, QUOTES, pickup_in, served_area
+from tests.rides.parcel_world import make_card as parcel_card
 
 pytestmark = pytest.mark.django_db
 
@@ -307,3 +311,28 @@ def test_only_a_rental_has_extras(kind: str) -> None:
 def test_a_rental_records_its_extras() -> None:
     ride = make_ride(make_quote(RideKind.RENTAL), extra_km=3, extra_minutes=10, extras_paise=5600)
     assert ride.extras_paise == 5600
+
+
+# --- the new vehicles can be quoted -----------------------------------------------------------
+
+
+def test_ride_quotes_include_the_new_vehicles_cheapest_first(
+    monkeypatch: pytest.MonkeyPatch, settings: SettingsWrapper
+) -> None:
+    """Every new type routes as a car and sorts after the cab (it used to raise KeyError)."""
+    settings.RIDES_ROUTING_PROVIDER = "fake"
+    pickup_in(monkeypatch)
+    area = served_area()
+    for vehicle in ("SUV", "EV_CAB", "INNOVA", "CAB", "PREMIUM"):
+        parcel_card(area, vehicle)
+
+    response = customer_client(make_user()).post(QUOTES, QUOTE_BODY, format="json")
+
+    assert response.status_code == 201
+    assert [q["vehicle_type"] for q in response.json()["quotes"]] == [
+        "CAB",
+        "EV_CAB",
+        "PREMIUM",
+        "SUV",
+        "INNOVA",
+    ]

@@ -10,6 +10,21 @@ Additive. Taxi on the Rides engine (`docs/taxi/README.md` §4.4, ADR-0016). In p
   `Kind899Enum` to `KindB9cEnum`.
 - **Added** to the ride `state`: `BOOKED` (D7).
 
+Customer:
+
+- **Changed** `GET /rides/availability/`: adds `rental`, a list of `{vehicle_type, packages:
+  [{hours, km, price_paise}]}` with only the packages each active rental card offers; `outstation`,
+  the vehicle types with an active outstation card; and `book_ahead`: `{min_minutes, max_days,
+  step_minutes}`. Each list is empty where its kind does not run (D19).
+- **Changed** `POST /rides/quotes/`: `kind` may be `RENTAL` (needs `rental_hours` 2, 4 or 8, and no
+  `drop`) or `OUTSTATION` (needs a `drop`, optional `round_trip`, and `return_at` when it is a round
+  trip). A wrong shape is `400`. Errors: `422 rental_package_unavailable` (no vehicle here offers
+  the package), `422 outstation_too_short` (under 40 km by road), `422 invalid_return_time` (not
+  after pickup, or more than 7 days after it). A quote adds `rental_hours`, `included_km`,
+  `extra_km_paise` and `extra_minute_paise` (rentals), `round_trip`, `return_at`, `billed_km` and
+  `days` (outstation); each is null where it does not apply.
+- **Renamed** generated enum `VehicleTypesEnum` to `VehicleTypeEnum`.
+
 ## 1.119.0 - Pick up & Drop V1
 
 Additive. Parcels on the Rides engine (`docs/parcel/README.md` §4.2, ADR-0015).

@@ -67,6 +67,38 @@ class AreaNotServedError(RidesApiError):
         super().__init__(code="area_not_served", message="Rides aren't available here yet.")
 
 
+class RentalPackageUnavailableError(RidesApiError):
+    """No vehicle here offers the rental package asked for (Taxi brief §4.4)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="rental_package_unavailable", message="This package isn't available here."
+        )
+
+
+class OutstationTooShortError(RidesApiError):
+    """An outstation trip is at least `RIDES_OUTSTATION_MIN_KM` by road (D12)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(code="outstation_too_short", message="For trips under 40 km, use Ride.")
+
+
+class InvalidReturnTimeError(RidesApiError):
+    """A round trip returns after pickup, within `RIDES_OUTSTATION_MAX_TRIP_DAYS` (D14)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_return_time",
+            message="Choose a return time after pickup, within 7 days.",
+        )
+
+
 class RoutingUnavailableApiError(RidesApiError):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     retryable = True

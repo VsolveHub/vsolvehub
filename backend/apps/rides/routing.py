@@ -53,6 +53,11 @@ TRAVEL_MODES: dict[str, str] = {
     VehicleType.BIKE: "TWO_WHEELER",
     VehicleType.AUTO: "DRIVE",
     VehicleType.CAB: "DRIVE",
+    VehicleType.EV_CAB: "DRIVE",
+    VehicleType.PREMIUM: "DRIVE",
+    VehicleType.SUV: "DRIVE",
+    VehicleType.INNOVA: "DRIVE",
+    VehicleType.TEMPO: "DRIVE",
 }
 
 # Fake provider: roads are about 1.3x the straight line; city speeds in km/h.
@@ -61,6 +66,11 @@ _FAKE_SPEED_KMH: dict[str, int] = {
     VehicleType.BIKE: 25,
     VehicleType.AUTO: 20,
     VehicleType.CAB: 20,
+    VehicleType.EV_CAB: 20,
+    VehicleType.PREMIUM: 20,
+    VehicleType.SUV: 20,
+    VehicleType.INNOVA: 20,
+    VehicleType.TEMPO: 20,
 }
 
 
