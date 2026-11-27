@@ -21,6 +21,7 @@ __all__ = [
     "PARCEL_LIMIT_FIELDS",
     "RATE_FIELDS",
     "RENTAL_HOURS",
+    "TAXI_RATE_FIELDS",
     "TRACKED_RIDE_STATES",
     "ActorKind",
     "CaptainDutySession",
@@ -151,6 +152,15 @@ RATE_FIELDS = (
 
 #: What a Pick up & Drop card adds to the prices: the limits shown to customers (D5).
 PARCEL_LIMIT_FIELDS = ("max_parcel_weight_grams", "parcel_size_label")
+
+#: What a rental or outstation card adds to the prices (Taxi brief §4.1).
+TAXI_RATE_FIELDS = (
+    "rental_2h_paise",
+    "rental_4h_paise",
+    "rental_8h_paise",
+    "round_trip_per_km_paise",
+    "round_trip_min_km_per_day",
+)
 
 
 def _any_of(conditions: Iterable[Q]) -> Q:

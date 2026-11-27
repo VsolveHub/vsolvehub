@@ -48,6 +48,7 @@ from apps.rides.models import (
     OPEN_RIDE_STATES,
     PARCEL_LIMIT_FIELDS,
     RATE_FIELDS,
+    TAXI_RATE_FIELDS,
     TRACKED_RIDE_STATES,
     CaptainDutySession,
     CaptainPass,
@@ -832,8 +833,8 @@ def update_rate_card(
 ) -> RideRateCard:
     """Edit the active card. A price edit is a new version; old quotes keep the old one.
 
-    `deactivate` switches that vehicle off in that area (the only on/off switch). A Pick up & Drop
-    card keeps its kind and, unless changed, its limits.
+    `deactivate` switches that vehicle off in that area (the only on/off switch). A card keeps its
+    kind and, unless changed, its parcel limits and its rental and round-trip prices.
     """
     card = RideRateCard.objects.select_for_update().get(pk=card.pk)
     if not card.is_active:
@@ -846,7 +847,8 @@ def update_rate_card(
         logger.info("ride_rate_card_deactivated", extra=_card_log(card, updated_by))
         return card
 
-    fields = {name: getattr(card, name) for name in (*RATE_FIELDS, *PARCEL_LIMIT_FIELDS)}
+    kept = (*RATE_FIELDS, *PARCEL_LIMIT_FIELDS, *TAXI_RATE_FIELDS)
+    fields = {name: getattr(card, name) for name in kept}
     fields.update(rates)
     new_card = RideRateCard.objects.create(
         service_area_id=card.service_area_id,
